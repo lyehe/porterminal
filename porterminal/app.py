@@ -13,10 +13,11 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import RequestResponseEndpoint
 
-from .config import Config, get_config, reload_config
+from .composition import create_container
+from .container import Container
+from .domain import SessionId, TerminalDimensions, UserId
+from .infrastructure.web import FastAPIWebSocketAdapter
 from .logging_setup import setup_logging_from_env
-from .session import SessionRegistry
-from .websocket import handle_terminal_session
 
 logger = logging.getLogger(__name__)
 
@@ -49,21 +50,21 @@ async def lifespan(app: FastAPI):
     setup_logging_from_env()
     security_preflight_checks()
 
-    # Wire dependencies explicitly and store in app.state
-    config = get_config()
-    registry = SessionRegistry(config=config)
+    # Create DI container with all wired dependencies
+    config_path = os.environ.get("PORTERMINAL_CONFIG_PATH", "config.yaml")
+    cwd = os.environ.get("PORTERMINAL_CWD")
 
-    app.state.config = config
-    app.state.registry = registry
+    container = create_container(config_path=config_path, cwd=cwd)
+    app.state.container = container
 
-    await registry.start()
+    await container.session_service.start()
 
     logger.info("Porterminal server started")
 
     yield
 
     # Shutdown
-    await registry.stop()
+    await container.session_service.stop()
     logger.info("Porterminal server stopped")
 
 
@@ -114,34 +115,32 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health():
         """Health check endpoint."""
-        registry: SessionRegistry = app.state.registry
+        container: Container = app.state.container
         return {
             "status": "healthy",
-            "sessions": registry.session_count,
+            "sessions": container.session_service.session_count(),
         }
 
     @app.get("/api/config")
     async def get_client_config():
         """Get client configuration (shells and buttons)."""
-        config: Config = app.state.config
+        container: Container = app.state.container
         return {
-            "shells": [{"id": s.id, "name": s.name} for s in config.terminal.shells],
-            "buttons": [{"label": b.label, "send": b.send} for b in config.buttons],
-            "default_shell": config.terminal.default_shell,
+            "shells": [{"id": s.id, "name": s.name} for s in container.available_shells],
+            "buttons": container.buttons,
+            "default_shell": container.default_shell_id,
         }
 
     @app.post("/api/config/reload")
     async def reload_configuration():
-        """Reload configuration from file."""
-        try:
-            new_config = reload_config()
-            app.state.config = new_config  # Update app.state to match global
-            return {"status": "ok", "message": "Configuration reloaded"}
-        except Exception as e:
-            return JSONResponse(
-                {"status": "error", "message": str(e)},
-                status_code=500,
-            )
+        """Reload configuration from file.
+
+        Note: With the new DI architecture, hot-reload requires server restart.
+        """
+        return JSONResponse(
+            {"status": "info", "message": "Config reload requires server restart"},
+            status_code=501,
+        )
 
     @app.post("/api/shutdown")
     async def shutdown_server(request: Request):
@@ -193,13 +192,17 @@ def create_app() -> FastAPI:
         # Accept the connection
         await websocket.accept()
 
-        # Get dependencies from app.state
-        registry: SessionRegistry = app.state.registry
-        config: Config = app.state.config
+        # Get dependencies from container
+        container: Container = websocket.app.state.container
+        session_service = container.session_service
+        terminal_service = container.terminal_service
 
         # Get user ID from headers (Cloudflare Access)
         # For local testing, use a default user
-        user_id = websocket.headers.get("cf-access-authenticated-user-email", "local-user")
+        user_id = UserId(websocket.headers.get("cf-access-authenticated-user-email", "local-user"))
+        connection = FastAPIWebSocketAdapter(websocket)
+        session = None
+
         logger.info(
             "WebSocket accepted client=%s user_id=%s session_id=%s shell=%s",
             getattr(websocket.client, "host", None),
@@ -214,74 +217,95 @@ def create_app() -> FastAPI:
                 logger.info(
                     "WebSocket reconnect requested user_id=%s session_id=%s", user_id, session_id
                 )
-                session = await registry.reconnect_session(session_id, user_id, websocket)
+                session = await session_service.reconnect_session(SessionId(session_id), user_id)
                 if not session:
-                    await websocket.send_json(
+                    await connection.send_message(
                         {
                             "type": "error",
                             "message": "Session not found or unauthorized",
                         }
                     )
-                    await websocket.close(code=4004)
+                    await connection.close(code=4004)
                     logger.warning(
                         "WebSocket reconnect denied user_id=%s session_id=%s", user_id, session_id
                     )
                     return
+                # reconnect_session already calls add_client()
             else:
-                # Create new session using config from app.state
-                cols = config.terminal.cols
-                rows = config.terminal.rows
+                # Try to auto-join existing session first (for device switching)
+                session = session_service.get_active_session(user_id)
+                if session:
+                    # Join existing session
+                    session.add_client()
+                    logger.info(
+                        "WebSocket auto-joined existing session user_id=%s session_id=%s client_count=%d",
+                        user_id,
+                        session.session_id,
+                        session.connected_clients,
+                    )
+                else:
+                    # Create new session
+                    shell_cmd = container.get_shell(shell)
+                    if not shell_cmd:
+                        await connection.send_message(
+                            {"type": "error", "message": "No shell available"}
+                        )
+                        await connection.close(code=4006)
+                        return
 
-                logger.info(
-                    "WebSocket creating session user_id=%s shell=%s cols=%d rows=%d",
-                    user_id,
-                    shell,
-                    cols,
-                    rows,
-                )
-                session = await registry.create_session(
-                    user_id=user_id,
-                    shell_id=shell,
-                    cols=cols,
-                    rows=rows,
-                )
-                session.websocket = websocket
-                session.is_connected = True
-                logger.info(
-                    "WebSocket created session user_id=%s session_id=%s shell_id=%s",
-                    user_id,
-                    session.session_id,
-                    session.shell_id,
-                )
+                    dims = TerminalDimensions(container.default_cols, container.default_rows)
 
-            # Handle the session
-            await handle_terminal_session(
-                websocket, session, registry, skip_buffer=bool(skip_buffer)
+                    logger.info(
+                        "WebSocket creating new session user_id=%s shell=%s cols=%d rows=%d",
+                        user_id,
+                        shell_cmd.id,
+                        dims.cols,
+                        dims.rows,
+                    )
+                    session = await session_service.create_session(
+                        user_id=user_id,
+                        shell=shell_cmd,
+                        dimensions=dims,
+                    )
+                    session.add_client()
+                    logger.info(
+                        "WebSocket created session user_id=%s session_id=%s shell_id=%s",
+                        user_id,
+                        session.session_id,
+                        session.shell_id,
+                    )
+
+            # Handle the session using TerminalService
+            await terminal_service.handle_session(
+                session, connection, skip_buffer=bool(skip_buffer)
             )
 
         except ValueError as e:
             # Session limit exceeded
-            await websocket.send_json(
+            await connection.send_message(
                 {
                     "type": "error",
                     "message": str(e),
                 }
             )
-            await websocket.close(code=4005)
+            await connection.close(code=4005)
             logger.warning("WebSocket session limit user_id=%s error=%s", user_id, e)
 
         except WebSocketDisconnect:
-            logger.info(f"Client disconnected: {user_id}")
+            logger.info("Client disconnected user_id=%s", user_id)
 
-        except Exception as e:
-            logger.exception(f"WebSocket error: {e}")
+        except Exception:
+            logger.exception("WebSocket error user_id=%s", user_id)
             with suppress(Exception):
-                await websocket.close(code=1011)
+                await connection.close(code=1011)
         finally:
+            if session:
+                session_service.disconnect_session(session.id)
+            actual_session_id = session_id or (session.session_id if session else None)
             logger.info(
                 "WebSocket handler finished user_id=%s session_id=%s",
                 user_id,
-                session_id or getattr(locals().get("session", None), "session_id", None),
+                actual_session_id,
             )
 
     return app

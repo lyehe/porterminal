@@ -18,15 +18,8 @@
     <link rel="manifest" href="/static/manifest.json">
     <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
     <link rel="apple-touch-icon" href="/static/icon-192.png">
-
-    <!-- xterm.js with SRI -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" integrity="sha384-LJcOxlx9IMbNXDqJ2axpfEQKkAYbFjJfhXexLfiRJhjDU81mzgkiQq8rkV0j6dVh" crossorigin="anonymous">
-    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js" integrity="sha384-xjfWUeCWdMtvpAb/SmM6lMzS6pQGcQa0loOl1d97j6Odw0vjK9nW3+dTb/bn/mwH" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js" integrity="sha384-dpjGwSSISUTz2taP54Bor7qkyMR20sSO9oe11UVYnGs2/YdUBf7HW30XKQx9PCzn" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-webgl@0.16.0/lib/xterm-addon-webgl.min.js" integrity="sha384-LjE7pQ+MvZLxKNFYaNqxXiKIg0LASkwKbvcMtgxwNfSSDVjJ4tgEe0p56hzikjhs" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js" integrity="sha384-iAAiqSZrWZz/YKZSTKOPNaRhVOg9JY14avg2EWEpYNnUsrnATA+Sg8pV7mak84/G" crossorigin="anonymous"></script>
-
-    <link rel="stylesheet" href="/static/style.css">
+  <script type="module" crossorigin src="/static/assets/app-D8Zu184y.js"></script>
+  <link rel="stylesheet" crossorigin href="/static/assets/app-BS392zlj.css">
 </head>
 <body>
     <div id="app">
@@ -36,6 +29,7 @@
             <div id="shell-selector">
                 <span id="connection-dot"></span>
                 <select id="shell-select"><option>...</option></select>
+                <button id="btn-info" title="Help">ⓘ</button>
                 <button id="btn-shutdown" title="Shutdown">⏻</button>
             </div>
         </div>
@@ -45,22 +39,41 @@
             <div id="terminal"></div>
         </div>
 
-        <!-- Bottom Toolbar - Minimal single row -->
+        <!-- Bottom Toolbar - Two rows -->
         <div id="toolbar">
-            <button class="tool-btn modifier" id="btn-ctrl">Ct</button>
-            <button class="tool-btn modifier" id="btn-alt">At</button>
-            <button class="tool-btn arrow" data-key="ArrowLeft">←</button>
-            <button class="tool-btn arrow" data-key="ArrowDown">↓</button>
-            <button class="tool-btn arrow" data-key="ArrowUp">↑</button>
-            <button class="tool-btn arrow" data-key="ArrowRight">→</button>
-            <button class="tool-btn" data-send="&#x1b;[Z">ST</button>
-            <button class="tool-btn" data-key="Tab">⇥</button>
-            <button class="tool-btn" id="btn-escape">Es</button>
-            <button class="tool-btn danger" data-key="Ctrl+C">^C</button>
-            <button class="tool-btn" id="btn-paste">⎘</button>
+            <div class="toolbar-row">
+                <button class="tool-btn" id="btn-escape">Esc</button>
+                <button class="tool-btn arrow" data-key="ArrowLeft">←</button>
+                <button class="tool-btn arrow" data-key="ArrowDown">↓</button>
+                <button class="tool-btn arrow" data-key="ArrowUp">↑</button>
+                <button class="tool-btn arrow" data-key="ArrowRight">→</button>
+                <button class="tool-btn icon" data-key="Tab">⇥</button>
+                <button class="tool-btn" data-key="Home">Home</button>
+                <button class="tool-btn" data-key="End">End</button>
+                <button class="tool-btn icon" id="btn-backspace">⌫</button>
+                <button class="tool-btn" data-key="Delete">Del</button>
+                <button class="tool-btn icon enter" data-key="Enter">↵</button>
+            </div>
+            <div class="toolbar-row">
+                <button class="tool-btn modifier" id="btn-ctrl">Ctl</button>
+                <button class="tool-btn modifier" id="btn-alt">Alt</button>
+                <button class="tool-btn modifier" id="btn-shift">Sft</button>
+                <button class="tool-btn" data-key="ShiftTab">Sft⇥</button>
+                <button class="tool-btn danger" data-key="Ctrl+C">^C</button>
+                <button class="tool-btn icon" id="btn-paste">⎘</button>
+                <button class="tool-btn" data-key="1">1</button>
+                <button class="tool-btn" data-key="2">2</button>
+                <button class="tool-btn" data-key="3">3</button>
+                <button class="tool-btn" data-key="@">@</button>
+                <button class="tool-btn" data-key="/">/</button>
+                <button class="tool-btn" data-key="\Enter">\↵</button>
+            </div>
         </div>
 
     </div>
+
+    <!-- Floating Copy Button (iOS) -->
+    <button id="copy-button">Copy</button>
 
     <!-- Connection Lost Overlay -->
     <div id="disconnect-overlay" class="hidden">
@@ -71,12 +84,38 @@
         </div>
     </div>
 
-    <script src="/static/app.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/static/sw.js')
-                .catch((e) => console.warn('SW registration failed:', e));
-        }
-    </script>
+    <!-- Help Popup -->
+    <div id="help-overlay" class="hidden">
+        <div id="help-content">
+            <div id="help-header">
+                <span>Touch Controls</span>
+                <button id="help-close">×</button>
+            </div>
+            <div id="help-body">
+                <div class="help-section">
+                    <div class="help-title">Swipe</div>
+                    <div class="help-item"><span class="help-key">←</span> ↑ Last command</div>
+                    <div class="help-item"><span class="help-key">→</span> ↓ Next command</div>
+                </div>
+                <div class="help-section">
+                    <div class="help-title">Selection</div>
+                    <div class="help-item"><span class="help-key">Long press</span> Start selection</div>
+                    <div class="help-item"><span class="help-key">Drag</span> Extend selection</div>
+                    <div class="help-item"><span class="help-key">Double tap</span> Select word</div>
+                    <div class="help-item"><span class="help-key">Tap</span> Clear selection</div>
+                </div>
+                <div class="help-section">
+                    <div class="help-title">Zoom</div>
+                    <div class="help-item"><span class="help-key">Pinch</span> Change font size</div>
+                </div>
+                <div class="help-section">
+                    <div class="help-title">Modifiers (Ctl, Alt, Sft)</div>
+                    <div class="help-item"><span class="help-key">Tap</span> Sticky (one use)</div>
+                    <div class="help-item"><span class="help-key">Double tap</span> Lock on/off</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

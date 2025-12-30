@@ -55,6 +55,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Check if a newer version is available",
     )
+    parser.add_argument(
+        "-b",
+        "--background",
+        action="store_true",
+        help="Run in background and return immediately",
+    )
+    # Internal argument for background mode communication
+    parser.add_argument(
+        "--_url-file",
+        dest="url_file",
+        help=argparse.SUPPRESS,
+    )
 
     args = parser.parse_args()
 

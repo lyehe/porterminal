@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/porterminal
+      url: https://pypi.org/p/ptn
     permissions:
       id-token: write  # Required for trusted publishing
     steps:

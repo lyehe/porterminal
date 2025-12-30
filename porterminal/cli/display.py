@@ -1,6 +1,7 @@
 """Display utilities for the startup screen."""
 
 import io
+import random
 import sys
 
 import qrcode
@@ -42,13 +43,16 @@ CAUTION_EASTER_EGGS = [
     "*HACKER VOICE* I'M IN (the bathroom)",
     "THEY SAID REMOTE WORK. I DELIVERED.",
     "TECHNICALLY THIS IS A STANDING DESK",
+    "SUDO MAKE ME A SANDWICH (I'M IN LINE)",
+    "MY OTHER TERMINAL IS A YACHT",
+    "REAL PROGRAMMERS CODE IN TRAFFIC JAMS",
+    "MERGE CONFLICTS RESOLVED AT 30,000 FT",
+    "PUSHED TO MAIN FROM THE CHECKOUT LINE",
 ]
 
 
 def get_caution() -> str:
     """Get caution message with 1% chance of easter egg."""
-    import random
-
     if random.random() < 0.01:
         return random.choice(CAUTION_EASTER_EGGS)
     return CAUTION_DEFAULT
@@ -86,7 +90,6 @@ def display_startup_screen(
     url: str,
     is_tunnel: bool = True,
     cwd: str | None = None,
-    local_url: str | None = None,
 ) -> None:
     """Display the final startup screen with QR code.
 
@@ -94,7 +97,6 @@ def display_startup_screen(
         url: Primary URL to display and encode in QR.
         is_tunnel: Whether tunnel mode is active.
         cwd: Current working directory to display.
-        local_url: Local network URL to display.
     """
     console.clear()
 
@@ -134,12 +136,10 @@ def display_startup_screen(
         *tagline_colored,
         "",
         f"[bold yellow]{get_caution()}[/bold yellow]",
-        "",
+        "[bright_red]The URL is the only security. Use at your own risk.[/bright_red]",
         status,
         f"[bold cyan]{url}[/bold cyan]",
     ]
-    if local_url:
-        left_lines.append(f"[dim]{local_url}[/dim]")
     if cwd:
         left_lines.append(f"[dim]{cwd}[/dim]")
     left_lines.append("[dim]Ctrl+C to stop[/dim]")

@@ -1,3 +1,6 @@
+# Node
+node_modules/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -60,3 +63,9 @@ htmlcov/
 
 # Local config override
 config.local.yaml
+
+# Build cache
+porterminal/static/.vite/
+
+# Windows artifacts
+nul

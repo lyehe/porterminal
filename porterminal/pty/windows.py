@@ -2,6 +2,7 @@
 
 import logging
 import select
+import time
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -106,13 +107,23 @@ class WindowsPTYBackend:
         return self._pty is not None and self._pty.isalive()
 
     def close(self) -> None:
-        """Close the PTY and clean up resources."""
+        """Close the PTY with grace period before force kill."""
         if self._pty is None:
             return
 
         try:
             if self._pty.isalive():
-                self._pty.terminate(force=True)
+                # Try graceful termination first
+                self._pty.terminate(force=False)
+                # Wait up to 3 seconds for process to exit
+                for _ in range(30):
+                    if not self._pty.isalive():
+                        break
+                    time.sleep(0.1)
+                # Force kill if still alive
+                if self._pty.isalive():
+                    logger.debug("PTY did not exit gracefully, force killing")
+                    self._pty.terminate(force=True)
         except OSError as e:
             logger.error("PTY close error: %s", e)
         finally:

@@ -24,7 +24,6 @@ from porterminal.infrastructure import (
     CloudflaredInstaller,
     drain_process_output,
     find_available_port,
-    get_local_ip,
     is_port_available,
     start_cloudflared,
     start_server,
@@ -34,10 +33,117 @@ from porterminal.infrastructure import (
 console = Console()
 
 
+def _run_in_background(args) -> int:
+    """Spawn the server in background and return immediately."""
+    import tempfile
+
+    # Create temp file for URL communication
+    url_file = Path(tempfile.gettempdir()) / f"porterminal-{os.getpid()}.url"
+
+    # Build command without --background flag, with URL file
+    cmd = [sys.executable, "-m", "porterminal", f"--_url-file={url_file}"]
+    if args.path:
+        cmd.append(args.path)
+    if args.no_tunnel:
+        cmd.append("--no-tunnel")
+    if args.verbose:
+        cmd.append("--verbose")
+
+    # Start subprocess
+    popen_kwargs = {
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "stdin": subprocess.DEVNULL,
+    }
+
+    if sys.platform == "win32":
+        # Windows: CREATE_NO_WINDOW hides console window
+        CREATE_NO_WINDOW = 0x08000000
+        popen_kwargs["creationflags"] = CREATE_NO_WINDOW
+    else:
+        # Unix: start_new_session to detach from terminal
+        popen_kwargs["start_new_session"] = True
+
+    try:
+        proc = subprocess.Popen(cmd, **popen_kwargs)
+    except Exception as e:
+        console.print(f"[red]Error starting process:[/red] {e}")
+        return 1
+
+    # Wait for URL file to be created (with timeout)
+    timeout = 30
+    start_time = time.time()
+
+    with console.status("[cyan]Starting in background...[/cyan]", spinner="dots") as status:
+        while time.time() - start_time < timeout:
+            if url_file.exists():
+                try:
+                    content = url_file.read_text().strip()
+                    if content:
+                        status.stop()
+                        url = content
+                        is_tunnel = url.startswith("https://")
+                        cwd = args.path or os.getcwd()
+
+                        # Display full startup screen with QR code
+                        display_startup_screen(url, is_tunnel=is_tunnel, cwd=cwd)
+
+                        # Add background mode info
+                        console.print(
+                            f"[green]Running in background[/green] [dim](PID: {proc.pid})[/dim]"
+                        )
+                        stop_cmd = (
+                            f"taskkill /T /PID {proc.pid} /F"
+                            if sys.platform == "win32"
+                            else f"kill {proc.pid}"
+                        )
+                        console.print(f"[dim]Stop with: {stop_cmd}[/dim]\n")
+
+                        # Cleanup temp file
+                        try:
+                            url_file.unlink()
+                        except OSError:
+                            pass
+                        return 0
+                except OSError:
+                    pass
+
+            if proc.poll() is not None:
+                status.stop()
+                console.print(
+                    f"[red]Error:[/red] Process exited unexpectedly (code: {proc.returncode})"
+                )
+                # Cleanup temp file
+                try:
+                    url_file.unlink()
+                except OSError:
+                    pass
+                return 1
+
+            time.sleep(0.2)
+
+    console.print("[red]Error:[/red] Timeout waiting for server to start")
+    # Kill the process tree (includes child shells)
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/T", "/PID", str(proc.pid), "/F"], capture_output=True)
+    else:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+    return 1
+
+
 def main() -> int:
     """Main entry point."""
     args = parse_args()
     verbose = args.verbose
+
+    # Handle background mode
+    if args.background:
+        return _run_in_background(args)
 
     # Set log level based on verbose flag
     if verbose:
@@ -98,6 +204,11 @@ def main() -> int:
                 console.print("[red]Error:[/red] Server failed to start")
                 if server_process and server_process.poll() is None:
                     server_process.terminate()
+                    try:
+                        server_process.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        server_process.kill()
+                        server_process.wait()
                 return 1
 
         tunnel_process = None
@@ -109,22 +220,32 @@ def main() -> int:
 
             if not tunnel_url:
                 console.print("[red]Error:[/red] Failed to establish tunnel")
-                if server_process:
-                    server_process.terminate()
-                if tunnel_process:
-                    tunnel_process.terminate()
+                for proc in [server_process, tunnel_process]:
+                    if proc and proc.poll() is None:
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=3)
+                        except subprocess.TimeoutExpired:
+                            proc.kill()
+                            proc.wait()
                 return 1
 
-    # Display final screen
-    local_ip = get_local_ip()
-    local_url = f"http://{local_ip}:{port}"
+    # Determine final URL
     display_cwd = cwd_str or os.getcwd()
-
     if args.no_tunnel:
         display_url = f"http://{check_host}:{port}"
-        display_startup_screen(display_url, is_tunnel=False, cwd=display_cwd, local_url=local_url)
     else:
-        display_startup_screen(tunnel_url, is_tunnel=True, cwd=display_cwd, local_url=local_url)
+        display_url = tunnel_url
+
+    # If running as background child, write URL to file and skip display
+    if args.url_file:
+        try:
+            Path(args.url_file).write_text(display_url)
+        except OSError as e:
+            console.print(f"[red]Error writing URL file:[/red] {e}")
+    else:
+        # Display final screen (only in foreground mode)
+        display_startup_screen(display_url, is_tunnel=not args.no_tunnel, cwd=display_cwd)
 
     # Drain process output silently in background (only when not verbose)
     if server_process is not None and not verbose:
@@ -146,22 +267,19 @@ def main() -> int:
     except KeyboardInterrupt:
         console.print("\n[dim]Shutting down...[/dim]")
 
-    # Cleanup
-    if server_process is not None:
-        server_process.terminate()
-    if tunnel_process is not None:
-        tunnel_process.terminate()
+    # Cleanup - terminate gracefully, then kill if needed
+    def cleanup_process(proc: subprocess.Popen | None, name: str) -> None:
+        if proc is None or proc.poll() is not None:
+            return
+        try:
+            proc.terminate()
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()  # Reap the killed process
 
-    try:
-        if server_process is not None:
-            server_process.wait(timeout=5)
-        if tunnel_process is not None:
-            tunnel_process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        if server_process is not None:
-            server_process.kill()
-        if tunnel_process is not None:
-            tunnel_process.kill()
+    cleanup_process(server_process, "server")
+    cleanup_process(tunnel_process, "tunnel")
 
     return 0
 

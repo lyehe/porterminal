@@ -10,25 +10,25 @@ Porterminal is a web-based terminal accessible from mobile devices via Cloudflar
 
 **Install from PyPI:**
 ```bash
-pip install porterminal
+uv tool install ptn
 # or
-uv tool install porterminal
+pip install ptn
 ```
 
 **Run (after install):**
 ```bash
-porterminal
+ptn
 ```
 
 **Run without installing:**
 ```bash
-uvx porterminal
+uvx ptn
 ```
 
 **Development:**
 ```bash
 uv sync
-uv run porterminal
+uv run ptn
 ```
 
 **Build for PyPI:**
@@ -39,30 +39,47 @@ uv publish
 
 ## Architecture
 
-### Backend (Python/FastAPI)
-- `porterminal/__init__.py` - Entry point: starts uvicorn server, establishes Cloudflare tunnel, displays QR code
-- `porterminal/app.py` - FastAPI app with WebSocket endpoint at `/ws`, serves static files, exposes `/api/config`
-- `porterminal/session.py` - Session registry with unlimited reconnection window, max 10 sessions per user
-- `porterminal/config.py` - Pydantic config loaded from `config.yaml`
-- `porterminal/websocket/` - WebSocket handling package:
-  - `handler.py` - Main WebSocket handler with heartbeat
-  - `handlers.py` - Message type handlers (resize, input, ping)
-  - `buffer.py` - Output batching (immediate for <64 bytes, delayed for larger)
-  - `rate_limiter.py` - Token bucket rate limiting (100/sec, 500 burst)
-- `porterminal/pty/` - PTY management package:
-  - `manager.py` - Secure PTY manager with environment sanitization
-  - `windows.py` - Windows backend using pywinpty
-  - `unix.py` - Unix backend using pty module
-  - `env.py` - Environment sanitization (blocks API keys, secrets)
-  - `protocol.py` - PTY backend protocol definition
-- `porterminal/cli/` - CLI display utilities
-- `porterminal/infrastructure/` - Server and Cloudflare tunnel management
+Hexagonal architecture with clear separation of concerns.
 
-### Frontend (porterminal/static/)
-- `index.html` - Mobile-optimized layout with xterm.js (CDN with SRI), virtual keyboard rows
-- `app.js` - Terminal client with WebSocket reconnection, modifier key state machine (off/sticky/locked via double-tap)
-- `style.css` - Mobile-first styling
-- `sw.js` - Service worker for offline caching
+### Domain Layer (`porterminal/domain/`)
+Core business logic with no external dependencies:
+- `entities/` - Session, OutputBuffer
+- `values/` - SessionId, UserId, TerminalDimensions, ShellCommand, RateLimitConfig
+- `services/` - RateLimiter, EnvironmentSanitizer, SessionLimits
+- `ports/` - PtyPort, SessionRepository (interfaces)
+
+### Application Layer (`porterminal/application/`)
+Use cases orchestrating domain logic:
+- `services/terminal_service.py` - Terminal I/O, resize, heartbeat handling
+- `services/session_service.py` - Session lifecycle management
+- `ports/` - ConfigPort, ConnectionPort (interfaces)
+
+### Infrastructure Layer (`porterminal/infrastructure/`)
+External adapters and implementations:
+- `web/websocket_adapter.py` - WebSocket message routing
+- `repositories/in_memory_session.py` - Session storage implementation
+- `config/yaml_loader.py` - Configuration loading
+- `config/shell_detector.py` - Auto-detect available shells
+- `cloudflared.py` - Cloudflare tunnel management
+- `server.py` - Uvicorn server wrapper
+
+### PTY Layer (`porterminal/pty/`)
+- `windows.py` - Windows backend using pywinpty
+- `unix.py` - Unix backend using pty module
+
+### Entry Points
+- `porterminal/__init__.py` - Main entry point
+- `porterminal/app.py` - FastAPI app with WebSocket at `/ws`, serves static files
+- `porterminal/cli/` - CLI argument parsing and display
+
+### Frontend (`frontend/`)
+TypeScript/Vite application built to `porterminal/static/`:
+- `src/main.ts` - Application entry point
+- `src/services/` - ConnectionService, TabService, ConfigService
+- `src/input/` - KeyMapper, InputHandler, ModifierManager
+- `src/gestures/` - GestureRecognizer, SwipeDetector, SelectionHandler
+- `src/terminal/` - ResizeManager
+- `src/ui/` - ConnectionStatus, CopyButton, DisconnectOverlay
 
 ### Data Flow
 1. Client connects via WebSocket to `/ws?session_id=<id>&shell=<id>&skip_buffer=<bool>`

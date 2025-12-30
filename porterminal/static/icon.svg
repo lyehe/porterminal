@@ -1,4 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="64" fill="#1e1e1e"/>
-  <text x="256" y="320" font-family="monospace" font-size="280" font-weight="bold" fill="#007acc" text-anchor="middle">&gt;_</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <rect width="16" height="16" fill="#1e1e1e"/>
+  <rect x="1" y="2" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="2" y="2" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="3" y="2" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="2" y="3" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="3" y="3" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="4" y="3" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="3" y="4" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="4" y="4" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="5" y="4" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="4" y="5" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="5" y="5" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="6" y="5" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="3" y="6" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="4" y="6" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="5" y="6" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="2" y="7" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="3" y="7" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="4" y="7" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="1" y="8" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="2" y="8" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="3" y="8" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="8" y="8" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="9" y="8" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="10" y="8" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="11" y="8" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="12" y="8" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="8" y="9" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="9" y="9" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="10" y="9" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="11" y="9" width="1" height="1" fill="#FFFFFF"/>
+  <rect x="12" y="9" width="1" height="1" fill="#FFFFFF"/>
 </svg>

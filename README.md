@@ -1,128 +1,60 @@
-```
-    ____             __                      _             __
-   / __ \____  _____/ /____  _________ ___  (_)___  ____ _/ /
-  / /_/ / __ \/ ___/ __/ _ \/ ___/ __ `__ \/ / __ \/ __ `/ /
- / ____/ /_/ / /  / /_/  __/ /  / / / / / / / / / / /_/ / /
-/_/    \____/_/   \__/\___/_/  /_/ /_/ /_/_/_/ /_/\__,_/_/
-```
+<p align="center">
+  <img src="assets/banner.png" alt="Porterminal - Vibe Code From Anywhere" width="600">
+</p>
 
-Web-based terminal accessible from your phone via Cloudflare Quick Tunnel. Code from anywhere with a touch-friendly interface.
+<p align="center">
+  <a href="https://pypi.org/project/ptn/"><img src="https://img.shields.io/pypi/v/ptn" alt="PyPI"></a>
+  <a href="https://pypi.org/project/ptn/"><img src="https://img.shields.io/pypi/pyversions/ptn" alt="Python"></a>
+  <a href="https://github.com/lyehe/porterminal/blob/main/LICENSE"><img src="https://img.shields.io/github/license/lyehe/porterminal" alt="License"></a>
+</p>
+
+Web-based terminal accessible from your phone via Cloudflare Quick Tunnel. Touch-friendly interface with virtual keys, multi-tab sessions, and automatic reconnection.
 
 ## Features
 
-- **Mobile-optimized UI** - Touch-friendly virtual keyboard with modifier keys (Ctrl, Alt)
-- **Multi-tab support** - Run multiple terminal sessions simultaneously
-- **Session persistence** - Reconnect to running sessions after disconnect
-- **Secure by default** - Environment variables sanitized, API keys blocked
-- **Zero configuration tunnel** - Cloudflare Quick Tunnel with QR code for instant access
-- **Cross-platform** - Windows (pywinpty), Linux/macOS (pty)
-- **Auto shell detection** - Finds PowerShell, CMD, WSL, Bash automatically
+- **Touch-optimized** - Virtual keyboard with Ctrl/Alt/Shift modifiers, swipe gestures, pinch-to-zoom
+- **Multi-tab sessions** - Run multiple terminals simultaneously with persistent sessions
+- **Instant access** - Cloudflare Quick Tunnel with QR code, no port forwarding needed
+- **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish)
+- **Secure** - Environment sanitization blocks API keys and secrets
 
 ## Quick Start
 
-**One-liner install (installs uv automatically if needed):**
+```bash
+# Install
+uv tool install ptn
 
-```powershell
-# Windows (PowerShell)
-powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/lyehe/porterminal/main/install.ps1 | iex"
+# Run
+ptn
 ```
 
-```bash
-# macOS/Linux
-curl -LsSf https://raw.githubusercontent.com/lyehe/porterminal/main/install.sh | sh
-```
+Scan the QR code with your phone to connect.
 
-Then run:
-```bash
-porterminal
-```
-
-Scan the QR code with your phone to access the terminal.
-
-**Or install with pip/uv:**
+**Alternative methods:**
 
 ```bash
-pip install porterminal
-# or
-uv tool install porterminal
-```
+# Run without installing
+uvx ptn
 
-**Or run without installing:**
-
-```bash
-uvx porterminal
-```
-
-## Installation
-
-### Prerequisites
-
-- Python 3.12+
-- [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (auto-installed if missing)
-
-### Install from source
-
-```bash
-git clone https://github.com/lyehe/porterminal.git
-cd porterminal
-uv sync
-uv run porterminal
+# Or with pip
+pip install ptn
 ```
 
 ## Usage
 
-### Start with Cloudflare tunnel (recommended)
-
-```bash
-porterminal
 ```
-
-This will:
-1. Start the FastAPI server on localhost
-2. Create a Cloudflare Quick Tunnel
-3. Display a QR code for mobile access
-
-### Start without tunnel (local network only)
-
-```bash
-porterminal --no-tunnel
-```
-
-Or run uvicorn directly:
-
-```bash
-uv run uvicorn porterminal.app:app --host 0.0.0.0 --port 8000
-```
-
-### Command-line options
-
-```
-porterminal [path] [options]
-
-Arguments:
-  path              Starting directory for the shell (default: current directory)
+ptn [path] [options]
 
 Options:
-  --no-tunnel       Start server only, without Cloudflare tunnel
-  -v, --verbose     Show detailed startup logs
-  -U, --update      Update to the latest version
-  --check-update    Check if a newer version is available
-  -V, --version     Show version number
-```
-
-### Updating
-
-```bash
-# Check for updates
-porterminal --check-update
-
-# Update to latest version
-porterminal --update
+  --no-tunnel       Local network only (no Cloudflare tunnel)
+  -v, --verbose     Show detailed logs
+  -U, --update      Update to latest version
+  -V, --version     Show version
 ```
 
 ## Configuration
 
-Edit `config.yaml` to customize:
+Create `config.yaml` to customize:
 
 ```yaml
 server:
@@ -132,40 +64,26 @@ server:
 terminal:
   cols: 120
   rows: 30
-  default_shell: powershell  # or cmd, wsl, bash
+  default_shell: powershell  # cmd, wsl, bash, zsh
 
-# Custom buttons for the virtual keyboard
 buttons:
   - label: "git"
     send: "git status\r"
 ```
 
-## Architecture
-
-```
-porterminal/
-  __init__.py      Entry point: server + tunnel + QR code
-  app.py           FastAPI application with WebSocket endpoint
-  session.py       Session registry with reconnection support
-  config.py        Configuration loading
-  websocket/       WebSocket handler with output batching
-  pty/             PTY management (Windows/Unix)
-  cli/             Command-line interface
-  infrastructure/  Server and tunnel management
-  static/
-    index.html     Mobile-optimized terminal UI
-    app.js         Terminal client with xterm.js
-    style.css      VSCode-inspired styling
-```
-
 ## Security
 
-- Environment variables are sanitized before passing to shell
-- API keys and secrets (AWS, GitHub, OpenAI, etc.) are blocked
-- Sessions are isolated per user (via Cloudflare Access email)
-- Rate limiting on WebSocket input
-- Admin privilege warning on Windows
+> **Warning:** The URL is the only authentication. Anyone with the link can access your terminal.
+
+- Environment variables sanitized (API keys, tokens, secrets blocked)
+- Rate limiting on input
+- Sessions isolated per user via Cloudflare Access
+
+## Requirements
+
+- Python 3.12+
+- [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (auto-installed if missing)
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+[AGPL-3.0](LICENSE)

@@ -1,0 +1,632 @@
+/**
+ * VSCode-inspired Terminal UI
+ * Compact, borderless, integrated design
+ */
+
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* ========== THEME VARIABLES ========== */
+:root {
+    /* Core backgrounds */
+    --bg-primary: #1e1e1e;
+    --bg-elevated: #252525;
+    --bg-surface: #2d2d2d;
+
+    /* Gradients */
+    --bg-gradient-top: #232323;
+    --bg-gradient-bottom: #1a1a1a;
+
+    /* Text hierarchy */
+    --text-primary: #cccccc;
+    --text-high: rgba(255, 255, 255, 0.9);
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --text-muted: rgba(255, 255, 255, 0.5);
+    --text-disabled: rgba(255, 255, 255, 0.4);
+
+    /* Borders & dividers */
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --border-light: rgba(255, 255, 255, 0.1);
+    --border-medium: rgba(255, 255, 255, 0.15);
+
+    /* Semantic colors */
+    --color-success: rgba(100, 220, 100, 0.8);
+    --color-success-text: rgba(130, 230, 150, 1);
+    --color-success-bg: rgba(100, 200, 120, 0.15);
+
+    --color-danger: rgba(255, 100, 100, 0.8);
+    --color-danger-muted: rgba(255, 120, 120, 0.7);
+    --color-danger-text: rgba(255, 150, 150, 1);
+    --color-danger-bg: rgba(255, 80, 80, 0.15);
+
+    --color-accent: rgba(80, 160, 255, 0.8);
+    --color-accent-text: rgba(150, 200, 255, 1);
+    --color-accent-bg: rgba(80, 160, 255, 0.3);
+    --color-accent-strong: rgba(80, 160, 255, 0.5);
+
+    /* Interactive states */
+    --hover-overlay: rgba(255, 255, 255, 0.05);
+    --active-overlay: rgba(255, 255, 255, 0.08);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+    --scrollbar-hover: rgba(255, 255, 255, 0.25);
+
+    /* Terminal */
+    --cursor-color: #aeafad;
+    --selection-bg: rgba(38, 79, 120, 0.5);
+
+    /* Shadows & glows */
+    --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.5);
+    --glow-success: 0 0 6px rgba(100, 220, 100, 0.4);
+    --glow-danger: 0 0 6px rgba(255, 100, 100, 0.4);
+    --glow-accent: 0 0 8px rgba(80, 160, 255, 0.4);
+
+    /* Overlay */
+    --overlay-bg: rgba(0, 0, 0, 0.9);
+}
+
+/* Disable callout only on buttons, not terminal */
+.tool-btn, .tab-btn {
+    -webkit-touch-callout: none;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    /* Prevent any page scrolling */
+    position: fixed;
+    width: 100%;
+    /* Disable ALL browser touch handling - we handle gestures in JS */
+    touch-action: none;
+    overscroll-behavior: none;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    height: 100dvh;
+    height: 100svh; /* Small viewport - excludes keyboard */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
+/* ========== TAB BAR (Elegant style) ========== */
+#tab-bar {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    min-height: 36px;
+    background: linear-gradient(to bottom, var(--bg-gradient-top), var(--bg-gradient-bottom));
+    border-bottom: 1px solid var(--border-subtle);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#tab-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 14px;
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.tab-btn:active {
+    background: var(--hover-overlay);
+}
+
+.tab-btn.active {
+    background: var(--active-overlay);
+    color: var(--text-high);
+}
+
+.tab-btn.tab-add {
+    color: var(--text-disabled);
+    font-size: 18px;
+    padding: 0 14px;
+    border-right: none;
+}
+
+.tab-btn.tab-add:active {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.tab-label {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tab-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--text-disabled);
+    margin-left: 4px;
+    transition: all 0.1s ease;
+}
+
+.tab-close:active {
+    background: var(--border-light);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* Shell selector in tab bar */
+#shell-selector {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    height: 36px;
+    border-left: 1px solid var(--border-subtle);
+}
+
+#shell-select {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 11px;
+    padding: 4px 8px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+#connection-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-danger);
+    margin-right: 8px;
+    box-shadow: var(--glow-danger);
+}
+
+#connection-dot.connected {
+    background: var(--color-success);
+    box-shadow: var(--glow-success);
+}
+
+#btn-info,
+#btn-shutdown {
+    background: transparent;
+    border: none;
+    color: var(--text-disabled);
+    font-size: 14px;
+    padding: 4px 8px;
+    margin-left: 8px;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+#btn-info:active {
+    color: var(--color-accent);
+}
+
+#btn-shutdown {
+    color: var(--color-danger-muted);
+}
+
+#btn-shutdown:active {
+    color: var(--color-danger-text);
+}
+
+/* ========== TERMINAL AREA ========== */
+#terminal-container {
+    flex: 1;
+    overflow: hidden;
+    background: var(--bg-primary);
+    /* Disable native selection - custom JS handles it */
+    -webkit-user-select: none;
+    user-select: none;
+    /* Prevent iOS callout menu during long-press */
+    -webkit-touch-callout: none;
+    /* Disable browser touch handling - JS handles selection gestures */
+    touch-action: none;
+    overscroll-behavior: contain;
+}
+
+#terminal {
+    height: 100% !important;
+    width: 100% !important;
+}
+
+.terminal-instance {
+    height: 100%;
+    width: 100%;
+}
+
+#terminal .xterm-viewport {
+    background: var(--bg-primary) !important;
+    /* Disable browser touch handling - xterm.js handles scrolling via wheel events */
+    touch-action: none;
+    overscroll-behavior: contain;
+}
+
+/* Smooth scroll animation for terminal content */
+#terminal .xterm-viewport::-webkit-scrollbar {
+    width: 8px;
+}
+
+#terminal .xterm-viewport::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#terminal .xterm-viewport::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+#terminal .xterm-viewport::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-hover);
+}
+
+/* Disable native selection on screen - custom JS handles selection */
+#terminal .xterm-screen {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* iOS keyboard configuration for xterm input textarea */
+#terminal .xterm-helper-textarea,
+.xterm-helper-textarea {
+    /* Prevent iOS secure text entry (password dots) */
+    -webkit-text-security: none !important;
+    /* Prevent iOS from auto-zooming on focus (16px minimum) */
+    font-size: 16px !important;
+    /* Ensure standard text input behavior */
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+/* Hide Safari autofill buttons that may appear on the textarea */
+.xterm-helper-textarea::-webkit-contacts-auto-fill-button,
+.xterm-helper-textarea::-webkit-credentials-auto-fill-button {
+    visibility: hidden;
+    display: none !important;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+    width: 0;
+    height: 0;
+}
+
+/* ========== BOTTOM TOOLBAR ========== */
+#toolbar {
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(to bottom, var(--bg-gradient-top), var(--bg-gradient-bottom));
+    border-top: 1px solid var(--border-subtle);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.toolbar-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    min-height: 36px;
+    gap: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.toolbar-row:first-child {
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.toolbar-row::-webkit-scrollbar {
+    display: none;
+}
+
+.tool-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    padding: 0 10px;
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border-subtle);
+    border-radius: 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    -webkit-touch-callout: none;
+    flex-shrink: 0;
+}
+
+.tool-btn:active {
+    background: var(--hover-overlay);
+    color: var(--text-high);
+}
+
+.tool-btn.arrow {
+    padding: 0 10px;
+}
+
+.tool-btn.danger {
+    color: var(--color-danger-muted);
+}
+
+.tool-btn.danger:active {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+}
+
+.tool-btn.modifier {
+    padding: 0 10px;
+}
+
+.tool-btn.icon {
+    font-size: 18px;
+}
+
+.tool-btn.enter {
+    color: rgba(100, 200, 120, 0.8);
+}
+
+.tool-btn.enter:active {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+}
+
+.tool-btn.sticky {
+    background: var(--color-accent-bg);
+    color: var(--color-accent-text);
+}
+
+.tool-btn.locked {
+    background: var(--color-accent-strong);
+    color: #fff;
+    box-shadow: var(--glow-accent);
+}
+
+/* ========== DISCONNECT OVERLAY ========== */
+#disconnect-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--overlay-bg);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#disconnect-content {
+    text-align: center;
+}
+
+#disconnect-icon {
+    font-size: 48px;
+    color: var(--color-danger);
+    margin-bottom: 16px;
+}
+
+#disconnect-text {
+    color: var(--text-secondary);
+    font-size: 18px;
+    margin-bottom: 24px;
+}
+
+#disconnect-retry {
+    padding: 12px 32px;
+    background: var(--border-light);
+    border: 1px solid var(--border-medium);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+#disconnect-retry:active {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+/* ========== FLOATING COPY BUTTON (iOS) ========== */
+#copy-button {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 8px 20px;
+    background: linear-gradient(to bottom, var(--bg-surface), var(--bg-elevated));
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    color: var(--text-high);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    z-index: 10000;
+    box-shadow: var(--shadow-elevated);
+    display: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+    transition: all 0.15s ease;
+}
+
+#copy-button:active {
+    background: linear-gradient(to bottom, #3a3a3a, var(--bg-surface));
+    transform: translate(-50%, -50%) scale(0.97);
+}
+
+#copy-button.visible {
+    display: block;
+    animation: copyButtonAppear 0.1s ease-out;
+}
+
+#copy-button.success {
+    background: linear-gradient(to bottom, #2a3a2a, #1f2f1f);
+    border-color: rgba(100, 200, 120, 0.3);
+    color: var(--color-success-text);
+}
+
+#copy-button.error {
+    background: linear-gradient(to bottom, #3a2a2a, #2f1f1f);
+    border-color: rgba(255, 120, 120, 0.3);
+    color: var(--color-danger-text);
+}
+
+@keyframes copyButtonAppear {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+/* ========== HELP POPUP ========== */
+#help-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--overlay-bg);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+#help-content {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    max-width: 320px;
+    width: 100%;
+    box-shadow: var(--shadow-elevated);
+    animation: helpAppear 0.15s ease-out;
+}
+
+@keyframes helpAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+#help-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-high);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+#help-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+}
+
+#help-close:active {
+    color: var(--text-high);
+}
+
+#help-body {
+    padding: 12px 16px;
+}
+
+.help-section {
+    margin-bottom: 12px;
+}
+
+.help-section:last-child {
+    margin-bottom: 0;
+}
+
+.help-title {
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.help-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.help-key {
+    display: inline-block;
+    min-width: 80px;
+    padding: 2px 6px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    color: var(--text-high);
+    font-size: 11px;
+    text-align: center;
+}
+
+/* ========== UTILITIES ========== */
+.hidden {
+    display: none !important;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}

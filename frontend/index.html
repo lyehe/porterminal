@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Terminal">
+    <meta name="theme-color" content="#1e1e1e">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="Terminal">
+    <meta name="msapplication-TileColor" content="#1e1e1e">
+    <meta name="msapplication-tap-highlight" content="no">
+    <meta name="format-detection" content="telephone=no">
+    <title>Terminal</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+</head>
+<body>
+    <div id="app">
+        <!-- Tab Bar with Shell Selector -->
+        <div id="tab-bar">
+            <!-- Tabs rendered by JS -->
+            <div id="shell-selector">
+                <span id="connection-dot"></span>
+                <select id="shell-select"><option>...</option></select>
+                <button id="btn-info" title="Help">ⓘ</button>
+                <button id="btn-shutdown" title="Shutdown">⏻</button>
+            </div>
+        </div>
+
+        <!-- Terminal Area -->
+        <div id="terminal-container">
+            <div id="terminal"></div>
+        </div>
+
+        <!-- Bottom Toolbar - Two rows -->
+        <div id="toolbar">
+            <div class="toolbar-row">
+                <button class="tool-btn" id="btn-escape">Esc</button>
+                <button class="tool-btn arrow" data-key="ArrowLeft">←</button>
+                <button class="tool-btn arrow" data-key="ArrowDown">↓</button>
+                <button class="tool-btn arrow" data-key="ArrowUp">↑</button>
+                <button class="tool-btn arrow" data-key="ArrowRight">→</button>
+                <button class="tool-btn icon" data-key="Tab">⇥</button>
+                <button class="tool-btn" data-key="Home">Home</button>
+                <button class="tool-btn" data-key="End">End</button>
+                <button class="tool-btn icon" id="btn-backspace">⌫</button>
+                <button class="tool-btn" data-key="Delete">Del</button>
+                <button class="tool-btn icon enter" data-key="Enter">↵</button>
+            </div>
+            <div class="toolbar-row">
+                <button class="tool-btn modifier" id="btn-ctrl">Ctl</button>
+                <button class="tool-btn modifier" id="btn-alt">Alt</button>
+                <button class="tool-btn modifier" id="btn-shift">Sft</button>
+                <button class="tool-btn" data-key="ShiftTab">Sft⇥</button>
+                <button class="tool-btn danger" data-key="Ctrl+C">^C</button>
+                <button class="tool-btn icon" id="btn-paste">⎘</button>
+                <button class="tool-btn" data-key="1">1</button>
+                <button class="tool-btn" data-key="2">2</button>
+                <button class="tool-btn" data-key="3">3</button>
+                <button class="tool-btn" data-key="@">@</button>
+                <button class="tool-btn" data-key="/">/</button>
+                <button class="tool-btn" data-key="\Enter">\↵</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Floating Copy Button (iOS) -->
+    <button id="copy-button">Copy</button>
+
+    <!-- Connection Lost Overlay -->
+    <div id="disconnect-overlay" class="hidden">
+        <div id="disconnect-content">
+            <div id="disconnect-icon">○</div>
+            <div id="disconnect-text">Connection Lost</div>
+            <button id="disconnect-retry">Retry</button>
+        </div>
+    </div>
+
+    <!-- Help Popup -->
+    <div id="help-overlay" class="hidden">
+        <div id="help-content">
+            <div id="help-header">
+                <span>Touch Controls</span>
+                <button id="help-close">×</button>
+            </div>
+            <div id="help-body">
+                <div class="help-section">
+                    <div class="help-title">Swipe</div>
+                    <div class="help-item"><span class="help-key">←</span> ↑ Last command</div>
+                    <div class="help-item"><span class="help-key">→</span> ↓ Next command</div>
+                </div>
+                <div class="help-section">
+                    <div class="help-title">Selection</div>
+                    <div class="help-item"><span class="help-key">Long press</span> Start selection</div>
+                    <div class="help-item"><span class="help-key">Drag</span> Extend selection</div>
+                    <div class="help-item"><span class="help-key">Double tap</span> Select word</div>
+                    <div class="help-item"><span class="help-key">Tap</span> Clear selection</div>
+                </div>
+                <div class="help-section">
+                    <div class="help-title">Zoom</div>
+                    <div class="help-item"><span class="help-key">Pinch</span> Change font size</div>
+                </div>
+                <div class="help-section">
+                    <div class="help-title">Modifiers (Ctl, Alt, Sft)</div>
+                    <div class="help-item"><span class="help-key">Tap</span> Sticky (one use)</div>
+                    <div class="help-item"><span class="help-key">Double tap</span> Lock on/off</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

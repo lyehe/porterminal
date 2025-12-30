@@ -1,5 +1,5 @@
 [project]
-name = "porterminal"
+name = "ptn"
 version = "0.1.0"
 description = "Web-based terminal accessible from phone via Cloudflare Tunnel"
 readme = "README.md"
@@ -45,7 +45,7 @@ Documentation = "https://github.com/lyehe/porterminal/tree/main/docs"
 Issues = "https://github.com/lyehe/porterminal/issues"
 
 [project.scripts]
-porterminal = "porterminal:main"
+ptn = "porterminal:main"
 
 [project.optional-dependencies]
 dev = [
@@ -72,6 +72,8 @@ dev-dependencies = [
     "watchfiles>=0.21.0",
     "pre-commit>=4.0.0",
     "ruff>=0.8.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
 ]
 
 [tool.ruff]

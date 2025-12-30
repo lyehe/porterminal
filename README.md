@@ -31,24 +31,17 @@ Simple, quick and dirty web terminal accessible from your phone via Cloudflare Q
 ## Quick Start
 
 ```bash
-# Install
-uv tool install ptn
+# Run without installing
+uvx ptn
 
-# Run
+
+# Or install
+uv tool install ptn
 ptn
 ```
 
 Scan the QR code with your phone to connect.
 
-**Alternative methods:**
-
-```bash
-# Run without installing
-uvx ptn
-
-# Or with pip
-pip install ptn
-```
 
 ## Usage
 

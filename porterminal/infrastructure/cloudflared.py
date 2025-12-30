@@ -93,14 +93,8 @@ class CloudflaredInstaller:
                     if install_path:
                         os.environ["PATH"] = install_path + os.pathsep + os.environ.get("PATH", "")
                         console.print(f"[dim]Added to PATH: {install_path}[/dim]")
-                        return True
-                    else:
-                        # Couldn't find it, prompt restart
-                        console.print(
-                            "[yellow]Installed but not found in PATH.[/yellow]\n"
-                            "[yellow]Please restart your terminal and run again.[/yellow]"
-                        )
-                        return False
+                    # Return True regardless - winget succeeded, may just need shell restart
+                    return True
             except (subprocess.TimeoutExpired, OSError) as e:
                 console.print(f"[dim]winget failed: {e}[/dim]")
 
@@ -209,13 +203,8 @@ class CloudflaredInstaller:
                                 install_path + os.pathsep + os.environ.get("PATH", "")
                             )
                             console.print(f"[dim]Added to PATH: {install_path}[/dim]")
-                            return True
-                        else:
-                            console.print(
-                                "[yellow]Installed but not found in PATH.[/yellow]\n"
-                                "[yellow]Please restart your terminal and run again.[/yellow]"
-                            )
-                            return False
+                        # Return True regardless - package manager succeeded
+                        return True
                 except (subprocess.TimeoutExpired, OSError) as e:
                     console.print(f"[dim]{name} failed: {e}[/dim]")
 
@@ -266,13 +255,8 @@ class CloudflaredInstaller:
                     if install_path:
                         os.environ["PATH"] = install_path + os.pathsep + os.environ.get("PATH", "")
                         console.print(f"[dim]Added to PATH: {install_path}[/dim]")
-                        return True
-                    else:
-                        console.print(
-                            "[yellow]Installed but not found in PATH.[/yellow]\n"
-                            "[yellow]Please restart your terminal and run again.[/yellow]"
-                        )
-                        return False
+                    # Return True regardless - Homebrew succeeded
+                    return True
             except (subprocess.TimeoutExpired, OSError) as e:
                 console.print(f"[dim]Homebrew failed: {e}[/dim]")
 

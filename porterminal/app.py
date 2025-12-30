@@ -73,7 +73,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Porterminal",
         description="Web-based terminal accessible from phone via Cloudflare Tunnel",
-        version="0.1.1",
+        version="0.1.2",
         lifespan=lifespan,
     )
 

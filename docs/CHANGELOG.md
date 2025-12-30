@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2024-12-30
+
+### Fixed
+- Improved cloudflared install flow: shows friendly "restart terminal" message instead of error when PATH not updated
+
 ## [0.1.1] - 2024-12-30
 
 ### Fixed
@@ -49,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/lyehe/porterminal/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/lyehe/porterminal/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/lyehe/porterminal/releases/tag/v0.1.0

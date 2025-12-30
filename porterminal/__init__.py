@@ -8,7 +8,7 @@ This package provides:
 - Configuration system with shell auto-detection
 """
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 import os
 import subprocess
@@ -175,14 +175,14 @@ def main() -> int:
     if not args.no_tunnel and not CloudflaredInstaller.is_installed():
         console.print("[yellow]cloudflared not found[/yellow]")
         if not CloudflaredInstaller.install():
-            console.print("[red]Error:[/red] Failed to install cloudflared")
             console.print()
             console.print("Install manually: [cyan]winget install cloudflare.cloudflared[/cyan]")
             return 1
-        # Verify installation
+        # Verify installation - if still not found, ask to restart shell
         if not CloudflaredInstaller.is_installed():
-            console.print("[red]Error:[/red] cloudflared still not found after install")
-            return 1
+            console.print()
+            console.print("[yellow]Please restart your terminal and run again.[/yellow]")
+            return 0  # Exit gracefully, not an error
 
     # Show startup status
     with console.status("[cyan]Starting...[/cyan]", spinner="dots") as status:

@@ -19,7 +19,7 @@
   </a>
 </p>
 
-Web terminal accessible from your phone via Cloudflare Quick Tunnel. Touch-friendly interface with virtual keys, multi-tab sessions, etc.
+Simple, quick and dirty web terminal accessible from your phone via Cloudflare Quick Tunnel. Vibe-coding-friendly interface with virtual keys, multi-tab sessions, etc.
 
 ## Features
 
@@ -54,31 +54,90 @@ pip install ptn
 
 ```
 ptn [path] [options]
-
-Options:
-  --no-tunnel       Local network only (no Cloudflare tunnel)
-  -v, --verbose     Show detailed logs
-  -U, --update      Update to latest version
-  -V, --version     Show version
 ```
+
+**Examples:**
+
+```bash
+# Start in current directory with tunnel
+ptn
+
+# Start in a specific project folder
+ptn ~/projects/myapp
+
+# Local network only (no Cloudflare tunnel)
+ptn --no-tunnel
+
+# Run in background (returns immediately)
+ptn -b
+
+# Show detailed startup logs
+ptn -v
+
+# Update to latest version
+ptn -U
+
+# Check for updates without installing
+ptn --check-update
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `path` | Starting directory for the shell (default: current) |
+| `--no-tunnel` | Local network only, no Cloudflare tunnel |
+| `-b, --background` | Run in background and return immediately |
+| `-v, --verbose` | Show detailed startup logs |
+| `-U, --update` | Update to the latest version |
+| `--check-update` | Check if a newer version is available |
+| `-V, --version` | Show version |
+| `-h, --help` | Show help message |
 
 ## Configuration
 
-Create `config.yaml` to customize:
+Create `config.yaml` in your working directory to customize:
 
 ```yaml
+# Server settings
 server:
   host: "127.0.0.1"
   port: 8000
 
+# Terminal settings
 terminal:
-  cols: 120
-  rows: 30
-  default_shell: powershell  # cmd, wsl, bash, zsh
+  cols: 120        # Default columns (40-500)
+  rows: 30         # Default rows (10-200)
+  default_shell: powershell  # Default shell ID
 
+  # Custom shells (optional - auto-detected if not specified)
+  shells:
+    - id: powershell
+      name: PowerShell
+      command: powershell.exe
+      args: ["-NoLogo"]
+    - id: wsl
+      name: WSL
+      command: wsl.exe
+      args: []
+
+# Custom quick-action buttons
 buttons:
   - label: "git"
     send: "git status\r"
+  - label: "ls"
+    send: "ls -la\r"
+  - label: "clear"
+    send: "clear\r"
+  - label: "exit"
+    send: "exit\r"
+```
+
+**Minimal config example:**
+
+```yaml
+terminal:
+  default_shell: bash
 ```
 
 ## Security

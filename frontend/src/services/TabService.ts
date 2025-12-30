@@ -129,7 +129,7 @@ export function createTabService(
 
             const label = document.createElement('span');
             label.className = 'tab-label';
-            label.textContent = `${tab.shellId} ${tab.id}`;
+            label.textContent = `${tab.id}`;
             tabBtn.appendChild(label);
 
             if (tabs.length > 1) {

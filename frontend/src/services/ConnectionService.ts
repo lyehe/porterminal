@@ -39,6 +39,7 @@ export interface ConnectionService {
 interface TabConnectionState {
     state: ConnectionState;
     pendingReconnect: ReturnType<typeof setTimeout> | null;
+    earlyBuffer: string[];  // Buffer for data arriving before terminal is ready
 }
 
 // Terminal response pattern - filter these from input
@@ -69,7 +70,7 @@ export function createConnectionService(
 
     function getTabState(tabId: number): TabConnectionState {
         if (!tabStates.has(tabId)) {
-            tabStates.set(tabId, { state: 'disconnected', pendingReconnect: null });
+            tabStates.set(tabId, { state: 'disconnected', pendingReconnect: null, earlyBuffer: [] });
         }
         return tabStates.get(tabId)!;
     }
@@ -159,6 +160,7 @@ export function createConnectionService(
             }
 
             state.state = 'connecting';
+            state.earlyBuffer = [];  // Clear any stale buffered data
 
             const url = buildWebSocketUrl(tab, shellId, skipBuffer);
             const ws = new WebSocket(url);
@@ -172,7 +174,6 @@ export function createConnectionService(
                     return;
                 }
 
-                state.state = 'connected';
                 tab.reconnectAttempts = 0;
                 eventBus.emit('connection:open', { tabId: tab.id });
 
@@ -183,20 +184,32 @@ export function createConnectionService(
                     }
                 }, config.heartbeatMs);
 
-                // Fit terminal (will trigger resize message)
-                tab.fitAddon.fit();
+                // Fit terminal after browser layout, then set connected state
+                // This ensures terminal is properly sized before accepting data
+                requestAnimationFrame(() => {
+                    tab.fitAddon.fit();
+                    state.state = 'connected';
+                    // Flush any data that arrived during setup
+                    if (state.earlyBuffer.length > 0) {
+                        for (const text of state.earlyBuffer) {
+                            tab.term.write(text);
+                        }
+                        state.earlyBuffer = [];
+                    }
+                });
             };
 
             ws.onmessage = (event: MessageEvent) => {
-                // Only process if connected
-                if (state.state !== 'connected') {
-                    return;
-                }
-
                 if (event.data instanceof ArrayBuffer) {
                     const text = textDecoder.decode(event.data);
-                    tab.term.write(text);
-                } else {
+                    // Buffer data if terminal isn't ready yet (still in connecting state)
+                    if (state.state === 'connecting') {
+                        state.earlyBuffer.push(text);
+                    } else if (state.state === 'connected') {
+                        tab.term.write(text);
+                    }
+                } else if (state.state === 'connected' || state.state === 'connecting') {
+                    // JSON messages can be handled immediately
                     try {
                         const msg = JSON.parse(event.data as string) as WebSocketMessage;
                         handleMessage(tab, msg);

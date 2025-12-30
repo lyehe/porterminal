@@ -121,9 +121,9 @@ html, body {
 .tab-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 2px;
     height: 36px;
-    padding: 0 14px;
+    padding: 0 8px;
     background: transparent;
     border: none;
     border-right: 1px solid var(--border-subtle);
@@ -147,7 +147,7 @@ html, body {
 .tab-btn.tab-add {
     color: var(--text-disabled);
     font-size: 18px;
-    padding: 0 14px;
+    padding: 0 10px;
     border-right: none;
 }
 
@@ -170,7 +170,6 @@ html, body {
     border-radius: 4px;
     font-size: 14px;
     color: var(--text-disabled);
-    margin-left: 4px;
     transition: all 0.1s ease;
 }
 

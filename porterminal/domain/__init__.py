@@ -5,10 +5,12 @@
 from .entities import (
     CLEAR_SCREEN_SEQUENCE,
     MAX_SESSIONS_PER_USER,
+    MAX_TABS_PER_USER,
     MAX_TOTAL_SESSIONS,
     OUTPUT_BUFFER_MAX_BYTES,
     OutputBuffer,
     Session,
+    Tab,
 )
 
 # Ports
@@ -16,6 +18,7 @@ from .ports import (
     PTYFactory,
     PTYPort,
     SessionRepository,
+    TabRepository,
 )
 
 # Services
@@ -25,6 +28,9 @@ from .services import (
     SessionLimitChecker,
     SessionLimitConfig,
     SessionLimitResult,
+    TabLimitChecker,
+    TabLimitConfig,
+    TabLimitResult,
     TokenBucketRateLimiter,
 )
 from .values import (
@@ -38,6 +44,7 @@ from .values import (
     RateLimitConfig,
     SessionId,
     ShellCommand,
+    TabId,
     TerminalDimensions,
     UserId,
 )
@@ -51,6 +58,7 @@ __all__ = [
     "MAX_ROWS",
     "SessionId",
     "UserId",
+    "TabId",
     "ShellCommand",
     "RateLimitConfig",
     "EnvironmentRules",
@@ -63,6 +71,8 @@ __all__ = [
     "OutputBuffer",
     "OUTPUT_BUFFER_MAX_BYTES",
     "CLEAR_SCREEN_SEQUENCE",
+    "Tab",
+    "MAX_TABS_PER_USER",
     # Services
     "TokenBucketRateLimiter",
     "Clock",
@@ -70,8 +80,12 @@ __all__ = [
     "SessionLimitChecker",
     "SessionLimitConfig",
     "SessionLimitResult",
+    "TabLimitChecker",
+    "TabLimitConfig",
+    "TabLimitResult",
     # Ports
     "SessionRepository",
+    "TabRepository",
     "PTYPort",
     "PTYFactory",
 ]

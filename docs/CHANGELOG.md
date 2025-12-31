@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2024-12-31
+
+### Added
+- Text view overlay for easier text selection on mobile (triple-tap or long-press to open)
+- Management WebSocket for centralized tab control
+
+### Changed
+- Tab management architecture refactored to server-side state with sync to clients
+- Simplified frontend by removing StorageService and barrel exports
+- Cleaner domain layer with dedicated tab entities, ports, and services
+
+### Fixed
+- Tab state consistency across reconnections
+
 ## [0.1.2] - 2024-12-30
 
 ### Fixed
@@ -54,7 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/lyehe/porterminal/compare/v0.1.2...v0.1.4
 [0.1.2]: https://github.com/lyehe/porterminal/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/lyehe/porterminal/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/lyehe/porterminal/releases/tag/v0.1.0

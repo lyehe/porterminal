@@ -23,11 +23,12 @@
     <div id="app">
         <!-- Tab Bar with Shell Selector -->
         <div id="tab-bar">
+            <span id="connection-dot"></span>
             <!-- Tabs rendered by JS -->
             <div id="shell-selector">
-                <span id="connection-dot"></span>
                 <select id="shell-select"><option>...</option></select>
                 <button id="btn-info" title="Help">ⓘ</button>
+                <button id="btn-textview" title="Plain Text View">≡</button>
                 <button id="btn-shutdown" title="Shutdown">⏻</button>
             </div>
         </div>
@@ -111,7 +112,24 @@
                     <div class="help-item"><span class="help-key">Tap</span> Sticky (one use)</div>
                     <div class="help-item"><span class="help-key">Double tap</span> Lock on/off</div>
                 </div>
+                <div class="help-section">
+                    <div class="help-title">Tabs</div>
+                    <div class="help-item"><span class="help-key">Hold ×</span> Close tab</div>
+                </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Plain Text View Popup -->
+    <div id="textview-overlay" class="hidden">
+        <div id="textview-content">
+            <div id="textview-header">
+                <span id="textview-title">Text</span>
+                <button class="textview-zoom-btn" id="textview-zoom-out">−</button>
+                <button class="textview-zoom-btn" id="textview-zoom-in">+</button>
+                <button id="textview-close">×</button>
+            </div>
+            <pre id="textview-body"></pre>
         </div>
     </div>
 

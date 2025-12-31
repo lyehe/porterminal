@@ -7,10 +7,11 @@ import type { Tab, SwipeDirection, ModifierMode } from '@/types';
 
 /** Event payload types */
 export interface EventMap {
-    // Tab events
+    // Tab events (local)
     'tab:created': { tab: Tab };
     'tab:switched': { tabId: number; tab: Tab };
     'tab:closed': { tabId: number };
+    'tab:stale': { tabId: number; serverId: string | null; code: number };
 
     // Connection events
     'connection:open': { tabId: number };

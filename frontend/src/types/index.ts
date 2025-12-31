@@ -7,7 +7,8 @@ import type { FitAddon } from '@xterm/addon-fit';
 
 /** Tab state */
 export interface Tab {
-    id: number;
+    id: number;                  // Local numeric ID for UI
+    tabId: string | null;        // Server-assigned UUID
     shellId: string;
     term: Terminal;
     fitAddon: FitAddon;
@@ -18,18 +19,14 @@ export interface Tab {
     reconnectAttempts: number;
 }
 
-/** Saved tab state for localStorage persistence */
-export interface SavedTab {
-    id: number;
-    shellId: string;
-    sessionId: string | null;
-}
-
-/** Saved state from localStorage */
-export interface SavedState {
-    tabs: SavedTab[];
-    activeTabId: number | null;
-    tabCounter: number;
+/** Server tab info from tab_list message */
+export interface ServerTab {
+    id: string;                  // Server UUID
+    session_id: string;
+    shell_id: string;
+    name: string;
+    created_at: string;
+    last_accessed: string;
 }
 
 /** Connection state machine */
@@ -93,6 +90,8 @@ export interface TerminalPosition {
 export interface SessionInfoMessage {
     type: 'session_info';
     session_id: string;
+    shell?: string;
+    tab_id?: string | null;
 }
 
 export interface PingMessage {
@@ -114,4 +113,100 @@ export interface ResizeMessage {
     rows: number;
 }
 
-export type WebSocketMessage = SessionInfoMessage | PingMessage | PongMessage | ErrorMessage;
+/** Tab sync messages from server */
+export interface TabListMessage {
+    type: 'tab_list';
+    tabs: ServerTab[];
+    timestamp: string;
+}
+
+export interface TabCreatedMessage {
+    type: 'tab_created';
+    tab: ServerTab;
+}
+
+export interface TabClosedMessage {
+    type: 'tab_closed';
+    tab_id: string;
+    reason: string;
+}
+
+export type WebSocketMessage =
+    | SessionInfoMessage
+    | PingMessage
+    | PongMessage
+    | ErrorMessage
+    | TabListMessage
+    | TabCreatedMessage
+    | TabClosedMessage;
+
+/** Management WebSocket message types */
+
+/** Tab state change */
+export interface TabChange {
+    action: 'add' | 'remove' | 'update';
+    tab_id: string;
+    tab?: ServerTab;
+    reason?: string;
+}
+
+/** Full state sync from server */
+export interface TabStateSyncMessage {
+    type: 'tab_state_sync';
+    tabs: ServerTab[];
+}
+
+/** Incremental state update from server */
+export interface TabStateUpdateMessage {
+    type: 'tab_state_update';
+    changes: TabChange[];
+}
+
+/** Response to create_tab request */
+export interface CreateTabResponse {
+    type: 'create_tab_response';
+    request_id: string;
+    success: boolean;
+    tab?: ServerTab;
+    error?: string;
+}
+
+/** Response to close_tab request */
+export interface CloseTabResponse {
+    type: 'close_tab_response';
+    request_id: string;
+    success: boolean;
+    error?: string;
+}
+
+/** Response to rename_tab request */
+export interface RenameTabResponse {
+    type: 'rename_tab_response';
+    request_id: string;
+    success: boolean;
+    tab?: ServerTab;
+    error?: string;
+}
+
+export type ManagementMessage =
+    | TabStateSyncMessage
+    | TabStateUpdateMessage
+    | CreateTabResponse
+    | CloseTabResponse
+    | RenameTabResponse
+    | PongMessage;
+
+/** Saved tab state for localStorage */
+export interface SavedTab {
+    id: number;
+    tabId: string | null;
+    sessionId: string | null;
+    shellId: string;
+}
+
+/** Saved state for localStorage */
+export interface SavedState {
+    tabs: SavedTab[];
+    activeTabId: number | null;
+    tabCounter: number;
+}

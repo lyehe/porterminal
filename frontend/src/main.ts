@@ -1,6 +1,11 @@
 /**
  * Porterminal - Web-based terminal client
  * Main entry point - Application bootstrap and wiring
+ *
+ * Architecture: Backend-driven tab management
+ * - ManagementService handles control plane (/ws/management)
+ * - ConnectionService handles data plane (/ws for terminal I/O)
+ * - TabService renders what the server tells it
  */
 
 // Styles
@@ -11,9 +16,9 @@ import './styles/index.css';
 import { createEventBus } from '@/core/events';
 
 // Services
-import { createStorageService } from '@/services/StorageService';
 import { createConfigService } from '@/services/ConfigService';
 import { createConnectionService } from '@/services/ConnectionService';
+import { createManagementService } from '@/services/ManagementService';
 import { createTabService } from '@/services/TabService';
 
 // Input
@@ -36,13 +41,14 @@ import { createResizeManager } from '@/terminal/ResizeManager';
 import { createCopyButton } from '@/ui/CopyButton';
 import { createDisconnectOverlay } from '@/ui/DisconnectOverlay';
 import { createConnectionStatus } from '@/ui/ConnectionStatus';
+import { createTextViewOverlay } from '@/ui/TextViewOverlay';
 
 // Types
 import type { SwipeDirection } from '@/types';
+import type { TabService } from '@/services/TabService';
 
 // Configuration
 const CONFIG = {
-    storageKey: 'porterminal-tabs',
     maxReconnectAttempts: 5,
     reconnectDelayMs: 1000,
     heartbeatMs: 25000,
@@ -59,12 +65,12 @@ async function init(): Promise<void> {
     const eventBus = createEventBus();
 
     // Create services
-    const storageService = createStorageService(CONFIG.storageKey);
     const configService = createConfigService();
 
     // Create UI components
     const connectionStatus = createConnectionStatus();
     const disconnectOverlay = createDisconnectOverlay();
+    const textViewOverlay = createTextViewOverlay();
 
     // Create clipboard manager
     const clipboardManager = createClipboardManager();
@@ -75,9 +81,31 @@ async function init(): Promise<void> {
         updateModifierButton(modifier);
     });
 
-    // Create connection service (needs callbacks)
-    let tabService: ReturnType<typeof createTabService>;
+    // Forward declaration for tabService
+    let tabService: TabService;
 
+    // Create management service (control plane)
+    const managementService = createManagementService({
+        onStateSync: (serverTabs) => {
+            console.log('Received state sync:', serverTabs.length, 'tabs');
+            tabService.applyStateSync(serverTabs);
+        },
+        onStateUpdate: (changes) => {
+            console.log('Received state update:', changes);
+            tabService.applyStateUpdate(changes);
+        },
+        onDisconnect: () => {
+            console.log('Management WebSocket disconnected');
+            connectionStatus.set('disconnected');
+            disconnectOverlay.show();
+        },
+        onConnect: () => {
+            console.log('Management WebSocket connected');
+            disconnectOverlay.hide();
+        },
+    });
+
+    // Create connection service (data plane for terminal I/O)
     const connectionService = createConnectionService(
         eventBus,
         {
@@ -86,9 +114,12 @@ async function init(): Promise<void> {
             heartbeatMs: CONFIG.heartbeatMs,
         },
         {
-            onSessionInfo: (tab, sessionId) => {
+            onSessionInfo: (tab, sessionId, tabId) => {
+                // Update tab with server-assigned IDs
                 tab.sessionId = sessionId;
-                tabService.save();
+                if (tabId) {
+                    tab.tabId = tabId;
+                }
             },
             onDisconnect: () => {
                 connectionStatus.set('disconnected');
@@ -104,10 +135,10 @@ async function init(): Promise<void> {
         connectionService.sendResize(tab, cols, rows);
     });
 
-    // Create tab service
+    // Create tab service (render-only, backend-driven)
     tabService = createTabService(
         eventBus,
-        storageService,
+        managementService,
         connectionService,
         { isMobile },
         modifierManager.state,
@@ -169,10 +200,10 @@ async function init(): Promise<void> {
                 if (!tab) return;
 
                 if (direction === 'up') {
-                    connectionService.sendInput(tab, '\x1b[A'); // Up arrow
+                    connectionService.sendInput(tab, '\x1b[A');
                     if (navigator.vibrate) navigator.vibrate(20);
                 } else if (direction === 'down') {
-                    connectionService.sendInput(tab, '\x1b[B'); // Down arrow
+                    connectionService.sendInput(tab, '\x1b[B');
                     if (navigator.vibrate) navigator.vibrate(20);
                 }
             },
@@ -193,13 +224,24 @@ async function init(): Promise<void> {
 
     // Setup UI components
     copyButton.setup();
-    disconnectOverlay.setup(() => {
-        // Retry all disconnected tabs
-        for (const tab of tabService.tabs) {
-            if (!connectionService.isConnected(tab)) {
-                tab.reconnectAttempts = 0;
-                connectionService.connect(tab, undefined, true);
+    disconnectOverlay.setup(async () => {
+        try {
+            // 1. Reconnect management and wait for state sync
+            if (!managementService.isConnected()) {
+                await managementService.connect();
             }
+
+            // 2. Connect data plane for synced tabs
+            for (const tab of tabService.tabs) {
+                if (!connectionService.isConnected(tab)) {
+                    tab.reconnectAttempts = 0;
+                    connectionService.connect(tab, true);
+                }
+            }
+
+            disconnectOverlay.hide();
+        } catch (e) {
+            console.error('Retry failed:', e);
         }
     });
 
@@ -220,21 +262,19 @@ async function init(): Promise<void> {
             shellSelect.appendChild(option);
         }
 
-        // Handle shell change - proper sequence without arbitrary delay
-        shellSelect.addEventListener('change', () => {
+        // Handle shell change - close current tab and create new one with new shell
+        shellSelect.addEventListener('change', async () => {
             const shellId = shellSelect.value;
-            const tab = tabService.activeTab;
-            if (shellId && tab) {
-                // 1. Disconnect first (cancels pending reconnects via state machine)
-                connectionService.disconnect(tab);
-
-                // 2. Clear state AFTER disconnect
-                tab.sessionId = null;
-                tab.term.reset();
-                tab.shellId = shellId;
-
-                // 3. Connect immediately (state machine handles if already connecting)
-                connectionService.connect(tab, shellId);
+            const currentTab = tabService.activeTab;
+            if (shellId && currentTab) {
+                try {
+                    // Create new tab with selected shell first
+                    await tabService.requestCreateTab(shellId);
+                    // Then close the old tab
+                    await tabService.requestCloseTab(currentTab.id);
+                } catch (e) {
+                    console.error('Failed to switch shell:', e);
+                }
             }
         });
     }
@@ -289,13 +329,17 @@ async function init(): Promise<void> {
     // Setup help button
     setupHelpButton();
 
+    // Setup text view button
+    textViewOverlay.setup();
+    setupTextViewButton(textViewOverlay, () => tabService.activeTab?.term ?? null);
+
     // Attach gesture recognizer
     const terminalContainer = document.getElementById('terminal-container');
     if (terminalContainer) {
         gestureRecognizer.attach(terminalContainer);
     }
 
-    // Connection events
+    // Connection events for terminal WebSockets
     eventBus.on('connection:open', ({ tabId }) => {
         if (tabId === tabService.activeTabId) {
             connectionStatus.set('connected');
@@ -309,48 +353,42 @@ async function init(): Promise<void> {
         }
     });
 
-    // Restore or create tabs
-    const stored = storageService.load();
-    if (stored && stored.tabs && stored.tabs.length > 0) {
-        for (const savedTab of stored.tabs) {
-            tabService.createTab(undefined, savedTab);
-        }
-        if (stored.activeTabId) {
-            const tab = tabService.getTab(stored.activeTabId);
-            if (tab) {
-                tabService.switchToTab(stored.activeTabId);
-            }
-        }
-    } else {
-        tabService.createTab();
-    }
-
-    // Handle visibility change
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            // Reset modifiers when page becomes visible (prevent stuck keys)
-            modifierManager.reset();
-
-            // Reconnect disconnected tabs
-            for (const tab of tabService.tabs) {
-                if (!connectionService.isConnected(tab)) {
-                    connectionService.connect(tab, undefined, true);
-                }
-            }
-        } else {
-            // Page is hidden - reset modifiers to prevent stuck state
-            modifierManager.reset();
-        }
-    });
-
-    // Handle window blur - reset modifiers
-    window.addEventListener('blur', () => {
-        modifierManager.reset();
-    });
-
     // Clean up resize timers when tabs are closed
     eventBus.on('tab:closed', ({ tabId }) => {
         resizeManager.cancelResize(tabId);
+    });
+
+    // Handle visibility change - sync first, then reconnect
+    document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible') {
+            modifierManager.reset();
+
+            try {
+                // 1. Reconnect management WebSocket and wait for state sync
+                if (!managementService.isConnected()) {
+                    await managementService.connect();
+                    // After connect() resolves, applyStateSync has been called
+                    // tabService.tabs now reflects server state
+                }
+
+                // 2. Connect data plane for synced tabs only
+                for (const tab of tabService.tabs) {
+                    if (!connectionService.isConnected(tab)) {
+                        connectionService.connect(tab, true);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to reconnect:', e);
+                disconnectOverlay.show();
+            }
+        } else {
+            modifierManager.reset();
+        }
+    });
+
+    // Handle window blur
+    window.addEventListener('blur', () => {
+        modifierManager.reset();
     });
 
     // Handle window resize
@@ -398,7 +436,25 @@ async function init(): Promise<void> {
         tabService.focusTerminal();
     });
 
-    console.log('Porterminal initialized');
+    // Connect management WebSocket first
+    // Server will send tab_state_sync with existing tabs
+    try {
+        await managementService.connect();
+
+        // If no tabs after sync, request one
+        // Give a short delay for state sync to be processed
+        setTimeout(async () => {
+            if (tabService.tabs.length === 0) {
+                console.log('No tabs from server, creating one');
+                await tabService.requestCreateTab();
+            }
+        }, 100);
+    } catch (e) {
+        console.error('Failed to connect management WebSocket:', e);
+        disconnectOverlay.show();
+    }
+
+    console.log('Porterminal initialized (backend-driven)');
 }
 
 // Helper functions for button setup
@@ -420,7 +476,6 @@ function updateModifierButton(modifier: string): void {
 }
 
 function setupModifierButtons(modifierManager: ReturnType<typeof createModifierManager>): void {
-    // Store reference for updateModifierButton
     (window as unknown as { _modifierManager?: ReturnType<typeof createModifierManager> })._modifierManager = modifierManager;
 
     for (const mod of ['ctrl', 'alt', 'shift'] as const) {
@@ -567,7 +622,6 @@ function setupToolButtons(
         if (el.dataset.bound) return;
         el.dataset.bound = 'true';
 
-        // Skip special buttons
         if (el.id === 'btn-ctrl' || el.id === 'btn-alt' ||
             el.id === 'btn-escape' || el.id === 'btn-paste' ||
             el.id === 'btn-backspace' || el.id === 'btn-shutdown') {
@@ -635,6 +689,21 @@ function setupHelpButton(): void {
     closeBtn?.addEventListener('click', hide);
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) hide();
+    });
+}
+
+function setupTextViewButton(
+    textViewOverlay: ReturnType<typeof createTextViewOverlay>,
+    getTerminal: () => import('@xterm/xterm').Terminal | null
+): void {
+    const btn = document.getElementById('btn-textview');
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+        const term = getTerminal();
+        if (term) {
+            textViewOverlay.show(term);
+        }
     });
 }
 

@@ -4,6 +4,7 @@ from .environment_rules import DEFAULT_BLOCKED_VARS, DEFAULT_SAFE_VARS, Environm
 from .rate_limit_config import RateLimitConfig
 from .session_id import SessionId
 from .shell_command import ShellCommand
+from .tab_id import TabId
 from .terminal_dimensions import MAX_COLS, MAX_ROWS, MIN_COLS, MIN_ROWS, TerminalDimensions
 from .user_id import UserId
 
@@ -15,6 +16,7 @@ __all__ = [
     "MAX_ROWS",
     "SessionId",
     "UserId",
+    "TabId",
     "ShellCommand",
     "RateLimitConfig",
     "EnvironmentRules",

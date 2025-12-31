@@ -3,7 +3,12 @@
 from collections.abc import Callable
 from pathlib import Path
 
-from porterminal.application.services import SessionService, TerminalService
+from porterminal.application.services import (
+    ManagementService,
+    SessionService,
+    TabService,
+    TerminalService,
+)
 from porterminal.container import Container
 from porterminal.domain import (
     EnvironmentRules,
@@ -11,10 +16,12 @@ from porterminal.domain import (
     PTYPort,
     SessionLimitChecker,
     ShellCommand,
+    TabLimitChecker,
     TerminalDimensions,
 )
 from porterminal.infrastructure.config import ShellDetector, YAMLConfigLoader
-from porterminal.infrastructure.repositories import InMemorySessionRepository
+from porterminal.infrastructure.registry import UserConnectionRegistry
+from porterminal.infrastructure.repositories import InMemorySessionRepository, InMemoryTabRepository
 
 
 def create_pty_factory(
@@ -139,8 +146,12 @@ def create_container(
     if configured_shells:
         shells = [ShellCommand.from_dict(s) for s in configured_shells]
 
-    # Create repository
+    # Create repositories
     session_repository = InMemorySessionRepository()
+    tab_repository = InMemoryTabRepository()
+
+    # Create connection registry for broadcasting
+    connection_registry = UserConnectionRegistry()
 
     # Create PTY factory
     pty_factory = create_pty_factory(cwd)
@@ -154,12 +165,37 @@ def create_container(
         working_directory=cwd,
     )
 
+    tab_service = TabService(
+        repository=tab_repository,
+        limit_checker=TabLimitChecker(),
+    )
+
     terminal_service = TerminalService()
+
+    # Create a shell provider closure for ManagementService
+    def get_shell(shell_id: str | None) -> ShellCommand | None:
+        target_id = shell_id or default_shell_id
+        for shell in shells:
+            if shell.id == target_id:
+                return shell
+        return shells[0] if shells else None
+
+    management_service = ManagementService(
+        session_service=session_service,
+        tab_service=tab_service,
+        connection_registry=connection_registry,
+        shell_provider=get_shell,
+        default_dimensions=TerminalDimensions(default_cols, default_rows),
+    )
 
     return Container(
         session_service=session_service,
+        tab_service=tab_service,
         terminal_service=terminal_service,
+        management_service=management_service,
         session_repository=session_repository,
+        tab_repository=tab_repository,
+        connection_registry=connection_registry,
         pty_factory=pty_factory,
         available_shells=shells,
         default_shell_id=default_shell_id,

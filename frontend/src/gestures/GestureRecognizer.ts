@@ -97,8 +97,12 @@ export function createGestureRecognizer(
             handlers.pointerdown = (e: PointerEvent) => {
                 if (e.pointerType === 'mouse') return;
 
-                // Don't prevent default immediately - allow scrolling
-                // Only capture pointer for tracking, not blocking
+                // Stop propagation to prevent xterm.js internal handlers from
+                // interfering with focus (they may blur on pointerdown).
+                // preventDefault stops browser from synthesizing click events.
+                // Browser scrolling disabled via CSS touch-action: none anyway.
+                e.stopPropagation();
+                e.preventDefault();
 
                 touchGestureActive = true;
                 state.startX = e.clientX;
@@ -200,7 +204,7 @@ export function createGestureRecognizer(
                     if (selection) {
                         callbacks.showCopyButton(selection, e.clientX, e.clientY);
                     }
-                    setTimeout(() => { touchGestureActive = false; }, 100);
+                    setTimeout(() => { touchGestureActive = false; }, 350);
                     return;
                 }
 
@@ -214,7 +218,7 @@ export function createGestureRecognizer(
                 if (swipeResult) {
                     callbacks.sendArrowKey(swipeResult.direction);
                     eventBus.emit('gesture:swipe', { direction: swipeResult.direction });
-                    setTimeout(() => { touchGestureActive = false; }, 100);
+                    setTimeout(() => { touchGestureActive = false; }, 350);
                     return;
                 }
 
@@ -247,7 +251,7 @@ export function createGestureRecognizer(
                     }
                 }
 
-                setTimeout(() => { touchGestureActive = false; }, 100);
+                setTimeout(() => { touchGestureActive = false; }, 350);
             };
 
             handlers.pointercancel = (e: PointerEvent) => {

@@ -7,14 +7,8 @@ const CACHE_NAME = 'porterminal-v1';
 const STATIC_ASSETS = [
     '/',
     '/static/index.html',
-    '/static/style.css',
-    '/static/app.js',
     '/static/manifest.json',
-    'https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css',
-    'https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js',
-    'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js',
-    'https://cdn.jsdelivr.net/npm/xterm-addon-webgl@0.16.0/lib/xterm-addon-webgl.min.js',
-    'https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js',
+    '/static/icon.svg',
 ];
 
 // Install - cache static assets

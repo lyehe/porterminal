@@ -1,6 +1,6 @@
 [project]
 name = "ptn"
-version = "0.1.2"
+version = "0.1.4"
 description = "Web-based terminal accessible from phone via Cloudflare Tunnel"
 readme = "README.md"
 license = {text = "AGPL-3.0-or-later"}

@@ -104,8 +104,8 @@ html, body {
 #tab-bar {
     display: flex;
     align-items: center;
-    height: 36px;
-    min-height: 36px;
+    height: 30px;
+    min-height: 30px;
     background: linear-gradient(to bottom, var(--bg-gradient-top), var(--bg-gradient-bottom));
     border-bottom: 1px solid var(--border-subtle);
     overflow-x: auto;
@@ -122,8 +122,8 @@ html, body {
     display: flex;
     align-items: center;
     gap: 2px;
-    height: 36px;
-    padding: 0 8px;
+    height: 30px;
+    padding: 0 2px 0 8px;
     background: transparent;
     border: none;
     border-right: 1px solid var(--border-subtle);
@@ -167,15 +167,47 @@ html, body {
     justify-content: center;
     width: 16px;
     height: 16px;
+    margin-left: 2px;
     border-radius: 4px;
     font-size: 14px;
     color: var(--text-disabled);
-    transition: all 0.1s ease;
+    transition: all 0.15s ease;
+    position: relative;
+    overflow: hidden;
 }
 
-.tab-close:active {
-    background: var(--border-light);
-    color: rgba(255, 255, 255, 0.8);
+/* Hold-to-close progress indicator */
+.tab-close::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--color-danger-bg);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.4s ease-out;
+    z-index: -1;
+}
+
+.tab-close.holding::before {
+    transform: scaleX(1);
+}
+
+.tab-close.holding {
+    color: var(--color-danger-text);
+}
+
+.tab-close.ready {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+    animation: pulseReady 0.3s ease;
+}
+
+@keyframes pulseReady {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
 }
 
 /* Shell selector in tab bar */
@@ -184,7 +216,7 @@ html, body {
     display: flex;
     align-items: center;
     padding: 0 12px;
-    height: 36px;
+    height: 30px;
     border-left: 1px solid var(--border-subtle);
 }
 
@@ -204,8 +236,10 @@ html, body {
     height: 6px;
     border-radius: 50%;
     background: var(--color-danger);
+    margin-left: 12px;
     margin-right: 8px;
     box-shadow: var(--glow-danger);
+    flex-shrink: 0;
 }
 
 #connection-dot.connected {
@@ -214,18 +248,20 @@ html, body {
 }
 
 #btn-info,
+#btn-textview,
 #btn-shutdown {
     background: transparent;
     border: none;
     color: var(--text-disabled);
     font-size: 14px;
-    padding: 4px 8px;
-    margin-left: 8px;
+    padding: 4px 4px;
+    margin-left: 4px;
     cursor: pointer;
     transition: color 0.15s ease;
 }
 
-#btn-info:active {
+#btn-info:active,
+#btn-textview:active {
     color: var(--color-accent);
 }
 
@@ -250,16 +286,31 @@ html, body {
     /* Disable browser touch handling - JS handles selection gestures */
     touch-action: none;
     overscroll-behavior: contain;
+
+    /* Performance: Isolate from page layout/paint */
+    contain: strict;
+    isolation: isolate;
 }
 
 #terminal {
     height: 100% !important;
     width: 100% !important;
+    /* Performance: Contain layout changes */
+    contain: layout paint;
 }
 
 .terminal-instance {
     height: 100%;
     width: 100%;
+    /* Performance: Each terminal is isolated */
+    contain: layout paint;
+}
+
+/* Performance: Promote canvas to compositor layer */
+.xterm-screen canvas,
+.xterm canvas {
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 #terminal .xterm-viewport {
@@ -267,6 +318,8 @@ html, body {
     /* Disable browser touch handling - xterm.js handles scrolling via wheel events */
     touch-action: none;
     overscroll-behavior: contain;
+    /* Performance: Contain paint operations */
+    contain: paint;
 }
 
 /* Smooth scroll animation for terminal content */
@@ -331,8 +384,8 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 36px;
-    min-height: 36px;
+    height: 30px;
+    min-height: 30px;
     gap: 0;
     overflow-x: auto;
     overflow-y: hidden;
@@ -352,7 +405,7 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 36px;
+    height: 30px;
     padding: 0 10px;
     background: transparent;
     border: none;
@@ -615,6 +668,105 @@ html, body {
     color: var(--text-high);
     font-size: 11px;
     text-align: center;
+}
+
+/* ========== TEXT VIEW POPUP ========== */
+#textview-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-primary);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+#textview-content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-primary);
+}
+
+#textview-header {
+    display: flex;
+    align-items: center;
+    height: 30px;
+    min-height: 30px;
+    background: linear-gradient(to bottom, var(--bg-gradient-top), var(--bg-gradient-bottom));
+    border-bottom: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+}
+
+#textview-title {
+    padding: 0 12px;
+    color: var(--text-muted);
+    font-size: 12px;
+    border-right: 1px solid var(--border-subtle);
+}
+
+.textview-zoom-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    padding: 0 12px;
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.textview-zoom-btn:active {
+    background: var(--hover-overlay);
+    color: var(--text-high);
+}
+
+#textview-close {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    padding: 0 12px;
+    background: transparent;
+    border: none;
+    border-left: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+#textview-close:active {
+    background: var(--hover-overlay);
+    color: var(--text-high);
+}
+
+#textview-body {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    padding: 8px 12px;
+    background: var(--bg-primary);
+    border: none;
+    color: var(--text-primary);
+    font-family: Menlo, Monaco, Consolas, monospace;
+    font-size: 10px;
+    line-height: 1.3;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 /* ========== UTILITIES ========== */

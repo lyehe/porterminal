@@ -2,9 +2,11 @@
 
 from .pty_port import PTYFactory, PTYPort
 from .session_repository import SessionRepository
+from .tab_repository import TabRepository
 
 __all__ = [
     "SessionRepository",
+    "TabRepository",
     "PTYPort",
     "PTYFactory",
 ]

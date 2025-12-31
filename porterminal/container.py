@@ -2,10 +2,19 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from porterminal.application.services import SessionService, TerminalService
+from porterminal.application.services import (
+    ManagementService,
+    SessionService,
+    TabService,
+    TerminalService,
+)
 from porterminal.domain import PTYPort, ShellCommand, TerminalDimensions
-from porterminal.domain.ports import SessionRepository
+from porterminal.domain.ports import SessionRepository, TabRepository
+
+if TYPE_CHECKING:
+    from porterminal.infrastructure.registry import UserConnectionRegistry
 
 
 @dataclass(frozen=True)
@@ -18,10 +27,16 @@ class Container:
 
     # Services
     session_service: SessionService
+    tab_service: TabService
     terminal_service: TerminalService
+    management_service: ManagementService
 
-    # Repository
+    # Repositories
     session_repository: SessionRepository
+    tab_repository: TabRepository
+
+    # Registry for broadcasting
+    connection_registry: "UserConnectionRegistry"
 
     # Factories
     pty_factory: Callable[[ShellCommand, TerminalDimensions, dict[str, str], str | None], PTYPort]

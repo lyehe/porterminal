@@ -1,9 +1,17 @@
 /**
- * Connection Service - Manages WebSocket connections with state machine
- * Single Responsibility: WebSocket lifecycle, messaging, reconnection
+ * Connection Service - Terminal I/O Data Plane
+ *
+ * This service ONLY handles terminal WebSocket connections for data transfer.
+ * It is NOT responsible for tab creation - that's ManagementService's job.
+ *
+ * Design principles:
+ * - Requires valid tab_id (from server) to connect
+ * - Only handles binary data and session_info/ping/pong messages
+ * - Rejects stale/invalid tabs without attempting to create new ones
+ * - Clean separation from control plane (ManagementService)
  */
 
-import type { Tab, WebSocketMessage, ResizeMessage, ConnectionState } from '@/types';
+import type { Tab, ConnectionState } from '@/types';
 import type { EventBus } from '@/core/events';
 
 export interface ConnectionConfig {
@@ -13,8 +21,8 @@ export interface ConnectionConfig {
 }
 
 export interface ConnectionService {
-    /** Connect a tab to the server */
-    connect(tab: Tab, shellId?: string, skipBuffer?: boolean): void;
+    /** Connect a tab's terminal WebSocket (tab must have valid tabId) */
+    connect(tab: Tab, skipBuffer?: boolean): void;
 
     /** Disconnect a tab */
     disconnect(tab: Tab): void;
@@ -39,10 +47,23 @@ export interface ConnectionService {
 interface TabConnectionState {
     state: ConnectionState;
     pendingReconnect: ReturnType<typeof setTimeout> | null;
-    earlyBuffer: string[];  // Buffer for data arriving before terminal is ready
+    earlyBuffer: string[];
+    writeBuffer: string[];      // Buffer for rAF batching during connected state
+    rafHandle: number | null;   // requestAnimationFrame handle for batched writes
 }
 
-// Terminal response pattern - filter these from input
+// Server rejection codes that should NOT trigger reconnect
+const REJECTION_CODES = {
+    TAB_ID_REQUIRED: 4000,
+    TAB_NOT_FOUND: 4004,
+    SESSION_ENDED: 4005,
+} as const;
+
+/**
+ * Filter terminal response sequences that shouldn't be sent to PTY.
+ * xterm.js generates these in response to queries (DA, cursor position).
+ * If sent to PTY, they get echoed back and displayed as garbage.
+ */
 const TERMINAL_RESPONSE_PATTERN = /\x1b\[\?[\d;]*c|\x1b\[[\d;]*R/g;
 
 function filterTerminalResponses(data: string): string {
@@ -51,33 +72,34 @@ function filterTerminalResponses(data: string): string {
 }
 
 /**
- * Create a connection service instance with state machine
+ * Create a connection service instance
  */
 export function createConnectionService(
     eventBus: EventBus,
     config: ConnectionConfig,
     callbacks: {
-        onSessionInfo: (tab: Tab, sessionId: string) => void;
+        onSessionInfo: (tab: Tab, sessionId: string, tabId: string | null) => void;
         onDisconnect: () => void;
         onReconnectFailed: () => void;
     }
 ): ConnectionService {
     const textEncoder = new TextEncoder();
     const textDecoder = new TextDecoder();
-
-    // State machine per tab
     const tabStates = new Map<number, TabConnectionState>();
 
     function getTabState(tabId: number): TabConnectionState {
         if (!tabStates.has(tabId)) {
-            tabStates.set(tabId, { state: 'disconnected', pendingReconnect: null, earlyBuffer: [] });
+            tabStates.set(tabId, {
+                state: 'disconnected',
+                pendingReconnect: null,
+                earlyBuffer: [],
+                writeBuffer: [],
+                rafHandle: null,
+            });
         }
         return tabStates.get(tabId)!;
     }
 
-    /**
-     * Cancel any pending reconnect timeout for a tab
-     */
     function cancelPendingReconnect(tabId: number): void {
         const state = tabStates.get(tabId);
         if (state?.pendingReconnect) {
@@ -87,9 +109,32 @@ export function createConnectionService(
     }
 
     /**
-     * Clean up WebSocket and heartbeat
+     * Schedule a batched write to the terminal.
+     * Collects all data within an animation frame and flushes in single write.
+     * This prevents flickering when backend sends rapid cursor/text updates.
      */
+    function scheduleFlush(tab: Tab, state: TabConnectionState): void {
+        if (state.rafHandle !== null) return;  // Already scheduled
+
+        state.rafHandle = requestAnimationFrame(() => {
+            state.rafHandle = null;
+            if (state.writeBuffer.length === 0) return;
+
+            const combined = state.writeBuffer.join('');
+            state.writeBuffer = [];
+            tab.term.write(combined);
+        });
+    }
+
     function cleanupWebSocket(tab: Tab): void {
+        // Cancel any pending rAF flush
+        const state = tabStates.get(tab.id);
+        if (state && state.rafHandle !== null) {
+            cancelAnimationFrame(state.rafHandle);
+            state.rafHandle = null;
+            state.writeBuffer = [];
+        }
+
         if (tab.ws) {
             tab.ws.onopen = null;
             tab.ws.onmessage = null;
@@ -106,69 +151,42 @@ export function createConnectionService(
         }
     }
 
-    function buildWebSocketUrl(tab: Tab, shellId?: string, skipBuffer?: boolean): string {
+    function buildWebSocketUrl(tabId: string, skipBuffer?: boolean): string {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        let url = `${protocol}//${window.location.host}/ws`;
-
-        const params = new URLSearchParams();
-        if (tab.sessionId) {
-            params.set('session_id', tab.sessionId);
-        }
-        if (shellId) {
-            params.set('shell', shellId);
-        }
+        const params = new URLSearchParams({ tab_id: tabId });
         if (skipBuffer) {
             params.set('skip_buffer', '1');
         }
-
-        if (params.toString()) {
-            url += '?' + params.toString();
-        }
-        return url;
-    }
-
-    function handleMessage(tab: Tab, msg: WebSocketMessage): void {
-        switch (msg.type) {
-            case 'session_info':
-                callbacks.onSessionInfo(tab, msg.session_id);
-                break;
-            case 'ping':
-                if (tab.ws?.readyState === WebSocket.OPEN) {
-                    tab.ws.send(JSON.stringify({ type: 'pong' }));
-                }
-                break;
-            case 'error':
-                console.error('Server error:', msg.message);
-                tab.term.write(`\r\n\x1b[31mError: ${msg.message}\x1b[0m\r\n`);
-                eventBus.emit('connection:error', { tabId: tab.id, error: msg.message });
-                break;
-        }
+        return `${protocol}//${window.location.host}/ws?${params}`;
     }
 
     const service: ConnectionService = {
-        connect(tab: Tab, shellId?: string, skipBuffer?: boolean): void {
+        connect(tab: Tab, skipBuffer?: boolean): void {
             const state = getTabState(tab.id);
-
-            // Cancel any pending reconnect first
             cancelPendingReconnect(tab.id);
 
-            // State machine: can only connect from disconnected state
+            // Validate: tab must have server-assigned ID
+            if (!tab.tabId) {
+                console.error(`Tab ${tab.id} has no tabId - cannot connect without server confirmation`);
+                eventBus.emit('connection:error', { tabId: tab.id, error: 'No tabId' });
+                return;
+            }
+
+            // Clean up any existing connection
             if (state.state !== 'disconnected') {
-                // If connecting/connected, clean up first
                 cleanupWebSocket(tab);
                 state.state = 'disconnected';
             }
 
             state.state = 'connecting';
-            state.earlyBuffer = [];  // Clear any stale buffered data
+            state.earlyBuffer = [];
 
-            const url = buildWebSocketUrl(tab, shellId, skipBuffer);
+            const url = buildWebSocketUrl(tab.tabId, skipBuffer);
             const ws = new WebSocket(url);
             ws.binaryType = 'arraybuffer';
             tab.ws = ws;
 
             ws.onopen = () => {
-                // Only proceed if we're still in connecting state
                 if (state.state !== 'connecting') {
                     ws.close();
                     return;
@@ -184,13 +202,26 @@ export function createConnectionService(
                     }
                 }, config.heartbeatMs);
 
-                // Fit terminal after browser layout, then set connected state
-                // This ensures terminal is properly sized before accepting data
+                // Fit terminal after layout, then mark connected
                 requestAnimationFrame(() => {
-                    tab.fitAddon.fit();
-                    state.state = 'connected';
-                    // Flush any data that arrived during setup
-                    if (state.earlyBuffer.length > 0) {
+                    if (state.state !== 'connecting') return;
+
+                    try {
+                        tab.fitAddon.fit();
+                        // Send resize IMMEDIATELY after fit, before flushing buffer.
+                        // This ensures server knows current dimensions before we render
+                        // buffered output that may have wrong cursor position.
+                        // Bypass the debounced scheduleResize to avoid race condition.
+                        if (tab.ws?.readyState === WebSocket.OPEN) {
+                            tab.ws.send(JSON.stringify({
+                                type: 'resize',
+                                cols: tab.term.cols,
+                                rows: tab.term.rows,
+                            }));
+                        }
+                    } finally {
+                        state.state = 'connected';
+                        // Flush buffered data
                         for (const text of state.earlyBuffer) {
                             tab.term.write(text);
                         }
@@ -202,17 +233,33 @@ export function createConnectionService(
             ws.onmessage = (event: MessageEvent) => {
                 if (event.data instanceof ArrayBuffer) {
                     const text = textDecoder.decode(event.data);
-                    // Buffer data if terminal isn't ready yet (still in connecting state)
                     if (state.state === 'connecting') {
                         state.earlyBuffer.push(text);
                     } else if (state.state === 'connected') {
-                        tab.term.write(text);
+                        // Batch writes within animation frame to prevent flickering
+                        // when backend sends rapid cursor/text updates
+                        state.writeBuffer.push(text);
+                        scheduleFlush(tab, state);
                     }
-                } else if (state.state === 'connected' || state.state === 'connecting') {
-                    // JSON messages can be handled immediately
+                } else {
+                    // JSON control messages
                     try {
-                        const msg = JSON.parse(event.data as string) as WebSocketMessage;
-                        handleMessage(tab, msg);
+                        const msg = JSON.parse(event.data as string);
+                        switch (msg.type) {
+                            case 'session_info':
+                                callbacks.onSessionInfo(tab, msg.session_id, msg.tab_id ?? null);
+                                break;
+                            case 'ping':
+                                if (tab.ws?.readyState === WebSocket.OPEN) {
+                                    tab.ws.send(JSON.stringify({ type: 'pong' }));
+                                }
+                                break;
+                            case 'error':
+                                console.error('Server error:', msg.message);
+                                tab.term.write(`\r\n\x1b[31mError: ${msg.message}\x1b[0m\r\n`);
+                                eventBus.emit('connection:error', { tabId: tab.id, error: msg.message });
+                                break;
+                        }
                     } catch (e) {
                         console.error('Failed to parse message:', e);
                     }
@@ -220,13 +267,11 @@ export function createConnectionService(
             };
 
             ws.onclose = (event: CloseEvent) => {
-                // If we're intentionally disconnecting, don't auto-reconnect
                 if (state.state === 'disconnecting') {
                     state.state = 'disconnected';
                     return;
                 }
 
-                // If we were connecting or connected, transition to disconnected
                 if (state.state === 'connecting' || state.state === 'connected') {
                     state.state = 'disconnected';
                 }
@@ -238,25 +283,22 @@ export function createConnectionService(
 
                 eventBus.emit('connection:close', { tabId: tab.id, code: event.code });
 
-                // Handle session not found
-                if (event.code === 4004) {
-                    console.log(`Session ${tab.sessionId} not found, creating new session`);
-                    tab.sessionId = null;
-                    tab.reconnectAttempts = 0;
-                    state.pendingReconnect = setTimeout(() => {
-                        state.pendingReconnect = null;
-                        service.connect(tab, tab.shellId);
-                    }, 500);
+                // Server rejected connection - tab is stale, don't reconnect
+                if (event.code === REJECTION_CODES.TAB_ID_REQUIRED ||
+                    event.code === REJECTION_CODES.TAB_NOT_FOUND ||
+                    event.code === REJECTION_CODES.SESSION_ENDED) {
+                    console.log(`Tab ${tab.id} rejected (code ${event.code}) - removing stale tab`);
+                    eventBus.emit('tab:stale', { tabId: tab.id, serverId: tab.tabId, code: event.code });
                     return;
                 }
 
-                // Auto-reconnect with exponential backoff
+                // Normal disconnect - try to reconnect
                 if (tab.reconnectAttempts < config.maxReconnectAttempts) {
                     tab.reconnectAttempts++;
                     const delay = config.reconnectDelayMs * Math.min(tab.reconnectAttempts, 5);
                     state.pendingReconnect = setTimeout(() => {
                         state.pendingReconnect = null;
-                        service.connect(tab, undefined, true);
+                        service.connect(tab, true);
                     }, delay);
                 } else {
                     callbacks.onReconnectFailed();
@@ -264,7 +306,6 @@ export function createConnectionService(
             };
 
             ws.onerror = () => {
-                // Only handle if we're still in a valid state
                 if (state.state === 'connecting' || state.state === 'connected') {
                     callbacks.onDisconnect();
                 }
@@ -273,16 +314,12 @@ export function createConnectionService(
 
         disconnect(tab: Tab): void {
             const state = getTabState(tab.id);
-
-            // Cancel any pending reconnect
             cancelPendingReconnect(tab.id);
 
-            // Only disconnect if not already disconnected
             if (state.state === 'disconnected') {
                 return;
             }
 
-            // Set state to disconnecting to prevent onclose from auto-reconnecting
             state.state = 'disconnecting';
             cleanupWebSocket(tab);
             state.state = 'disconnected';
@@ -293,10 +330,9 @@ export function createConnectionService(
             if (state.state !== 'connected' || !tab.ws || tab.ws.readyState !== WebSocket.OPEN) {
                 return;
             }
-
+            // Filter terminal response sequences before sending
             const filtered = filterTerminalResponses(data);
             if (!filtered) return;
-
             tab.ws.send(textEncoder.encode(filtered));
         },
 
@@ -305,9 +341,7 @@ export function createConnectionService(
             if (state.state !== 'connected' || !tab.ws || tab.ws.readyState !== WebSocket.OPEN) {
                 return;
             }
-
-            const msg: ResizeMessage = { type: 'resize', cols, rows };
-            tab.ws.send(JSON.stringify(msg));
+            tab.ws.send(JSON.stringify({ type: 'resize', cols, rows }));
         },
 
         isConnected(tab: Tab): boolean {
@@ -320,6 +354,10 @@ export function createConnectionService(
         },
 
         cleanupTabState(tabId: number): void {
+            const state = tabStates.get(tabId);
+            if (state && state.rafHandle !== null) {
+                cancelAnimationFrame(state.rafHandle);
+            }
             cancelPendingReconnect(tabId);
             tabStates.delete(tabId);
         },

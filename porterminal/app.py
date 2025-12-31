@@ -15,7 +15,7 @@ from starlette.middleware.base import RequestResponseEndpoint
 
 from .composition import create_container
 from .container import Container
-from .domain import SessionId, TerminalDimensions, UserId
+from .domain import UserId
 from .infrastructure.web import FastAPIWebSocketAdapter
 from .logging_setup import setup_logging_from_env
 
@@ -56,6 +56,15 @@ async def lifespan(app: FastAPI):
 
     container = create_container(config_path=config_path, cwd=cwd)
     app.state.container = container
+
+    # Wire up cascade: when session is destroyed, close associated tabs and broadcast
+    async def on_session_destroyed(session_id, user_id):
+        closed_tabs = container.tab_service.close_tabs_for_session(session_id)
+        for tab in closed_tabs:
+            message = container.tab_service.build_tab_closed_message(tab.tab_id, "session_ended")
+            await container.connection_registry.broadcast(user_id, message)
+
+    container.session_service.set_on_session_destroyed(on_session_destroyed)
 
     await container.session_service.start()
 
@@ -119,6 +128,18 @@ def create_app() -> FastAPI:
         return {
             "status": "healthy",
             "sessions": container.session_service.session_count(),
+            "tabs": container.tab_service.tab_count(),
+            "connections": container.connection_registry.total_connections(),
+        }
+
+    @app.get("/api/tabs")
+    async def list_tabs(request: Request):
+        """List all tabs for the current user."""
+        container: Container = app.state.container
+        user_id = UserId(request.headers.get("cf-access-authenticated-user-email", "local-user"))
+        tabs = container.tab_service.get_user_tabs(user_id)
+        return {
+            "tabs": [tab.to_dict() for tab in tabs],
         }
 
     @app.get("/api/config")
@@ -179,138 +200,178 @@ def create_app() -> FastAPI:
 
         return {"status": "ok", "message": "Server shutting down..."}
 
+    @app.websocket("/ws/management")
+    async def websocket_management(websocket: WebSocket):
+        """Management WebSocket for tab operations and state sync.
+
+        This is the control plane for tab management. Clients send requests
+        (create_tab, close_tab, rename_tab) and receive responses + state updates.
+        """
+        await websocket.accept()
+
+        container: Container = websocket.app.state.container
+        management_service = container.management_service
+        connection_registry = container.connection_registry
+
+        # Get user ID from headers (Cloudflare Access)
+        user_id = UserId(websocket.headers.get("cf-access-authenticated-user-email", "local-user"))
+        connection = FastAPIWebSocketAdapter(websocket)
+
+        logger.info(
+            "Management WebSocket connected client=%s user_id=%s",
+            getattr(websocket.client, "host", None),
+            user_id,
+        )
+
+        try:
+            # Register for broadcasts
+            await connection_registry.register(user_id, connection)
+
+            # Send initial state sync
+            state_sync = management_service.build_state_sync(user_id)
+            await connection.send_message(state_sync)
+
+            # Handle messages
+            while connection.is_connected():
+                try:
+                    message = await connection.receive()
+                    if isinstance(message, dict):
+                        await management_service.handle_message(user_id, connection, message)
+                except WebSocketDisconnect:
+                    break
+                except Exception as e:
+                    logger.warning("Management message error: %s", e)
+                    break
+
+        except WebSocketDisconnect:
+            pass
+        except Exception:
+            logger.exception("Management WebSocket error user_id=%s", user_id)
+        finally:
+            await connection_registry.unregister(user_id, connection)
+            logger.info("Management WebSocket disconnected user_id=%s", user_id)
+
     @app.websocket("/ws")
     async def websocket_terminal(
         websocket: WebSocket,
-        session_id: str | None = Query(None),
-        shell: str | None = Query(None),
         skip_buffer: str | None = Query(None),
+        tab_id: str | None = Query(None),
     ):
-        """WebSocket endpoint for terminal communication."""
+        """WebSocket endpoint for terminal I/O only.
+
+        This endpoint REQUIRES a valid tab_id. Tabs must be created via
+        /ws/management first. This endpoint only handles terminal I/O
+        for existing tabs.
+        """
         logger.info(
-            "WebSocket connect attempt client=%s session_id=%s shell=%s skip_buffer=%s",
+            "WebSocket connect attempt client=%s tab_id=%s",
             getattr(websocket.client, "host", None),
-            session_id,
-            shell,
-            skip_buffer,
+            tab_id,
         )
-        # Accept the connection
-        await websocket.accept()
 
         # Get dependencies from container
         container: Container = websocket.app.state.container
         session_service = container.session_service
+        tab_service = container.tab_service
         terminal_service = container.terminal_service
+        connection_registry = container.connection_registry
 
         # Get user ID from headers (Cloudflare Access)
-        # For local testing, use a default user
         user_id = UserId(websocket.headers.get("cf-access-authenticated-user-email", "local-user"))
+
+        # Validate tab_id is provided
+        if not tab_id:
+            logger.warning("WebSocket rejected - no tab_id provided user_id=%s", user_id)
+            await websocket.close(code=4000, reason="tab_id required")
+            return
+
+        # Validate tab exists and belongs to user
+        tab = tab_service.get_tab(tab_id)
+        if not tab or str(tab.user_id) != str(user_id):
+            logger.warning(
+                "WebSocket rejected - tab not found or unauthorized user_id=%s tab_id=%s",
+                user_id,
+                tab_id,
+            )
+            await websocket.close(code=4004, reason="Tab not found")
+            return
+
+        # Get the session for this tab
+        session = await session_service.reconnect_session(tab.session_id, user_id)
+        if not session:
+            # Session died - close tab and reject connection
+            logger.warning(
+                "WebSocket rejected - session ended user_id=%s tab_id=%s session_id=%s",
+                user_id,
+                tab_id,
+                tab.session_id,
+            )
+            closed_tab = tab_service.close_tab(tab_id, user_id)
+            if closed_tab:
+                # Accept briefly to send error, then close
+                await websocket.accept()
+                connection = FastAPIWebSocketAdapter(websocket)
+                await connection_registry.register(user_id, connection)
+                await connection_registry.broadcast(
+                    user_id,
+                    tab_service.build_tab_closed_message(tab_id, "session_ended"),
+                )
+                await connection_registry.unregister(user_id, connection)
+            await websocket.close(code=4005, reason="Session ended")
+            return
+
+        # Accept the connection
+        await websocket.accept()
         connection = FastAPIWebSocketAdapter(websocket)
-        session = None
 
         logger.info(
-            "WebSocket accepted client=%s user_id=%s session_id=%s shell=%s",
+            "WebSocket accepted client=%s user_id=%s tab_id=%s session_id=%s",
             getattr(websocket.client, "host", None),
             user_id,
-            session_id,
-            shell,
+            tab_id,
+            session.session_id,
         )
 
+        # Update tab access time
+        tab_service.touch_tab(tab_id, user_id)
+
         try:
-            if session_id:
-                # Reconnect to existing session
-                logger.info(
-                    "WebSocket reconnect requested user_id=%s session_id=%s", user_id, session_id
-                )
-                session = await session_service.reconnect_session(SessionId(session_id), user_id)
-                if not session:
-                    await connection.send_message(
-                        {
-                            "type": "error",
-                            "message": "Session not found or unauthorized",
-                        }
-                    )
-                    await connection.close(code=4004)
-                    logger.warning(
-                        "WebSocket reconnect denied user_id=%s session_id=%s", user_id, session_id
-                    )
-                    return
-                # reconnect_session already calls add_client()
-            else:
-                # Try to auto-join existing session first (for device switching)
-                session = session_service.get_active_session(user_id)
-                if session:
-                    # Join existing session
-                    session.add_client()
-                    logger.info(
-                        "WebSocket auto-joined existing session user_id=%s session_id=%s client_count=%d",
-                        user_id,
-                        session.session_id,
-                        session.connected_clients,
-                    )
-                else:
-                    # Create new session
-                    shell_cmd = container.get_shell(shell)
-                    if not shell_cmd:
-                        await connection.send_message(
-                            {"type": "error", "message": "No shell available"}
-                        )
-                        await connection.close(code=4006)
-                        return
+            # Register connection for broadcasts
+            await connection_registry.register(user_id, connection)
 
-                    dims = TerminalDimensions(container.default_cols, container.default_rows)
+            # Send session info
+            await connection.send_message(
+                {
+                    "type": "session_info",
+                    "session_id": session.session_id,
+                    "shell": session.shell_id,
+                    "tab_id": tab.tab_id,
+                }
+            )
 
-                    logger.info(
-                        "WebSocket creating new session user_id=%s shell=%s cols=%d rows=%d",
-                        user_id,
-                        shell_cmd.id,
-                        dims.cols,
-                        dims.rows,
-                    )
-                    session = await session_service.create_session(
-                        user_id=user_id,
-                        shell=shell_cmd,
-                        dimensions=dims,
-                    )
-                    session.add_client()
-                    logger.info(
-                        "WebSocket created session user_id=%s session_id=%s shell_id=%s",
-                        user_id,
-                        session.session_id,
-                        session.shell_id,
-                    )
-
-            # Handle the session using TerminalService
+            # Handle terminal I/O
             await terminal_service.handle_session(
                 session, connection, skip_buffer=bool(skip_buffer)
             )
 
-        except ValueError as e:
-            # Session limit exceeded
-            await connection.send_message(
-                {
-                    "type": "error",
-                    "message": str(e),
-                }
-            )
-            await connection.close(code=4005)
-            logger.warning("WebSocket session limit user_id=%s error=%s", user_id, e)
-
         except WebSocketDisconnect:
-            logger.info("Client disconnected user_id=%s", user_id)
+            logger.info("Client disconnected user_id=%s tab_id=%s", user_id, tab_id)
 
         except Exception:
-            logger.exception("WebSocket error user_id=%s", user_id)
+            logger.exception("WebSocket error user_id=%s tab_id=%s", user_id, tab_id)
             with suppress(Exception):
                 await connection.close(code=1011)
         finally:
+            # Unregister connection
+            await connection_registry.unregister(user_id, connection)
+
             if session:
                 session_service.disconnect_session(session.id)
-            actual_session_id = session_id or (session.session_id if session else None)
             logger.info(
-                "WebSocket handler finished user_id=%s session_id=%s",
+                "WebSocket handler finished user_id=%s tab_id=%s session_id=%s",
                 user_id,
-                actual_session_id,
+                tab_id,
+                session.session_id if session else None,
             )
 
     return app

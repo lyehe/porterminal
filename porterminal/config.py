@@ -193,10 +193,3 @@ def get_config() -> Config:
     if _config is None:
         _config = load_config()
     return _config
-
-
-def reload_config() -> Config:
-    """Reload configuration from file."""
-    global _config
-    _config = load_config()
-    return _config

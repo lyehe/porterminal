@@ -3,21 +3,6 @@
 import socket
 
 
-def get_local_ip() -> str:
-    """Get local network IP address.
-
-    Returns:
-        Local IP address, or 127.0.0.1 if unable to determine.
-    """
-    try:
-        # Connect to external address to determine local IP
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.connect(("8.8.8.8", 80))
-            return sock.getsockname()[0]
-    except OSError:
-        return "127.0.0.1"
-
-
 def is_port_available(host: str, port: int) -> bool:
     """Check if host:port is available to bind.
 

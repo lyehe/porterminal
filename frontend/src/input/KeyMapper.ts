@@ -10,6 +10,7 @@ export const DEFAULT_KEY_MAP: Record<string, string> = {
     'Tab': '\t',
     'ShiftTab': '\x1b[Z',
     'Enter': '\r',
+    '\\Enter': '\\\r',  // Line continuation: backslash + enter
     'Backspace': '\x7f',
     'Delete': '\x1b[3~',
     'Escape': '\x1b',

@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
 from porterminal.domain import (
@@ -46,6 +46,16 @@ class SessionService:
         self._cwd = working_directory
         self._running = False
         self._cleanup_task: asyncio.Task | None = None
+        self._on_session_destroyed: Callable[[SessionId, UserId], Awaitable[None]] | None = None
+
+    def set_on_session_destroyed(
+        self, callback: Callable[[SessionId, UserId], Awaitable[None]]
+    ) -> None:
+        """Set async callback to be invoked when a session is destroyed.
+
+        Used for cascading cleanup (e.g., closing associated tabs and broadcasting).
+        """
+        self._on_session_destroyed = callback
 
     async def start(self) -> None:
         """Start the session service (cleanup loop)."""
@@ -182,6 +192,17 @@ class SessionService:
         """Destroy a session completely."""
         session = self._repository.remove(session_id)
         if session:
+            # Invoke cascade callback (e.g., to close associated tabs)
+            if self._on_session_destroyed:
+                try:
+                    await self._on_session_destroyed(session_id, session.user_id)
+                except Exception as e:
+                    logger.warning(
+                        "Error in session destroyed callback session_id=%s: %s",
+                        session_id,
+                        e,
+                    )
+
             try:
                 session.pty_handle.close()
             except Exception as e:
@@ -201,18 +222,6 @@ class SessionService:
     def session_count(self) -> int:
         """Get total session count."""
         return self._repository.count()
-
-    def get_active_session(self, user_id: UserId) -> Session[PTYPort] | None:
-        """Get most recently active session for auto-join.
-
-        Returns the user's most recently active session with an alive PTY,
-        or None if no active sessions exist.
-        """
-        user_sessions = self._repository.get_by_user(user_id)
-        active = [s for s in user_sessions if s.pty_handle.is_alive()]
-        if not active:
-            return None
-        return max(active, key=lambda s: s.last_activity)
 
     async def _cleanup_loop(self) -> None:
         """Background task to cleanup stale sessions."""

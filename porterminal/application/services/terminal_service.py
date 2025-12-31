@@ -2,6 +2,8 @@
 
 import asyncio
 import logging
+import re
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 
@@ -16,6 +18,15 @@ from porterminal.domain import (
 from ..ports.connection_port import ConnectionPort
 
 logger = logging.getLogger(__name__)
+
+# Terminal response sequences that should NOT be written to PTY.
+# These are responses from the terminal emulator to queries from applications.
+# If written to PTY, they get echoed back and displayed as garbage.
+#
+# Patterns:
+#   \x1b[?...c  - Device Attributes (DA) response
+#   \x1b[...R   - Cursor Position Report (CPR) response
+TERMINAL_RESPONSE_PATTERN = re.compile(rb"\x1b\[\?[\d;]*c|\x1b\[[\d;]*R")
 
 # Constants
 HEARTBEAT_INTERVAL = 30  # seconds
@@ -38,6 +49,7 @@ class TerminalService:
     """Service for handling terminal I/O.
 
     Coordinates PTY reads, WebSocket writes, and message handling.
+    Supports multiple clients connected to the same session.
     """
 
     def __init__(
@@ -48,62 +60,153 @@ class TerminalService:
         self._rate_limit_config = rate_limit_config or RateLimitConfig()
         self._max_input_size = max_input_size
 
+        # Multi-client support: track connections and read loops per session
+        self._session_connections: dict[str, set[ConnectionPort]] = {}
+        self._session_read_tasks: dict[str, asyncio.Task[None]] = {}
+
+    # -------------------------------------------------------------------------
+    # Multi-client connection tracking
+    # -------------------------------------------------------------------------
+
+    def _register_connection(self, session_id: str, connection: ConnectionPort) -> int:
+        """Register a connection for a session. Returns connection count."""
+        if session_id not in self._session_connections:
+            self._session_connections[session_id] = set()
+        self._session_connections[session_id].add(connection)
+        return len(self._session_connections[session_id])
+
+    def _unregister_connection(self, session_id: str, connection: ConnectionPort) -> int:
+        """Unregister a connection. Returns remaining count."""
+        if session_id not in self._session_connections:
+            return 0
+        self._session_connections[session_id].discard(connection)
+        count = len(self._session_connections[session_id])
+        if count == 0:
+            del self._session_connections[session_id]
+        return count
+
+    async def _broadcast_output(self, session_id: str, data: bytes) -> None:
+        """Broadcast PTY output to all connections for a session."""
+        connections = self._session_connections.get(session_id, set())
+        dead: list[ConnectionPort] = []
+        for conn in list(connections):  # Copy to avoid mutation during iteration
+            try:
+                await conn.send_output(data)
+            except Exception:
+                dead.append(conn)
+        for conn in dead:
+            connections.discard(conn)
+
+    async def _broadcast_message(self, session_id: str, message: dict[str, Any]) -> None:
+        """Broadcast JSON message to all connections for a session."""
+        connections = self._session_connections.get(session_id, set())
+        dead: list[ConnectionPort] = []
+        for conn in list(connections):
+            try:
+                await conn.send_message(message)
+            except Exception:
+                dead.append(conn)
+        for conn in dead:
+            connections.discard(conn)
+
     async def handle_session(
         self,
         session: Session[PTYPort],
         connection: ConnectionPort,
         skip_buffer: bool = False,
     ) -> None:
-        """Handle terminal session I/O.
+        """Handle terminal session I/O with multi-client support.
+
+        Multiple clients can connect to the same session simultaneously.
+        The first client starts the PTY read loop; the last client stops it.
 
         Args:
             session: Terminal session to handle.
             connection: Network connection to client.
             skip_buffer: Whether to skip sending buffered output.
         """
+        session_id = str(session.id)
         clock = AsyncioClock()
         rate_limiter = TokenBucketRateLimiter(self._rate_limit_config, clock)
 
-        # Send session info
-        await connection.send_message(
-            {
-                "type": "session_info",
-                "session_id": str(session.id),
-                "shell": session.shell_id,
-            }
+        # Register this connection
+        connection_count = self._register_connection(session_id, connection)
+        is_first_client = connection_count == 1
+
+        logger.info(
+            "Client connected session_id=%s connection_count=%d",
+            session_id,
+            connection_count,
         )
 
-        # Replay buffered output
-        if not skip_buffer and not session.output_buffer.is_empty:
-            buffered = session.get_buffered_output()
-            session.clear_buffer()  # Clear after getting output
-            if buffered:
-                await connection.send_output(buffered)
-
-        # Start tasks
-        read_task = asyncio.create_task(self._read_pty_loop(session, connection))
-        heartbeat_task = asyncio.create_task(self._heartbeat_loop(connection))
-
         try:
-            await self._handle_input_loop(session, connection, rate_limiter)
-        finally:
-            read_task.cancel()
-            heartbeat_task.cancel()
-            try:
-                await read_task
-            except asyncio.CancelledError:
-                pass
-            try:
-                await heartbeat_task
-            except asyncio.CancelledError:
-                pass
+            # First client starts the shared PTY read loop
+            if is_first_client:
+                self._start_broadcast_read_loop(session, session_id)
 
-    async def _read_pty_loop(
+            # Note: session_info is sent by the caller (app.py) to include tab_id
+
+            # Replay buffered output to THIS connection only (not broadcast)
+            if not skip_buffer and not session.output_buffer.is_empty:
+                buffered = session.get_buffered_output()
+                # Don't clear buffer - other clients may need it too
+                if buffered:
+                    await connection.send_output(buffered)
+
+            # Start heartbeat for this connection
+            heartbeat_task = asyncio.create_task(self._heartbeat_loop(connection))
+
+            try:
+                await self._handle_input_loop(session, connection, rate_limiter)
+            finally:
+                heartbeat_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await heartbeat_task
+
+        finally:
+            # Unregister this connection
+            remaining = self._unregister_connection(session_id, connection)
+
+            logger.info(
+                "Client disconnected session_id=%s remaining_connections=%d",
+                session_id,
+                remaining,
+            )
+
+            # Last client: stop the read loop
+            if remaining == 0:
+                await self._stop_broadcast_read_loop(session_id)
+
+    def _start_broadcast_read_loop(
         self,
         session: Session[PTYPort],
-        connection: ConnectionPort,
+        session_id: str,
     ) -> None:
-        """Read from PTY and send to client with output batching.
+        """Start the PTY read loop that broadcasts to all clients."""
+        if session_id in self._session_read_tasks:
+            return  # Already running
+
+        task = asyncio.create_task(self._read_pty_broadcast_loop(session, session_id))
+        self._session_read_tasks[session_id] = task
+        logger.debug("Started broadcast read loop session_id=%s", session_id)
+
+    async def _stop_broadcast_read_loop(self, session_id: str) -> None:
+        """Stop the PTY read loop for a session."""
+        task = self._session_read_tasks.pop(session_id, None)
+        if task and not task.done():
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+        logger.debug("Stopped broadcast read loop session_id=%s", session_id)
+
+    async def _read_pty_broadcast_loop(
+        self,
+        session: Session[PTYPort],
+        session_id: str,
+    ) -> None:
+        """Read from PTY and broadcast to all connected clients.
+
+        Single loop per session, regardless of client count.
 
         Batching strategy:
         - Small data (<64 bytes): flush immediately for interactive responsiveness
@@ -113,7 +216,7 @@ class TerminalService:
         # Check if PTY is alive at start
         if not session.pty_handle.is_alive():
             logger.error("PTY not alive at start session_id=%s", session.id)
-            await connection.send_output(b"\r\n[PTY failed to start]\r\n")
+            await self._broadcast_output(session_id, b"\r\n[PTY failed to start]\r\n")
             return
 
         batch_buffer: list[bytes] = []
@@ -127,9 +230,15 @@ class TerminalService:
                 batch_buffer = []
                 batch_size = 0
                 last_flush_time = asyncio.get_running_loop().time()
-                await connection.send_output(combined)
+                await self._broadcast_output(session_id, combined)
 
-        while connection.is_connected() and session.pty_handle.is_alive():
+        def has_connections() -> bool:
+            return (
+                session_id in self._session_connections
+                and len(self._session_connections[session_id]) > 0
+            )
+
+        while has_connections() and session.pty_handle.is_alive():
             try:
                 data = session.pty_handle.read(4096)
                 if data:
@@ -138,7 +247,7 @@ class TerminalService:
 
                     # Small data (interactive): flush immediately for responsiveness
                     if len(data) < INTERACTIVE_THRESHOLD and not batch_buffer:
-                        await connection.send_output(data)
+                        await self._broadcast_output(session_id, data)
                     else:
                         # Batch larger data
                         batch_buffer.append(data)
@@ -151,7 +260,7 @@ class TerminalService:
             except Exception as e:
                 logger.error("PTY read error session_id=%s: %s", session.id, e)
                 await flush_batch()  # Flush any pending data
-                await connection.send_output(f"\r\n[PTY error: {e}]\r\n".encode())
+                await self._broadcast_output(session_id, f"\r\n[PTY error: {e}]\r\n".encode())
                 break
 
             # Check if we should flush based on time
@@ -164,9 +273,9 @@ class TerminalService:
         # Flush any remaining data
         await flush_batch()
 
-        # Notify client if PTY died
-        if connection.is_connected() and not session.pty_handle.is_alive():
-            await connection.send_output(b"\r\n[Shell exited]\r\n")
+        # Notify all clients if PTY died
+        if has_connections() and not session.pty_handle.is_alive():
+            await self._broadcast_output(session_id, b"\r\n[Shell exited]\r\n")
 
     async def _heartbeat_loop(self, connection: ConnectionPort) -> None:
         """Send periodic heartbeat pings."""
@@ -212,8 +321,15 @@ class TerminalService:
             )
             return
 
-        if rate_limiter.try_acquire(len(data)):
-            session.pty_handle.write(data)
+        # Filter terminal response sequences before writing to PTY.
+        # xterm.js generates these in response to DA/CPR queries.
+        # If written back to PTY, they get echoed and displayed as garbage.
+        filtered = TERMINAL_RESPONSE_PATTERN.sub(b"", data)
+        if not filtered:
+            return
+
+        if rate_limiter.try_acquire(len(filtered)):
+            session.pty_handle.write(filtered)
             session.touch(datetime.now(UTC))
         else:
             await connection.send_message(
@@ -293,8 +409,13 @@ class TerminalService:
 
         if data:
             input_bytes = data.encode("utf-8")
-            if rate_limiter.try_acquire(len(input_bytes)):
-                session.pty_handle.write(input_bytes)
+            # Filter terminal response sequences
+            filtered = TERMINAL_RESPONSE_PATTERN.sub(b"", input_bytes)
+            if not filtered:
+                return
+
+            if rate_limiter.try_acquire(len(filtered)):
+                session.pty_handle.write(filtered)
                 session.touch(datetime.now(UTC))
             else:
                 await connection.send_message(

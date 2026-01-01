@@ -61,11 +61,17 @@ htmlcov/
 .mypy_cache/
 .pytype/
 
+# Linting
+.ruff_cache/
+
 # Local config override
 config.local.yaml
 
 # Build cache
 porterminal/static/.vite/
+
+# Generated version file (hatch-vcs)
+porterminal/_version.py
 
 # Windows artifacts
 nul

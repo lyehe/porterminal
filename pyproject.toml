@@ -1,6 +1,6 @@
 [project]
 name = "ptn"
-version = "0.1.5"
+dynamic = ["version"]
 description = "Web-based terminal accessible from phone via Cloudflare Tunnel"
 readme = "README.md"
 license = {text = "AGPL-3.0-or-later"}
@@ -53,8 +53,14 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "porterminal/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["porterminal"]

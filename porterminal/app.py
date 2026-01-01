@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import RequestResponseEndpoint
 
+from . import __version__
 from .composition import create_container
 from .container import Container
 from .domain import UserId
@@ -82,7 +83,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Porterminal",
         description="Web-based terminal accessible from phone via Cloudflare Tunnel",
-        version="0.1.2",
+        version=__version__,
         lifespan=lifespan,
     )
 

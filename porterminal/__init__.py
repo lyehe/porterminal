@@ -8,7 +8,10 @@ This package provides:
 - Configuration system with shell auto-detection
 """
 
-__version__ = "0.1.5"
+try:
+    from ._version import __version__
+except ImportError:
+    __version__ = "0.0.0-dev"  # Fallback before first build
 
 import os
 import subprocess

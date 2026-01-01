@@ -50,10 +50,10 @@ So I built Porterminal. A mobile-first web terminal with secure tunneling, no re
 
 | Method | Install | Update |
 |--------|---------|--------|
-| **uvx** (no install) | `uvx ptn` | `uvx ptn@latest` |
-| **uv tool** | `uv tool install ptn` | `ptn -U` |
-| **pipx** | `pipx install ptn` | `ptn -U` |
-| **pip** | `pip install ptn` | `ptn -U` |
+| **uvx** (no install) | `uvx ptn` | `uvx --refresh ptn` |
+| **uv tool** | `uv tool install ptn` | `uv tool upgrade ptn` |
+| **pipx** | `pipx install ptn` | `pipx upgrade ptn` |
+| **pip** | `pip install ptn` | `pip install -U ptn` |
 
 Requires Python 3.12+ and [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (auto-installed if missing).
 

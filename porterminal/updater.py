@@ -11,9 +11,9 @@ from urllib.request import Request, urlopen
 
 from porterminal import __version__
 
-PACKAGE_NAME = "porterminal"
+PACKAGE_NAME = "ptn"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
-CACHE_DIR = Path.home() / ".cache" / PACKAGE_NAME
+CACHE_DIR = Path.home() / ".cache" / "porterminal"
 CACHE_FILE = CACHE_DIR / "update_check.json"
 CACHE_TTL = 86400  # 24 hours
 

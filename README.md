@@ -19,101 +19,99 @@
   </a>
 </p>
 
-Simple, quick and dirty web terminal accessible from your phone via Cloudflare Quick Tunnel. Vibe-coding-friendly interface with virtual keys, multi-tab sessions, etc.
+<p align="center">
+  <strong>Access your terminal from your phone. No setup. Just scan.</strong>
+</p>
+
+```bash
+uvx ptn
+```
+
+<p align="center">
+  <em>Scan the QR code. Start typing. That's it.</em>
+</p>
+
+---
+
+## Why I Built This
+
+I wanted to continue vibe coding after bed. I tried ngrok, but it requires registration. I tried Cloudflare Tunnel, but it doesn't provide a usable terminal UI. I tried Termius, but it comes with apps, accounts, and too much setup. I just wanted something simpler: open a browser, get a terminal, start typing.
+
+So I built Porterminal. A mobile-first web terminal with secure tunneling, no registration, no installation on your phone, and a touch-friendly UI optimized for vibe coding with whatever AI app you want.
 
 ## Features
 
-- **Touch-optimized** - Virtual keyboard, touch gestures
-- **Multi-tab sessions** - Run multiple terminals simultaneously with persistent sessions
-- **Instant access** - Cloudflare Quick Tunnel with QR code, no port forwarding needed
-- **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish)
+- **One command, instant access** - No SSH, no port forwarding, no config files. Cloudflare tunnel + QR code.
+- **Actually usable on mobile** - Virtual modifier keys (Ctrl, Alt, Tab, arrows), swipe gestures, copy/paste that works.
+- **Multi-tab sessions** - Run builds in one tab, tail logs in another. Sessions persist across reconnects.
+- **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish). Auto-detects your shells.
 
-## Quick Start
-
-```bash
-# Run without installing
-uvx ptn
-
-# Or install globally
-uv tool install ptn
-ptn
-```
-
-Scan the QR code with your phone to connect.
-
-## Installation & Updates
+## Installation
 
 | Method | Install | Update |
 |--------|---------|--------|
-| **uvx** (temporary) | `uvx ptn` | `uvx -U ptn` or `uvx --refresh ptn` |
-| **uv tool** (recommended) | `uv tool install ptn` | `ptn -U` or `uv tool upgrade ptn` |
-| **pipx** | `pipx install ptn` | `ptn -U` or `pipx upgrade ptn` |
-| **pip** | `pip install ptn` | `ptn -U` or `pip install -U ptn` |
+| **uvx** (no install) | `uvx ptn` | `uvx ptn@latest` |
+| **uv tool** | `uv tool install ptn` | `ptn -U` |
+| **pipx** | `pipx install ptn` | `ptn -U` |
+| **pip** | `pip install ptn` | `ptn -U` |
 
-When installed (`uv tool`, `pipx`, `pip`), `ptn -U` auto-detects the install method and runs the correct upgrade command.
-
+Requires Python 3.12+ and [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (auto-installed if missing).
 
 ## Usage
 
-```
-ptn [path] [options]
-```
-
-**Examples:**
-
 ```bash
-# Start in current directory with tunnel
-ptn
-
-# Start in a specific project folder
-ptn ~/projects/myapp
-
-# Local network only (no Cloudflare tunnel)
-ptn --no-tunnel
-
-# Run in background (returns immediately)
-ptn -b
-
-# Show detailed startup logs
-ptn -v
-
-# Update to latest version
-ptn -U
-
-# Check for updates without installing
-ptn --check-update
+ptn                    # Start in current directory
+ptn ~/projects/myapp   # Start in specific folder
+ptn --no-tunnel        # Local network only (no Cloudflare)
+ptn -b                 # Run in background
 ```
 
-**Options:**
+<details>
+<summary><strong>All options</strong></summary>
 
 | Option | Description |
 |--------|-------------|
-| `path` | Starting directory for the shell (default: current) |
-| `--no-tunnel` | Local network only, no Cloudflare tunnel |
-| `-b, --background` | Run in background and return immediately |
-| `-v, --verbose` | Show detailed startup logs |
-| `-U, --update` | Update to the latest version |
-| `--check-update` | Check if a newer version is available |
+| `path` | Starting directory (default: current) |
+| `--no-tunnel` | Local network only |
+| `-b, --background` | Run in background |
+| `-v, --verbose` | Detailed logs |
+| `-U, --update` | Update to latest |
+| `--check-update` | Check for updates |
 | `-V, --version` | Show version |
-| `-h, --help` | Show help message |
+
+</details>
 
 ## Configuration
 
-Create `config.yaml` in your working directory to customize:
+Create `config.yaml` in your working directory (optional):
 
 ```yaml
-# Server settings
+terminal:
+  default_shell: bash
+  cols: 120
+  rows: 30
+
+buttons:
+  - label: "git"
+    send: "git status\r"
+  - label: "build"
+    send: "npm run build\r"
+```
+
+<details>
+<summary><strong>Full config options</strong></summary>
+
+```yaml
 server:
   host: "127.0.0.1"
   port: 8000
 
-# Terminal settings
 terminal:
-  cols: 120        # Default columns (40-500)
-  rows: 30         # Default rows (10-200)
-  default_shell: powershell  # Default shell ID
+  cols: 120
+  rows: 30
+  default_shell: powershell
 
-  # Custom shells (optional - auto-detected if not specified)
+  # Custom shells (auto-detected if not specified)
   shells:
     - id: powershell
       name: PowerShell
@@ -122,40 +120,40 @@ terminal:
     - id: wsl
       name: WSL
       command: wsl.exe
-      args: []
 
-# Custom quick-action buttons
 buttons:
   - label: "git"
     send: "git status\r"
   - label: "ls"
     send: "ls -la\r"
-  - label: "clear"
-    send: "clear\r"
-  - label: "exit"
-    send: "exit\r"
 ```
 
-**Minimal config example:**
-
-```yaml
-terminal:
-  default_shell: bash
-```
+</details>
 
 ## Security
 
-> **Warning:** The URL is the only authentication. Anyone with the link can access your terminal.
+> **Warning:** The URL is the only authentication. Anyone with the link has full terminal access.
 
-- Environment variables sanitized (API keys, tokens, secrets blocked)
+**Best practices:**
+- Don't share the URL
+- Stop the server when not in use (`Ctrl+C`)
+- Use `--no-tunnel` for local network only
+
+**Built-in protections:**
+- Environment variables sanitized (API keys, tokens stripped)
 - Rate limiting on input
-- Sessions isolated per user via Cloudflare Access
+- Cloudflare Access integration for teams
 
-## Requirements
+## Contributing
 
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/) is prefered
-- [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (auto-installed if missing)
+Issues and PRs welcome. This project uses [uv](https://docs.astral.sh/uv/) for development:
+
+```bash
+git clone https://github.com/lyehe/porterminal
+cd porterminal
+uv sync
+uv run ptn
+```
 
 ## License
 

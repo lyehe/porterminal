@@ -61,18 +61,32 @@ export interface TabService {
  * Configure textarea for mobile devices
  */
 function configureTerminalTextarea(textarea: HTMLTextAreaElement): void {
-    textarea.setAttribute('autocomplete', 'terminal');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
     textarea.setAttribute('type', 'text');
     textarea.setAttribute('name', 'xterm');
-    textarea.setAttribute('autocorrect', 'on');
-    textarea.setAttribute('autocapitalize', 'none');
-    textarea.setAttribute('spellcheck', 'false');
     textarea.setAttribute('inputmode', 'text');
     textarea.setAttribute('enterkeyhint', 'send');
     textarea.setAttribute('role', 'textbox');
     textarea.setAttribute('aria-label', 'Terminal input');
     textarea.setAttribute('aria-multiline', 'false');
     textarea.removeAttribute('aria-hidden');
+
+    if (isIOS) {
+        // iOS: Enable predictive text suggestions
+        textarea.removeAttribute('autocomplete');
+        textarea.setAttribute('autocorrect', 'on');
+        textarea.setAttribute('autocapitalize', 'sentences');
+        textarea.removeAttribute('spellcheck');
+    } else {
+        // Other platforms: Disable autocomplete to avoid interference
+        textarea.setAttribute('autocomplete', 'off');
+        textarea.setAttribute('autocorrect', 'off');
+        textarea.setAttribute('autocapitalize', 'none');
+        textarea.setAttribute('spellcheck', 'false');
+    }
+
+    // Prevent password managers from interfering
     textarea.setAttribute('data-form-type', 'other');
     textarea.setAttribute('data-lpignore', 'true');
     textarea.setAttribute('data-1p-ignore', 'true');

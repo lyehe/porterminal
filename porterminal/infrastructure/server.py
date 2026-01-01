@@ -13,6 +13,12 @@ from rich.console import Console
 console = Console()
 
 
+def _is_icmp_warning(line: str) -> bool:
+    """Check if line is a harmless ICMP/ping warning from cloudflared."""
+    lower = line.lower()
+    return "icmp" in lower or "ping_group" in lower or "ping group" in lower
+
+
 def wait_for_server(host: str, port: int, timeout: int = 30) -> bool:
     """Wait for the server to be ready and verify it's Porterminal.
 
@@ -137,8 +143,8 @@ def start_cloudflared(port: int) -> tuple[subprocess.Popen, str | None]:
             url = match.group(0)
             break
 
-        # Also check for errors (ignore ICMP proxy warnings - harmless)
-        if "error" in line.lower() and "icmp" not in line.lower():
+        # Also check for errors (ignore ICMP/ping warnings - harmless)
+        if "error" in line.lower() and not _is_icmp_warning(line):
             console.print(f"[red]Cloudflared error:[/red] {line.strip()}")
 
     return process, url
@@ -155,7 +161,8 @@ def drain_process_output(process: subprocess.Popen) -> None:
             if not line:
                 break
             line = line.strip()
-            if line and "error" in line.lower():
+            # Print errors, but ignore harmless ICMP/ping warnings
+            if line and "error" in line.lower() and not _is_icmp_warning(line):
                 console.print(f"[red]{line}[/red]")
     except (OSError, ValueError):
         pass

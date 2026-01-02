@@ -16,27 +16,17 @@ export interface EventMap {
     // Connection events
     'connection:open': { tabId: number };
     'connection:close': { tabId: number; code: number };
-    'connection:message': { tabId: number; data: unknown };
     'connection:error': { tabId: number; error: string };
 
     // Input events
     'input:send': { data: string };
-    'input:key': { key: string };
 
     // Modifier events
     'modifier:changed': { modifier: 'ctrl' | 'alt' | 'shift'; state: ModifierMode };
 
-    // Selection events
-    'selection:changed': { text: string };
-    'selection:cleared': Record<string, never>;
-
     // Gesture events
     'gesture:swipe': { direction: SwipeDirection };
     'gesture:pinch': { scale: number };
-
-    // UI events
-    'ui:disconnect': Record<string, never>;
-    'ui:reconnect': Record<string, never>;
 }
 
 type EventHandler<T> = (payload: T) => void;

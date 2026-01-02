@@ -68,8 +68,3 @@ class TabRepository(ABC):
     def count_for_user(self, user_id: UserId) -> int:
         """Get tab count for a user."""
         ...
-
-    @abstractmethod
-    def all_tabs(self) -> list[Tab]:
-        """Get all tabs (for cleanup iteration)."""
-        ...

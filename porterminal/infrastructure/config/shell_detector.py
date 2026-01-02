@@ -53,6 +53,7 @@ class ShellDetector:
                 ("PS", "powershell", "powershell.exe", ["-NoLogo"]),
                 ("CMD", "cmd", "cmd.exe", []),
                 ("WSL", "wsl", "wsl.exe", []),
+                ("Git Bash", "gitbash", r"C:\Program Files\Git\bin\bash.exe", ["--login"]),
             ]
         return [
             ("Bash", "bash", "bash", ["--login"]),

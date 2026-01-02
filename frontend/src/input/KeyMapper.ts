@@ -4,50 +4,18 @@
  */
 
 import type { ModifierState } from '@/types';
-
-/** Default key mappings */
-export const DEFAULT_KEY_MAP: Record<string, string> = {
-    'Tab': '\t',
-    'ShiftTab': '\x1b[Z',
-    'Enter': '\r',
-    '\\Enter': '\\\r',  // Line continuation: backslash + enter
-    'Backspace': '\x7f',
-    'Delete': '\x1b[3~',
-    'Escape': '\x1b',
-    'Space': ' ',
-    'ArrowUp': '\x1b[A',
-    'ArrowDown': '\x1b[B',
-    'ArrowRight': '\x1b[C',
-    'ArrowLeft': '\x1b[D',
-    'Home': '\x1b[H',
-    'End': '\x1b[F',
-    'Ctrl+C': '\x03',
-    'Ctrl+D': '\x04',
-    'Ctrl+Z': '\x1a',
-    'Ctrl+L': '\x0c',
-    'Ctrl+R': '\x12',
-    'Ctrl+A': '\x01',
-    'Ctrl+E': '\x05',
-    'Ctrl+W': '\x17',
-    'Ctrl+U': '\x15',
-};
+import { buildKeyMap } from '@/config/keys';
 
 export interface KeyMapper {
     /** Get the escape sequence for a key, considering modifiers */
     getSequence(key: string, modifiers: ModifierState): string | null;
-
-    /** Register a custom key mapping */
-    registerMapping(key: string, sequence: string): void;
-
-    /** Check if a key has a mapping */
-    hasMapping(key: string): boolean;
 }
 
 /**
  * Create a key mapper instance
  */
 export function createKeyMapper(customMappings?: Record<string, string>): KeyMapper {
-    const keyMap = { ...DEFAULT_KEY_MAP, ...customMappings };
+    const keyMap = { ...buildKeyMap(), ...customMappings };
 
     return {
         getSequence(key: string, modifiers: ModifierState): string | null {
@@ -79,14 +47,6 @@ export function createKeyMapper(customMappings?: Record<string, string>): KeyMap
             }
 
             return null;
-        },
-
-        registerMapping(key: string, sequence: string): void {
-            keyMap[key] = sequence;
-        },
-
-        hasMapping(key: string): boolean {
-            return key in keyMap;
         },
     };
 }

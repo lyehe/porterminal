@@ -11,9 +11,6 @@ export interface ResizeManager {
 
     /** Cancel pending resize for a tab */
     cancelResize(tabId: number): void;
-
-    /** Get last sent dimensions for a tab */
-    getLastDimensions(tabId: number): { cols: number; rows: number } | null;
 }
 
 /**
@@ -60,11 +57,6 @@ export function createResizeManager(
                 clearTimeout(timeout);
                 pending.delete(tabId);
             }
-        },
-
-        getLastDimensions(tabId: number): { cols: number; rows: number } | null {
-            const last = lastSent.get(tabId);
-            return last ? { cols: last.cols, rows: last.rows } : null;
         },
     };
 }

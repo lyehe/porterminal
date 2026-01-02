@@ -42,6 +42,7 @@ import { createCopyButton } from '@/ui/CopyButton';
 import { createDisconnectOverlay } from '@/ui/DisconnectOverlay';
 import { createConnectionStatus } from '@/ui/ConnectionStatus';
 import { createTextViewOverlay } from '@/ui/TextViewOverlay';
+import { renderToolbar } from '@/ui/Toolbar';
 
 // Types
 import type { SwipeDirection } from '@/types';
@@ -58,9 +59,6 @@ const CONFIG = {
  * Initialize the application
  */
 async function init(): Promise<void> {
-    // Detect mobile
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
     // Create core infrastructure
     const eventBus = createEventBus();
 
@@ -140,7 +138,6 @@ async function init(): Promise<void> {
         eventBus,
         managementService,
         connectionService,
-        { isMobile },
         modifierManager.state,
         {
             onInputSend: () => {
@@ -279,19 +276,34 @@ async function init(): Promise<void> {
         });
     }
 
-    // Render custom buttons from config
+    // Render custom buttons from config (in third row)
+    // send can be string or array of strings/numbers (numbers = wait ms)
     if (config.buttons && config.buttons.length > 0) {
-        const toolbarRow = document.querySelector('.toolbar-row:last-child');
-        if (toolbarRow) {
+        const toolbarRow3 = document.getElementById('toolbar-row3');
+        if (toolbarRow3) {
             for (const btn of config.buttons) {
                 const button = document.createElement('button');
                 button.className = 'tool-btn';
                 button.textContent = btn.label;
-                button.dataset.send = btn.send;
-                toolbarRow.appendChild(button);
+                // Normalize to array and encode for HTML storage
+                const send = btn.send || '';
+                const sendArray = Array.isArray(send) ? send : [send];
+                const encoded = sendArray.map(item => {
+                    if (typeof item === 'number') return item;
+                    return item
+                        .replace(/\r/g, '{CR}')
+                        .replace(/\n/g, '{LF}')
+                        .replace(/\x1b/g, '{ESC}');
+                });
+                button.dataset.send = JSON.stringify(encoded);
+                toolbarRow3.appendChild(button);
             }
+            toolbarRow3.classList.remove('hidden');
         }
     }
+
+    // Render toolbar buttons from config
+    renderToolbar();
 
     // Setup modifier buttons
     setupModifierButtons(modifierManager);
@@ -587,28 +599,41 @@ function setupBackspaceButton(sendBackspace: () => void): void {
     btn.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
-function setupPasteButton(doPaste: () => Promise<void>): void {
-    const btn = document.getElementById('btn-paste');
+/**
+ * Setup a button with touch/click handling that prevents double-triggering.
+ * NOT suitable for: hold-to-repeat, custom event types, or state machines.
+ */
+function setupTapButton(
+    buttonId: string,
+    onAction: () => void | Promise<void>,
+    options: { preventDefault?: boolean } = {}
+): void {
+    const btn = document.getElementById(buttonId);
     if (!btn) return;
 
     let touchUsed = false;
+    const { preventDefault = true } = options;
 
     btn.addEventListener('touchstart', (e) => {
         touchUsed = true;
-        e.preventDefault();
-    }, { passive: false });
+        if (preventDefault) e.preventDefault();
+    }, { passive: !preventDefault });
 
     btn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        void doPaste();
-    }, { passive: false });
+        if (preventDefault) e.preventDefault();
+        void onAction();
+    }, { passive: !preventDefault });
 
     btn.addEventListener('click', () => {
         if (!touchUsed) {
-            void doPaste();
+            void onAction();
         }
         touchUsed = false;
     });
+}
+
+function setupPasteButton(doPaste: () => Promise<void>): void {
+    setupTapButton('btn-paste', doPaste);
 }
 
 function setupToolButtons(
@@ -628,23 +653,54 @@ function setupToolButtons(
             return;
         }
 
-        const action = () => {
+        const action = async () => {
             if (el.dataset.key) {
                 inputHandler.handleKeyButton(el.dataset.key);
             } else if (el.dataset.send) {
-                inputHandler.sendInput(el.dataset.send);
+                // Parse JSON array of strings/numbers
+                const items: Array<string | number> = JSON.parse(el.dataset.send);
+                for (const item of items) {
+                    if (typeof item === 'number') {
+                        // Number = wait ms
+                        await new Promise(r => setTimeout(r, item));
+                    } else {
+                        // String = decode and send
+                        const decoded = item
+                            .replace(/\{CR\}/g, '\r')
+                            .replace(/\{LF\}/g, '\n')
+                            .replace(/\{ESC\}/g, '\x1b');
+                        inputHandler.sendInput(decoded);
+                    }
+                }
                 focusTerminal();
             }
         };
 
+        let touchInside = false;
+
         el.addEventListener('touchstart', (e) => {
             touchUsed = true;
+            touchInside = true;
             e.preventDefault();
         }, { passive: false });
 
+        el.addEventListener('touchmove', (e) => {
+            if (!touchInside) return;
+            const touch = e.touches[0];
+            if (!touch) return;
+            const rect = el.getBoundingClientRect();
+            if (touch.clientX < rect.left || touch.clientX > rect.right ||
+                touch.clientY < rect.top || touch.clientY > rect.bottom) {
+                touchInside = false;
+            }
+        }, { passive: true });
+
         el.addEventListener('touchend', (e) => {
             e.preventDefault();
-            action();
+            if (touchInside) {
+                action();
+            }
+            touchInside = false;
         }, { passive: false });
 
         el.addEventListener('click', () => {
@@ -696,21 +752,12 @@ function setupTextViewButton(
     textViewOverlay: ReturnType<typeof createTextViewOverlay>,
     getTerminal: () => import('@xterm/xterm').Terminal | null
 ): void {
-    const btn = document.getElementById('btn-textview');
-    if (!btn) return;
-
-    btn.addEventListener('click', () => {
+    setupTapButton('btn-textview', () => {
         const term = getTerminal();
         if (term) {
             textViewOverlay.show(term);
         }
-    });
-}
-
-// Register service worker
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/static/sw.js')
-        .catch((e) => console.warn('SW registration failed:', e));
+    }, { preventDefault: false });
 }
 
 // Start the app

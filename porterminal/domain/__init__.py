@@ -15,7 +15,6 @@ from .entities import (
 
 # Ports
 from .ports import (
-    PTYFactory,
     PTYPort,
     SessionRepository,
     TabRepository,
@@ -87,5 +86,4 @@ __all__ = [
     "SessionRepository",
     "TabRepository",
     "PTYPort",
-    "PTYFactory",
 ]

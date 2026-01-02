@@ -3,11 +3,9 @@
  * Single Responsibility: Connection status display
  */
 
-export type ConnectionState = 'connected' | 'disconnected';
-
 export interface ConnectionStatus {
     /** Set connection state */
-    set(state: ConnectionState): void;
+    set(state: 'connected' | 'disconnected'): void;
 }
 
 /**
@@ -17,7 +15,7 @@ export function createConnectionStatus(): ConnectionStatus {
     const dot = document.getElementById('connection-dot');
 
     return {
-        set(state: ConnectionState): void {
+        set(state: 'connected' | 'disconnected'): void {
             if (!dot) return;
             dot.className = state === 'connected' ? 'connected' : '';
         },

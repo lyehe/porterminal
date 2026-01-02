@@ -1,11 +1,13 @@
 """Configuration loading and validation using Pydantic."""
 
+import os
 import shutil
-import sys
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
+
+from porterminal.infrastructure.config import ShellDetector
 
 
 class ServerConfig(BaseModel):
@@ -37,67 +39,6 @@ class ShellConfig(BaseModel):
         raise ValueError(f"Shell executable not found: {v}")
 
 
-def detect_available_shells() -> list[ShellConfig]:
-    """Auto-detect available shells based on the platform."""
-    shells = []
-
-    if sys.platform == "win32":
-        # Windows shells
-        candidates = [
-            ("PowerShell", "powershell", "powershell.exe", ["-NoLogo"]),
-            ("PowerShell 7", "pwsh", "pwsh.exe", ["-NoLogo"]),
-            ("CMD", "cmd", "cmd.exe", []),
-            ("WSL", "wsl", "wsl.exe", []),
-            ("Git Bash", "gitbash", r"C:\Program Files\Git\bin\bash.exe", ["--login"]),
-        ]
-    else:
-        # Unix-like shells (Linux, macOS)
-        candidates = [
-            ("Bash", "bash", "bash", ["--login"]),
-            ("Zsh", "zsh", "zsh", ["--login"]),
-            ("Fish", "fish", "fish", []),
-            ("Sh", "sh", "sh", []),
-        ]
-
-    for name, shell_id, command, args in candidates:
-        # Check if shell exists
-        shell_path = shutil.which(command)
-        if shell_path or Path(command).exists():
-            shells.append(
-                ShellConfig(
-                    name=name,
-                    id=shell_id,
-                    command=shell_path or command,
-                    args=args,
-                )
-            )
-
-    return shells
-
-
-def get_default_shell_id() -> str:
-    """Get the default shell ID for the current platform."""
-    if sys.platform == "win32":
-        # Prefer PowerShell 7, then PowerShell, then CMD
-        if shutil.which("pwsh"):
-            return "pwsh"
-        if shutil.which("powershell"):
-            return "powershell"
-        return "cmd"
-    elif sys.platform == "darwin":
-        # macOS defaults to zsh
-        if shutil.which("zsh"):
-            return "zsh"
-        return "bash"
-    else:
-        # Linux - prefer bash
-        if shutil.which("bash"):
-            return "bash"
-        if shutil.which("zsh"):
-            return "zsh"
-        return "sh"
-
-
 class TerminalConfig(BaseModel):
     """Terminal configuration."""
 
@@ -118,7 +59,7 @@ class ButtonConfig(BaseModel):
     """Custom button configuration."""
 
     label: str
-    send: str
+    send: str | list[str | int] = ""  # string or list of strings/ints (ints = wait ms)
 
 
 class CloudflareConfig(BaseModel):
@@ -137,11 +78,43 @@ class Config(BaseModel):
     cloudflare: CloudflareConfig = Field(default_factory=CloudflareConfig)
 
 
-def load_config(config_path: Path | str = "config.yaml") -> Config:
-    """Load configuration from YAML file."""
-    config_path = Path(config_path)
+def find_config_file(cwd: Path | None = None) -> Path | None:
+    """Find config file in standard locations.
 
-    if not config_path.exists():
+    Search order:
+    1. PORTERMINAL_CONFIG_PATH env var (if set)
+    2. ptn.yaml in cwd
+    3. .ptn/ptn.yaml in cwd
+    4. ~/.ptn/ptn.yaml (user home directory)
+    """
+    # Check env var first
+    if env_path := os.environ.get("PORTERMINAL_CONFIG_PATH"):
+        return Path(env_path)
+
+    base = cwd or Path.cwd()
+
+    # Search order: cwd first, then home
+    candidates = [
+        base / "ptn.yaml",
+        base / ".ptn" / "ptn.yaml",
+        Path.home() / ".ptn" / "ptn.yaml",
+    ]
+
+    for path in candidates:
+        if path.exists():
+            return path
+
+    return None  # No config found, use defaults
+
+
+def load_config(config_path: Path | str | None = None) -> Config:
+    """Load configuration from YAML file."""
+    if config_path is None:
+        config_path = find_config_file()
+
+    detector = ShellDetector()
+
+    if config_path is None or not Path(config_path).exists():
         data = {}
     else:
         with open(config_path, encoding="utf-8") as f:
@@ -162,10 +135,13 @@ def load_config(config_path: Path | str = "config.yaml") -> Config:
         except Exception:
             pass
 
-    # If no valid shells from config, auto-detect
+    # If no valid shells from config, auto-detect using ShellDetector
     if not valid_shells:
-        detected = detect_available_shells()
-        terminal_data["shells"] = [s.model_dump() for s in detected]
+        detected = detector.detect_shells()
+        terminal_data["shells"] = [
+            {"id": s.id, "name": s.name, "command": s.command, "args": list(s.args)}
+            for s in detected
+        ]
     else:
         terminal_data["shells"] = valid_shells
 
@@ -173,7 +149,7 @@ def load_config(config_path: Path | str = "config.yaml") -> Config:
     default_shell = terminal_data.get("default_shell", "")
     shell_ids = [s.get("id") or s.get("name", "").lower() for s in terminal_data.get("shells", [])]
     if not default_shell or default_shell not in shell_ids:
-        terminal_data["default_shell"] = get_default_shell_id()
+        terminal_data["default_shell"] = detector.get_default_shell_id()
         # Make sure the default shell is in the list
         if terminal_data["default_shell"] not in shell_ids and terminal_data.get("shells"):
             terminal_data["default_shell"] = terminal_data["shells"][0].get("id", "")

@@ -47,11 +47,14 @@ export interface ShellConfig {
     name: string;
 }
 
+/** Button send value: string or array of strings/numbers (numbers = wait ms) */
+export type ButtonSend = string | Array<string | number>;
+
 /** App configuration from /api/config */
 export interface AppConfig {
     shells: ShellConfig[];
     default_shell: string;
-    buttons?: Array<{ label: string; send: string }>;
+    buttons?: Array<{ label: string; send: ButtonSend }>;
 }
 
 /** Gesture state for touch handling */
@@ -131,15 +134,6 @@ export interface TabClosedMessage {
     reason: string;
 }
 
-export type WebSocketMessage =
-    | SessionInfoMessage
-    | PingMessage
-    | PongMessage
-    | ErrorMessage
-    | TabListMessage
-    | TabCreatedMessage
-    | TabClosedMessage;
-
 /** Management WebSocket message types */
 
 /** Tab state change */
@@ -179,34 +173,9 @@ export interface CloseTabResponse {
     error?: string;
 }
 
-/** Response to rename_tab request */
-export interface RenameTabResponse {
-    type: 'rename_tab_response';
-    request_id: string;
-    success: boolean;
-    tab?: ServerTab;
-    error?: string;
-}
-
 export type ManagementMessage =
     | TabStateSyncMessage
     | TabStateUpdateMessage
     | CreateTabResponse
     | CloseTabResponse
-    | RenameTabResponse
     | PongMessage;
-
-/** Saved tab state for localStorage */
-export interface SavedTab {
-    id: number;
-    tabId: string | null;
-    sessionId: string | null;
-    shellId: string;
-}
-
-/** Saved state for localStorage */
-export interface SavedState {
-    tabs: SavedTab[];
-    activeTabId: number | null;
-    tabCounter: number;
-}

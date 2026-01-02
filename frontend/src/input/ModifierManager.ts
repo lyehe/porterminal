@@ -21,9 +21,6 @@ export interface ModifierManager {
     /** Reset all modifiers to off */
     reset(): void;
 
-    /** Check if any modifier is active */
-    isActive(modifier: ModifierKey): boolean;
-
     /** Get state of a specific modifier */
     getState(modifier: ModifierKey): ModifierMode;
 }
@@ -98,10 +95,6 @@ export function createModifierManager(
                     emitChange(mod);
                 }
             }
-        },
-
-        isActive(modifier: ModifierKey): boolean {
-            return state[modifier] === 'sticky' || state[modifier] === 'locked';
         },
 
         getState(modifier: ModifierKey): ModifierMode {

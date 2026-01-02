@@ -1,6 +1,12 @@
 # Configuration
 
-Porterminal is configured via `config.yaml` in the working directory.
+Porterminal searches for `ptn.yaml` in these locations (first found wins):
+
+1. `ptn.yaml` in working directory
+2. `.ptn/ptn.yaml` in working directory
+3. `~/.ptn/ptn.yaml` (user home)
+
+Override with `PORTERMINAL_CONFIG_PATH` environment variable.
 
 ## Default Configuration
 
@@ -63,48 +69,86 @@ terminal:
 
 ## Custom Buttons
 
-Add custom buttons to the virtual keyboard:
+Add custom buttons to the toolbar (appears in third row):
 
 ```yaml
 buttons:
+  # Simple command
   - label: "git"
     send: "git status\r"
-  - label: "ls"
-    send: "ls -la\r"
+
+  # With delay before Enter (numbers = wait ms)
+  - label: "new"
+    send:
+      - "/new"
+      - 10           # wait 10ms
+      - "\r"         # Enter
+
+  # Control characters
   - label: "clear"
-    send: "\x0c"  # Ctrl+L
+    send: "\x0c"     # Ctrl+L
 ```
 
 | Property | Description |
 |----------|-------------|
 | `label` | Button text (keep short for mobile) |
-| `send` | String to send. Use `\r` for Enter, `\x__` for control chars |
+| `send` | String or list. Use `\r` for Enter, numbers for delays (ms) |
 
 ### Control Character Reference
 
-| Sequence | Key | Description |
-|----------|-----|-------------|
+| YAML Escape | Key | Description |
+|-------------|-----|-------------|
 | `\r` | Enter | Carriage return |
+| `\n` | Newline | Line feed |
 | `\x03` | Ctrl+C | Interrupt |
 | `\x04` | Ctrl+D | EOF |
 | `\x0c` | Ctrl+L | Clear screen |
 | `\x1a` | Ctrl+Z | Suspend |
 | `\x1b` | Escape | Escape key |
 
+Note: YAML escape sequences require double quotes (`"...\r"`). Single quotes treat backslash literally.
+
 ## Cloudflare Access Integration
 
-For team deployments with Cloudflare Access:
+For team deployments, you can protect your terminal with [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/).
 
-```yaml
-cloudflare:
-  team_domain: "yourteam.cloudflareaccess.com"
-  access_aud: "your-application-audience-tag"
+### How It Works
+
+When Cloudflare Access authenticates a user, it adds a header to every request:
+```
+cf-access-authenticated-user-email: user@example.com
 ```
 
-This enables:
-- User identification via Cloudflare Access email
-- Session isolation per user
-- Maximum 10 sessions per user
+Porterminal reads this header to identify users. Each user gets isolated sessions (max 10 per user).
+
+### Setup
+
+1. **Create a Cloudflare Access Application**
+   - Go to Zero Trust Dashboard → Access → Applications
+   - Add a self-hosted application
+   - Set the application domain to your tunnel URL
+   - Configure an Access Policy (e.g., allow specific emails)
+
+2. **No config needed in Porterminal**
+
+   Cloudflare handles authentication at the proxy level. The `cloudflare:` section in config is reserved for future use (JWT validation).
+
+### Security Model
+
+| Layer | What It Does |
+|-------|--------------|
+| Cloudflare Access | Validates JWT, enforces policies, sets trusted headers |
+| Cloudflare Tunnel | Routes only authenticated traffic to your app |
+| Porterminal | Trusts `cf-access-authenticated-user-email` header for user isolation |
+
+This is secure because:
+- Clients cannot set the `cf-access-authenticated-user-email` header directly
+- All traffic goes through Cloudflare tunnel (not exposed to internet)
+- Cloudflare validates tokens before forwarding requests
+
+### Without Cloudflare Access
+
+When running locally or without Access, users are identified as `local-user` and share sessions.
 
 ## Environment Variables
 
@@ -112,4 +156,4 @@ This enables:
 |----------|-------------|
 | `PORTERMINAL_LOG_LEVEL` | Log level (DEBUG, INFO, WARNING, ERROR) |
 | `PORTERMINAL_CWD` | Override working directory |
-| `PORTERMINAL_CONFIG_PATH` | Path to config file (default: config.yaml) |
+| `PORTERMINAL_CONFIG_PATH` | Path to config file (overrides search) |

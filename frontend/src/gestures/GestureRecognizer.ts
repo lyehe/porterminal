@@ -89,6 +89,15 @@ export function createGestureRecognizer(
         }
     }
 
+    function releasePointer(container: HTMLElement): void {
+        if (state.pointerId) {
+            try {
+                container.releasePointerCapture(state.pointerId);
+            } catch { /* ignore */ }
+            state.pointerId = null;
+        }
+    }
+
     return {
         attach(container: HTMLElement): void {
             attachedContainer = container;
@@ -177,13 +186,7 @@ export function createGestureRecognizer(
             handlers.pointerup = (e: PointerEvent) => {
                 if (e.pointerType === 'mouse') return;
 
-                if (state.pointerId) {
-                    try {
-                        container.releasePointerCapture(state.pointerId);
-                    } catch { /* ignore */ }
-                    state.pointerId = null;
-                }
-
+                releasePointer(container);
                 e.stopPropagation();
                 clearLongPressTimer();
 
@@ -257,13 +260,7 @@ export function createGestureRecognizer(
             handlers.pointercancel = (e: PointerEvent) => {
                 if (e.pointerType === 'mouse') return;
 
-                if (state.pointerId) {
-                    try {
-                        container.releasePointerCapture(state.pointerId);
-                    } catch { /* ignore */ }
-                    state.pointerId = null;
-                }
-
+                releasePointer(container);
                 clearLongPressTimer();
                 state.isSelecting = false;
                 touchGestureActive = false;

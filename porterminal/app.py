@@ -52,10 +52,10 @@ async def lifespan(app: FastAPI):
     security_preflight_checks()
 
     # Create DI container with all wired dependencies
-    config_path = os.environ.get("PORTERMINAL_CONFIG_PATH", "config.yaml")
+    # config_path=None uses find_config_file() to search standard locations
     cwd = os.environ.get("PORTERMINAL_CWD")
 
-    container = create_container(config_path=config_path, cwd=cwd)
+    container = create_container(config_path=None, cwd=cwd)
     app.state.container = container
 
     # Wire up cascade: when session is destroyed, close associated tabs and broadcast

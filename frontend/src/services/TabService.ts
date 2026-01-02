@@ -15,10 +15,6 @@ import type { EventBus } from '@/core/events';
 import type { ConnectionService } from './ConnectionService';
 import type { ManagementService } from './ManagementService';
 
-export interface TabServiceConfig {
-    isMobile: boolean;
-}
-
 export interface TabService {
     /** All tabs */
     readonly tabs: readonly Tab[];
@@ -43,12 +39,6 @@ export interface TabService {
 
     /** Apply incremental state update from server */
     applyStateUpdate(changes: TabChange[]): void;
-
-    /** Get a tab by local ID */
-    getTab(tabId: number): Tab | undefined;
-
-    /** Get a tab by server-assigned UUID */
-    getTabByServerId(serverId: string): Tab | undefined;
 
     /** Focus the active terminal */
     focusTerminal(): void;
@@ -103,7 +93,6 @@ export function createTabService(
     eventBus: EventBus,
     managementService: ManagementService,
     connectionService: ConnectionService,
-    config: TabServiceConfig,
     modifiers: ModifierState,
     callbacks: {
         onInputSend: (data: string) => void;
@@ -223,12 +212,13 @@ export function createTabService(
         container.id = `terminal-${id}`;
         container.className = 'terminal-instance';
         container.style.display = 'none';
+        container.style.opacity = '0';  // Start hidden, ConnectionService will show after buffer flush
         document.getElementById('terminal')?.appendChild(container);
 
         // Create terminal
         const terminal = new Terminal({
             cursorBlink: true,
-            fontSize: config.isMobile ? 10 : 10,
+            fontSize: 10,
             fontFamily: 'Menlo, Monaco, Consolas, monospace',
             theme: {
                 background: getCSSVar('--bg-primary', '#1e1e1e'),
@@ -474,11 +464,14 @@ export function createTabService(
             }
 
             // Focus and fit - use rAF to ensure CSS layout is complete
+            // Note: for new tabs, opacity is managed by ConnectionService after buffer flush
             tab.term.focus();
             requestAnimationFrame(() => {
                 tab.fitAddon.fit();
-                // Ensure cursor is visible after switching tabs
-                tab.term.scrollToBottom();
+                // If already visible (reconnect/switch back), scroll to bottom
+                if (tab.container.style.opacity !== '0') {
+                    tab.term.scrollToBottom();
+                }
             });
 
             renderTabs();
@@ -541,14 +534,6 @@ export function createTabService(
             }
 
             renderTabs();
-        },
-
-        getTab(tabId: number): Tab | undefined {
-            return tabs.find(t => t.id === tabId);
-        },
-
-        getTabByServerId(serverId: string): Tab | undefined {
-            return serverIdToTab.get(serverId);
         },
 
         focusTerminal(): void {

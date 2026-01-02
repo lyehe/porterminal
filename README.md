@@ -19,34 +19,32 @@
   </a>
 </p>
 
+
+
 <p align="center">
-  <strong>Access your terminal from your phone. No setup. Just scan.</strong>
+  <b>1.</b> <code>uvx ptn</code><br>
+  <b>2.</b> Scan the QR<br>
+  <b>3.</b> Access your terminal from your phone<br>
 </p>
 
-```bash
-uvx ptn
-```
-
 <p align="center">
-  <em>Scan the QR code. Start typing. That's it.</em>
+  <video src="assets/demo.mp4" width="600" controls></video>
 </p>
 
 ---
 
-## Why I Built This
+## Why
 
-I wanted to continue vibe coding after bed. I tried ngrok, but it requires registration. I tried Cloudflare Tunnel, but it doesn't provide a usable terminal UI. I tried Termius, but it comes with apps, accounts, and too much setup. I just wanted something simpler: open a browser, get a terminal, start typing.
-
-So I built Porterminal. A mobile-first web terminal with secure tunneling, no registration, no installation on your phone, and a touch-friendly UI optimized for vibe coding with whatever AI app you want.
+I wanted to vibe code from bed. ngrok requires registration and the free tier sucks. Cloudflare Quick Tunnel works great but is hard to use directly on the phone. Termius works after complicated setup: port forwarding, firewall rules, key management... I just wanted something simpler: run a command, scan a QR, start typing.
 
 ## Features
 
 - **One command, instant access** - No SSH, no port forwarding, no config files. Cloudflare tunnel + QR code.
-- **Actually usable on mobile** - Virtual modifier keys (Ctrl, Alt, Tab, arrows), swipe gestures, copy/paste that works.
-- **Multi-tab sessions** - Run builds in one tab, tail logs in another. Sessions persist across reconnects.
+- **Actually usable on mobile** - + Essential buttons and gestures for everyday terminals use for vibe coding and mroe.
+- **Multi-tab shared sessions** - Run builds in one tab, tail logs in another. Sessions persist across reconnects.
 - **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish). Auto-detects your shells.
 
-## Installation
+## Install
 
 | Method | Install | Update |
 |--------|---------|--------|
@@ -55,21 +53,6 @@ So I built Porterminal. A mobile-first web terminal with secure tunneling, no re
 | **pipx** | `pipx install ptn` | `pipx upgrade ptn` |
 | **pip** | `pip install ptn` | `pip install -U ptn` |
 
-<details>
-<summary>Don't have uv? Install it</summary>
-
-Linux/macOS:
-```bash
-wget -qO- https://astral.sh/uv/install.sh | sh
-```
-
-Windows:
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-</details>
-
 Requires Python 3.12+ and [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (auto-installed if missing).
 
 ## Usage
@@ -77,28 +60,14 @@ Requires Python 3.12+ and [cloudflared](https://developers.cloudflare.com/cloudf
 ```bash
 ptn                    # Start in current directory
 ptn ~/projects/myapp   # Start in specific folder
-ptn --no-tunnel        # Local network only (no Cloudflare)
+ptn --no-tunnel        # Local network only
 ptn -b                 # Run in background
+ptn -v                 # Verbose logs
 ```
-
-<details>
-<summary><strong>All options</strong></summary>
-
-| Option | Description |
-|--------|-------------|
-| `path` | Starting directory (default: current) |
-| `--no-tunnel` | Local network only |
-| `-b, --background` | Run in background |
-| `-v, --verbose` | Detailed logs |
-| `-U, --update` | Update to latest |
-| `--check-update` | Check for updates |
-| `-V, --version` | Show version |
-
-</details>
 
 ## Configuration
 
-Create `config.yaml` in your working directory (optional):
+Create `ptn.yaml` in your working directory, `.ptn/ptn.yaml`, or `~/.ptn/ptn.yaml` (optional):
 
 ```yaml
 terminal:
@@ -113,55 +82,18 @@ buttons:
     send: "npm run build\r"
 ```
 
-<details>
-<summary><strong>Full config options</strong></summary>
-
-```yaml
-server:
-  host: "127.0.0.1"
-  port: 8000
-
-terminal:
-  cols: 120
-  rows: 30
-  default_shell: powershell
-
-  # Custom shells (auto-detected if not specified)
-  shells:
-    - id: powershell
-      name: PowerShell
-      command: powershell.exe
-      args: ["-NoLogo"]
-    - id: wsl
-      name: WSL
-      command: wsl.exe
-
-buttons:
-  - label: "git"
-    send: "git status\r"
-  - label: "ls"
-    send: "ls -la\r"
-```
-
-</details>
-
 ## Security
 
 > **Warning:** The URL is the only authentication. Anyone with the link has full terminal access.
 
-**Best practices:**
 - Don't share the URL
 - Stop the server when not in use (`Ctrl+C`)
 - Use `--no-tunnel` for local network only
-
-**Built-in protections:**
-- Environment variables sanitized (API keys, tokens stripped)
-- Rate limiting on input
-- Cloudflare Access integration for teams
+- Environment variables are sanitized (API keys, tokens stripped)
 
 ## Contributing
 
-Issues and PRs welcome. This project uses [uv](https://docs.astral.sh/uv/) for development:
+Issues and PRs welcome.
 
 ```bash
 git clone https://github.com/lyehe/porterminal

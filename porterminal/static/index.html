@@ -14,23 +14,21 @@
     <meta name="format-detection" content="telephone=no">
     <title>Terminal</title>
 
-    <!-- PWA -->
-    <link rel="manifest" href="/static/manifest.json">
+    <!-- Icons (PWA disabled - not useful for tunnel-based access) -->
     <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
-    <link rel="apple-touch-icon" href="/static/icon-192.png">
-  <script type="module" crossorigin src="/static/assets/app-CMWCKzqr.js"></script>
-  <link rel="stylesheet" crossorigin href="/static/assets/app-DH03bCG2.css">
+  <script type="module" crossorigin src="/static/assets/app-RKANPViY.js"></script>
+  <link rel="stylesheet" crossorigin href="/static/assets/app-DQePboVd.css">
 </head>
 <body>
     <div id="app">
         <!-- Tab Bar with Shell Selector -->
         <div id="tab-bar">
             <span id="connection-dot"></span>
+            <button id="btn-textview" title="Plain Text View">TXT</button>
             <!-- Tabs rendered by JS -->
             <div id="shell-selector">
                 <select id="shell-select"><option>...</option></select>
                 <button id="btn-info" title="Help">ⓘ</button>
-                <button id="btn-textview" title="Plain Text View">≡</button>
                 <button id="btn-shutdown" title="Shutdown">⏻</button>
             </div>
         </div>
@@ -41,33 +39,22 @@
         </div>
 
         <!-- Bottom Toolbar - Two rows -->
+        <!-- Buttons with data-key are generated from config/keys.ts -->
         <div id="toolbar">
-            <div class="toolbar-row">
+            <div class="toolbar-row" id="toolbar-row1">
                 <button class="tool-btn" id="btn-escape">Esc</button>
-                <button class="tool-btn arrow" data-key="ArrowLeft">←</button>
-                <button class="tool-btn arrow" data-key="ArrowDown">↓</button>
-                <button class="tool-btn arrow" data-key="ArrowUp">↑</button>
-                <button class="tool-btn arrow" data-key="ArrowRight">→</button>
-                <button class="tool-btn icon" data-key="Tab">⇥</button>
-                <button class="tool-btn" data-key="Home">Home</button>
-                <button class="tool-btn" data-key="End">End</button>
+                <!-- Generated buttons inserted here -->
                 <button class="tool-btn icon" id="btn-backspace">⌫</button>
-                <button class="tool-btn" data-key="Delete">Del</button>
-                <button class="tool-btn icon enter" data-key="Enter">↵</button>
             </div>
-            <div class="toolbar-row">
+            <div class="toolbar-row" id="toolbar-row2">
                 <button class="tool-btn modifier" id="btn-ctrl">Ctl</button>
                 <button class="tool-btn modifier" id="btn-alt">Alt</button>
                 <button class="tool-btn modifier" id="btn-shift">Sft</button>
-                <button class="tool-btn" data-key="ShiftTab">Sft⇥</button>
-                <button class="tool-btn danger" data-key="Ctrl+C">^C</button>
+                <!-- Generated buttons inserted here -->
                 <button class="tool-btn icon" id="btn-paste">⎘</button>
-                <button class="tool-btn" data-key="1">1</button>
-                <button class="tool-btn" data-key="2">2</button>
-                <button class="tool-btn" data-key="3">3</button>
-                <button class="tool-btn" data-key="@">@</button>
-                <button class="tool-btn" data-key="/">/</button>
-                <button class="tool-btn" data-key="\Enter">\↵</button>
+            </div>
+            <div class="toolbar-row hidden" id="toolbar-row3">
+                <!-- Custom buttons from config inserted here -->
             </div>
         </div>
 
@@ -117,6 +104,10 @@
                 <div class="help-section">
                     <div class="help-title">Tabs</div>
                     <div class="help-item"><span class="help-key">Hold ×</span> Close tab</div>
+                </div>
+                <div class="help-section">
+                    <div class="help-title">TXT Button</div>
+                    <div class="help-item">Plain text view for easy scrolling, selection and review</div>
                 </div>
             </div>
         </div>

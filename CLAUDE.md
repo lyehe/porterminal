@@ -9,24 +9,27 @@ Porterminal is a web-based terminal accessible from mobile devices via Cloudflar
 ## Quick Reference
 
 ```bash
-uv sync          # Install dependencies
-uv run ptn       # Run locally
-uv build         # Build package
+# Backend
+uv sync                  # Install dependencies
+uv run ptn               # Run server
+uv run pytest            # Run tests
+uv run ruff check .      # Lint
+uv run ruff format .     # Format
+uv build                 # Build package
+
+# Frontend (in frontend/)
+npm install              # Install deps
+npm run dev              # Dev server with HMR
+npm run build            # Build to porterminal/static/
 ```
 
 **Release:** `git tag v0.1.x -m "Release" && git push origin v0.1.x`
 
-## Documentation
+## Architecture
 
-See [docs/](docs/) for detailed documentation:
-- [Development Guide](docs/development.md) - Setup, structure, release process
-- [Architecture](docs/architecture.md) - Technical design
-- [Configuration](docs/configuration.md) - Settings and options
+Hexagonal architecture with clean layer separation:
 
-## Architecture Summary
-
-Hexagonal architecture:
-- `porterminal/domain/` - Core business logic (entities, value objects, ports)
+- `porterminal/domain/` - Core business logic, ports (interfaces), no external deps
 - `porterminal/application/` - Use cases (TerminalService, SessionService)
 - `porterminal/infrastructure/` - Adapters (WebSocket, config, cloudflared)
 - `porterminal/pty/` - Platform PTY (windows.py, unix.py)
@@ -37,3 +40,4 @@ Hexagonal architecture:
 - Cross-platform: Windows (pywinpty), Linux/macOS (pty module)
 - Requires `cloudflared` CLI for tunnel functionality (auto-installed if missing)
 - Sessions persist as long as PTY is alive (no timeout)
+- Frontend must be rebuilt (`npm run build`) for changes to appear in packaged app

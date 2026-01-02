@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 
-from ..values.shell_command import ShellCommand
 from ..values.terminal_dimensions import TerminalDimensions
 
 
@@ -49,32 +48,4 @@ class PTYPort(ABC):
     @abstractmethod
     def dimensions(self) -> TerminalDimensions:
         """Get current terminal dimensions."""
-        ...
-
-
-class PTYFactory(ABC):
-    """Abstract interface for PTY creation.
-
-    Infrastructure provides platform-specific factory.
-    """
-
-    @abstractmethod
-    def create(
-        self,
-        shell: ShellCommand,
-        dimensions: TerminalDimensions,
-        environment: dict[str, str],
-        working_directory: str | None = None,
-    ) -> PTYPort:
-        """Create and spawn a new PTY.
-
-        Args:
-            shell: Shell command to run.
-            dimensions: Initial terminal dimensions.
-            environment: Sanitized environment variables.
-            working_directory: Optional working directory.
-
-        Returns:
-            PTY port implementation.
-        """
         ...

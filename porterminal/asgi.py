@@ -17,15 +17,20 @@ def create_app_from_env():
 
     This is called by uvicorn when using the --factory flag.
     Environment variables:
-        PORTERMINAL_CONFIG_PATH: Path to config file (default: config.yaml)
+        PORTERMINAL_CONFIG_PATH: Path to config file (overrides search)
         PORTERMINAL_CWD: Working directory for PTY sessions
+
+    Config search order (when env var not set):
+        1. ptn.yaml in cwd
+        2. .ptn/ptn.yaml in cwd
+        3. ~/.ptn/ptn.yaml
     """
     from porterminal.app import create_app
 
-    config_path = os.environ.get("PORTERMINAL_CONFIG_PATH", "config.yaml")
     cwd = os.environ.get("PORTERMINAL_CWD")
 
-    container = create_container(config_path=config_path, cwd=cwd)
+    # config_path=None uses find_config_file() to search standard locations
+    container = create_container(config_path=None, cwd=cwd)
 
     # Create app with container
     # Note: The current app.py doesn't accept container yet,

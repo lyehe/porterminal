@@ -13,7 +13,7 @@ export default defineConfig({
 
   build: {
     outDir: '../porterminal/static',
-    emptyOutDir: false, // Preserve manifest.json, icons, sw.js
+    emptyOutDir: false, // Preserve icons
     rollupOptions: {
       input: {
         app: resolve(__dirname, 'index.html'),

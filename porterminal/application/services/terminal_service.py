@@ -63,10 +63,22 @@ class TerminalService:
         # Multi-client support: track connections and read loops per session
         self._session_connections: dict[str, set[ConnectionPort]] = {}
         self._session_read_tasks: dict[str, asyncio.Task[None]] = {}
+        # Per-session locks to prevent race between buffer replay and broadcast
+        self._session_locks: dict[str, asyncio.Lock] = {}
 
     # -------------------------------------------------------------------------
     # Multi-client connection tracking
     # -------------------------------------------------------------------------
+
+    def _get_session_lock(self, session_id: str) -> asyncio.Lock:
+        """Get or create a lock for a session."""
+        if session_id not in self._session_locks:
+            self._session_locks[session_id] = asyncio.Lock()
+        return self._session_locks[session_id]
+
+    def _cleanup_session_lock(self, session_id: str) -> None:
+        """Remove session lock when no longer needed."""
+        self._session_locks.pop(session_id, None)
 
     def _register_connection(self, session_id: str, connection: ConnectionPort) -> int:
         """Register a connection for a session. Returns connection count."""
@@ -85,8 +97,21 @@ class TerminalService:
             del self._session_connections[session_id]
         return count
 
+    async def _send_to_connections(self, connections: list[ConnectionPort], data: bytes) -> None:
+        """Send data to a list of connections (used with pre-snapshotted list)."""
+        for conn in connections:
+            try:
+                await conn.send_output(data)
+            except Exception:
+                pass  # Connection cleanup handled elsewhere
+
     async def _broadcast_output(self, session_id: str, data: bytes) -> None:
-        """Broadcast PTY output to all connections for a session."""
+        """Broadcast PTY output to all connections for a session.
+
+        Note: This is only used for error/status messages where the race
+        condition doesn't matter. For PTY data, use _send_to_connections
+        with a lock-protected snapshot.
+        """
         connections = self._session_connections.get(session_id, set())
         dead: list[ConnectionPort] = []
         for conn in list(connections):  # Copy to avoid mutation during iteration
@@ -128,31 +153,41 @@ class TerminalService:
         session_id = str(session.id)
         clock = AsyncioClock()
         rate_limiter = TokenBucketRateLimiter(self._rate_limit_config, clock)
+        lock = self._get_session_lock(session_id)
 
-        # Register this connection
-        connection_count = self._register_connection(session_id, connection)
-        is_first_client = connection_count == 1
+        # Register atomically to prevent race with broadcast.
+        # Without this lock, a new client could register between add_output and
+        # broadcast, receiving the same data twice (once from buffer, once broadcast).
+        #
+        # Buffer snapshot and read loop start are also under lock to ensure:
+        # - Buffer is captured before any new data arrives
+        # - Only one read loop starts per session (prevents duplicate PTY reads)
+        # - I/O (send_output) happens OUTSIDE lock to avoid blocking other clients
+        buffered = None
+        async with lock:
+            connection_count = self._register_connection(session_id, connection)
+            is_first_client = connection_count == 1
 
-        logger.info(
-            "Client connected session_id=%s connection_count=%d",
-            session_id,
-            connection_count,
-        )
+            logger.info(
+                "Client connected session_id=%s connection_count=%d",
+                session_id,
+                connection_count,
+            )
 
-        try:
-            # First client starts the shared PTY read loop
+            # First client starts the shared PTY read loop (under lock to prevent duplicates)
             if is_first_client:
                 self._start_broadcast_read_loop(session, session_id)
 
+            # Snapshot buffer while under lock (ensures consistency with broadcast)
             # Note: session_info is sent by the caller (app.py) to include tab_id
-
-            # Replay buffered output to THIS connection only (not broadcast)
             if not skip_buffer and not session.output_buffer.is_empty:
                 buffered = session.get_buffered_output()
-                # Don't clear buffer - other clients may need it too
-                if buffered:
-                    await connection.send_output(buffered)
 
+        # Replay buffer OUTSIDE lock to avoid blocking other clients during I/O
+        if buffered:
+            await connection.send_output(buffered)
+
+        try:
             # Start heartbeat for this connection
             heartbeat_task = asyncio.create_task(self._heartbeat_loop(connection))
 
@@ -173,9 +208,10 @@ class TerminalService:
                 remaining,
             )
 
-            # Last client: stop the read loop
+            # Last client: stop the read loop and cleanup lock
             if remaining == 0:
                 await self._stop_broadcast_read_loop(session_id)
+                self._cleanup_session_lock(session_id)
 
     def _start_broadcast_read_loop(
         self,
@@ -212,6 +248,11 @@ class TerminalService:
         - Small data (<64 bytes): flush immediately for interactive responsiveness
         - Large data: batch for ~16ms to reduce WebSocket message frequency
         - Flush if batch exceeds 16KB to prevent memory buildup
+
+        Thread safety:
+        - Uses session lock to prevent race between add_output/broadcast and
+          new client registration/buffer replay. Lock is held briefly during
+          buffer update and connection snapshot, not during actual I/O.
         """
         # Check if PTY is alive at start
         if not session.pty_handle.is_alive():
@@ -219,18 +260,29 @@ class TerminalService:
             await self._broadcast_output(session_id, b"\r\n[PTY failed to start]\r\n")
             return
 
+        lock = self._get_session_lock(session_id)
         batch_buffer: list[bytes] = []
         batch_size = 0
         last_flush_time = asyncio.get_running_loop().time()
 
         async def flush_batch() -> None:
+            """Flush batched data with lock protection."""
             nonlocal batch_buffer, batch_size, last_flush_time
-            if batch_buffer:
-                combined = b"".join(batch_buffer)
-                batch_buffer = []
-                batch_size = 0
-                last_flush_time = asyncio.get_running_loop().time()
-                await self._broadcast_output(session_id, combined)
+            if not batch_buffer:
+                return
+
+            combined = b"".join(batch_buffer)
+            batch_buffer = []
+            batch_size = 0
+            last_flush_time = asyncio.get_running_loop().time()
+
+            # Acquire lock, add to buffer, snapshot connections, release lock
+            async with lock:
+                session.add_output(combined)
+                connections = list(self._session_connections.get(session_id, set()))
+
+            # Broadcast outside lock (I/O can be slow)
+            await self._send_to_connections(connections, combined)
 
         def has_connections() -> bool:
             return (
@@ -242,12 +294,16 @@ class TerminalService:
             try:
                 data = session.pty_handle.read(4096)
                 if data:
-                    session.add_output(data)
                     session.touch(datetime.now(UTC))
 
                     # Small data (interactive): flush immediately for responsiveness
                     if len(data) < INTERACTIVE_THRESHOLD and not batch_buffer:
-                        await self._broadcast_output(session_id, data)
+                        # Acquire lock, add to buffer, snapshot connections
+                        async with lock:
+                            session.add_output(data)
+                            connections = list(self._session_connections.get(session_id, set()))
+                        # Broadcast outside lock
+                        await self._send_to_connections(connections, data)
                     else:
                         # Batch larger data
                         batch_buffer.append(data)

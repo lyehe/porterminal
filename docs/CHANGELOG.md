@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-01-02
+
+### Added
+- Custom buttons now render in dedicated third toolbar row
+- Config file search paths: `PORTERMINAL_CONFIG_PATH` env var, `./ptn.yaml`, `./.ptn/ptn.yaml`, `~/.ptn/ptn.yaml`
+
+### Fixed
+- Race condition when new clients connect during active broadcast (duplicate output)
+- Session locks now ensure buffer replay and broadcast are atomic
+
+### Changed
+- Config file renamed from `config.yaml` to `ptn.yaml`
+- Centralized key configuration in `frontend/src/config/keys.ts` (single source of truth)
+- New Toolbar component renders buttons from config
+- Simplified frontend architecture (removed ~700 lines of code)
+- README updated with demo video and improved "Why" section
+
+### Removed
+- PWA support (service worker and manifest.json) - simplifies deployment
+- `generate_favicon.py` - no longer needed
+
 ## [0.1.8] - 2025-01-01
 
 ### Fixed
@@ -102,7 +123,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/lyehe/porterminal/compare/v0.1.8...v0.2.0
 [0.1.8]: https://github.com/lyehe/porterminal/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/lyehe/porterminal/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/lyehe/porterminal/compare/v0.1.5...v0.1.6

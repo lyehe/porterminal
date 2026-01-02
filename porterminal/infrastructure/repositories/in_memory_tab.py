@@ -118,7 +118,3 @@ class InMemoryTabRepository(TabRepository):
     def count_for_user(self, user_id: UserId) -> int:
         """Get tab count for a user."""
         return len(self._user_tabs.get(str(user_id), set()))
-
-    def all_tabs(self) -> list[Tab]:
-        """Get all tabs."""
-        return list(self._tabs.values())

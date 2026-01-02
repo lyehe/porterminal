@@ -67,7 +67,3 @@ class OutputBuffer:
         """Clear the buffer."""
         self._buffer.clear()
         self._size = 0
-
-    def __len__(self) -> int:
-        """Return number of chunks in buffer."""
-        return len(self._buffer)

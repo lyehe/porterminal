@@ -3,12 +3,15 @@
 from collections.abc import Callable
 from pathlib import Path
 
+import yaml
+
 from porterminal.application.services import (
     ManagementService,
     SessionService,
     TabService,
     TerminalService,
 )
+from porterminal.config import find_config_file
 from porterminal.container import Container
 from porterminal.domain import (
     EnvironmentRules,
@@ -19,7 +22,7 @@ from porterminal.domain import (
     TabLimitChecker,
     TerminalDimensions,
 )
-from porterminal.infrastructure.config import ShellDetector, YAMLConfigLoader
+from porterminal.infrastructure.config import ShellDetector
 from porterminal.infrastructure.registry import UserConnectionRegistry
 from porterminal.infrastructure.repositories import InMemorySessionRepository, InMemoryTabRepository
 
@@ -107,7 +110,7 @@ class PTYManagerAdapter:
 
 
 def create_container(
-    config_path: Path | str = "config.yaml",
+    config_path: Path | str | None = None,
     cwd: str | None = None,
 ) -> Container:
     """Create the dependency container with all wired dependencies.
@@ -116,15 +119,20 @@ def create_container(
     dependencies are created and wired together.
 
     Args:
-        config_path: Path to config file.
+        config_path: Path to config file, or None to search standard locations.
         cwd: Working directory for PTY sessions.
 
     Returns:
         Fully wired dependency container.
     """
     # Load configuration
-    loader = YAMLConfigLoader(config_path)
-    config_data = loader.load()
+    if config_path is None:
+        config_path = find_config_file()
+
+    config_data: dict = {}
+    if config_path is not None and Path(config_path).exists():
+        with open(config_path, encoding="utf-8") as f:
+            config_data = yaml.safe_load(f) or {}
 
     # Detect shells
     detector = ShellDetector()

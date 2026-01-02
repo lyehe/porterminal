@@ -27,14 +27,8 @@ export interface ManagementService {
     /** Request tab close */
     closeTab(tabId: string): Promise<void>;
 
-    /** Request tab rename */
-    renameTab(tabId: string, name: string): Promise<ServerTab>;
-
     /** Check if connected */
     isConnected(): boolean;
-
-    /** Send ping to keep connection alive */
-    ping(): void;
 }
 
 export interface ManagementCallbacks {
@@ -117,20 +111,6 @@ export function createManagementService(
                     break;
                 }
 
-                case 'rename_tab_response': {
-                    const pending = pendingRequests.get(msg.request_id);
-                    if (pending) {
-                        clearTimeout(pending.timeout);
-                        pendingRequests.delete(msg.request_id);
-                        if (msg.success && msg.tab) {
-                            pending.resolve(msg.tab);
-                        } else {
-                            pending.reject(new Error(msg.error || 'Failed to rename tab'));
-                        }
-                    }
-                    break;
-                }
-
                 case 'pong':
                     // Heartbeat response - nothing to do
                     break;
@@ -152,6 +132,33 @@ export function createManagementService(
             pending.reject(new Error('Connection closed'));
             pendingRequests.delete(requestId);
         }
+    }
+
+    function sendRequest<T>(type: string, payload: Record<string, unknown>): Promise<T> {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            return Promise.reject(new Error('Not connected to management WebSocket'));
+        }
+
+        const requestId = generateRequestId();
+
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                pendingRequests.delete(requestId);
+                reject(new Error('Request timeout'));
+            }, REQUEST_TIMEOUT_MS);
+
+            pendingRequests.set(requestId, {
+                resolve: resolve as (value: unknown) => void,
+                reject,
+                timeout,
+            });
+
+            ws!.send(JSON.stringify({
+                type,
+                request_id: requestId,
+                ...payload,
+            }));
+        });
     }
 
     return {
@@ -214,96 +221,16 @@ export function createManagementService(
             }
         },
 
-        async createTab(shellId: string): Promise<ServerTab> {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                throw new Error('Not connected to management WebSocket');
-            }
-
-            const requestId = generateRequestId();
-
-            return new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    pendingRequests.delete(requestId);
-                    reject(new Error('Request timeout'));
-                }, REQUEST_TIMEOUT_MS);
-
-                pendingRequests.set(requestId, {
-                    resolve: resolve as (value: unknown) => void,
-                    reject,
-                    timeout,
-                });
-
-                ws!.send(JSON.stringify({
-                    type: 'create_tab',
-                    request_id: requestId,
-                    shell_id: shellId,
-                }));
-            });
+        createTab(shellId: string): Promise<ServerTab> {
+            return sendRequest<ServerTab>('create_tab', { shell_id: shellId });
         },
 
-        async closeTab(tabId: string): Promise<void> {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                throw new Error('Not connected to management WebSocket');
-            }
-
-            const requestId = generateRequestId();
-
-            return new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    pendingRequests.delete(requestId);
-                    reject(new Error('Request timeout'));
-                }, REQUEST_TIMEOUT_MS);
-
-                pendingRequests.set(requestId, {
-                    resolve: resolve as (value: unknown) => void,
-                    reject,
-                    timeout,
-                });
-
-                ws!.send(JSON.stringify({
-                    type: 'close_tab',
-                    request_id: requestId,
-                    tab_id: tabId,
-                }));
-            });
-        },
-
-        async renameTab(tabId: string, name: string): Promise<ServerTab> {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                throw new Error('Not connected to management WebSocket');
-            }
-
-            const requestId = generateRequestId();
-
-            return new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    pendingRequests.delete(requestId);
-                    reject(new Error('Request timeout'));
-                }, REQUEST_TIMEOUT_MS);
-
-                pendingRequests.set(requestId, {
-                    resolve: resolve as (value: unknown) => void,
-                    reject,
-                    timeout,
-                });
-
-                ws!.send(JSON.stringify({
-                    type: 'rename_tab',
-                    request_id: requestId,
-                    tab_id: tabId,
-                    name: name,
-                }));
-            });
+        closeTab(tabId: string): Promise<void> {
+            return sendRequest<void>('close_tab', { tab_id: tabId });
         },
 
         isConnected(): boolean {
             return ws?.readyState === WebSocket.OPEN;
-        },
-
-        ping(): void {
-            if (ws?.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'ping' }));
-            }
         },
     };
 }

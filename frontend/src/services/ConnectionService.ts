@@ -225,14 +225,27 @@ export function createConnectionService(
                         if (state.state !== 'connecting') return;
 
                         state.state = 'connected';
-                        // Flush buffered data
+                        // Flush buffered data and show terminal
                         if (state.earlyBuffer.length > 0) {
                             const combined = state.earlyBuffer.join('');
                             state.earlyBuffer = [];
+
+                            // Terminal starts with opacity:0 (set in TabService).
+                            // Write buffer while hidden, then show after rendering completes.
                             tab.term.write(combined, () => {
-                                // After buffer is written, ensure cursor is visible
-                                tab.term.scrollToBottom();
+                                // Wait for xterm.js to fully render before showing.
+                                // Use setTimeout to yield, then rAF for the render frame.
+                                setTimeout(() => {
+                                    requestAnimationFrame(() => {
+                                        tab.term.scrollToBottom();
+                                        tab.container.style.opacity = '';
+                                    });
+                                }, 0);
                             });
+                        } else {
+                            // No buffer to flush - show terminal immediately
+                            tab.term.scrollToBottom();
+                            tab.container.style.opacity = '';
                         }
                     });
                 });

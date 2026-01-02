@@ -14,15 +14,8 @@ export interface ClipboardManager {
     reset(): void;
 }
 
-/** Clipboard configuration */
-export interface ClipboardConfig {
-    /** Window for duplicate detection in ms */
-    deduplicationWindowMs: number;
-}
-
-const DEFAULT_CONFIG: ClipboardConfig = {
-    deduplicationWindowMs: 300,
-};
+/** Deduplication window in milliseconds */
+const DEDUPLICATION_WINDOW_MS = 300;
 
 /**
  * Fallback copy using execCommand (works on iOS when Clipboard API fails)
@@ -81,8 +74,7 @@ function fallbackCopy(text: string): boolean {
 /**
  * Create a clipboard manager instance
  */
-export function createClipboardManager(config: Partial<ClipboardConfig> = {}): ClipboardManager {
-    const { deduplicationWindowMs } = { ...DEFAULT_CONFIG, ...config };
+export function createClipboardManager(): ClipboardManager {
 
     let lastText = '';
     let lastTime = 0;
@@ -96,7 +88,7 @@ export function createClipboardManager(config: Partial<ClipboardConfig> = {}): C
             const now = Date.now();
 
             // Prevent duplicate copies
-            if (text === lastText && (now - lastTime) < deduplicationWindowMs) {
+            if (text === lastText && (now - lastTime) < DEDUPLICATION_WINDOW_MS) {
                 return false;
             }
 

@@ -52,14 +52,3 @@ class Container:
 
     # Working directory
     cwd: str | None = None
-
-    def get_shell(self, shell_id: str | None = None) -> ShellCommand | None:
-        """Get shell by ID or default."""
-        target_id = shell_id or self.default_shell_id
-
-        for shell in self.available_shells:
-            if shell.id == target_id:
-                return shell
-
-        # Return first available if target not found
-        return self.available_shells[0] if self.available_shells else None

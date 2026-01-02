@@ -11,6 +11,7 @@ Porterminal provides a mobile-friendly terminal interface that you can access fr
 - [Installation](installation.md) - Get started with Porterminal
 - [Configuration](configuration.md) - Customize your setup
 - [Architecture](architecture.md) - Technical details
+- [Development](development.md) - Contributing & release process
 - [Changelog](CHANGELOG.md) - Version history
 
 ## Key Features

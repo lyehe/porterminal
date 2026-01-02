@@ -340,13 +340,16 @@ def create_app() -> FastAPI:
             # Register connection for broadcasts
             await connection_registry.register(user_id, connection)
 
-            # Send session info
+            # Send session info including current dimensions
+            # New clients should adapt to existing dimensions to prevent rendering issues
             await connection.send_message(
                 {
                     "type": "session_info",
                     "session_id": session.session_id,
                     "shell": session.shell_id,
                     "tab_id": tab.tab_id,
+                    "cols": session.dimensions.cols,
+                    "rows": session.dimensions.rows,
                 }
             )
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2025-01-02
+
+### Added
+- Terminal size syncing across clients sharing a session (resize_sync message)
+
+### Changed
+- Reduced debug logging verbosity in terminal service
+
 ## [0.2.0] - 2025-01-02
 
 ### Added
@@ -123,7 +131,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/lyehe/porterminal/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/lyehe/porterminal/compare/v0.1.8...v0.2.0
 [0.1.8]: https://github.com/lyehe/porterminal/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/lyehe/porterminal/compare/v0.1.6...v0.1.7

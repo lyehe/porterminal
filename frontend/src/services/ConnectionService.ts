@@ -126,6 +126,19 @@ export function createConnectionService(
         });
     }
 
+    /**
+     * Sync terminal size to match server dimensions.
+     * Called when server sends dimensions (session_info or resize_sync).
+     * This ensures all clients sharing a session have consistent dimensions.
+     */
+    function syncTerminalSize(tab: Tab, cols: number, rows: number): void {
+        // Only resize if dimensions differ
+        if (tab.term.cols !== cols || tab.term.rows !== rows) {
+            console.log(`Syncing terminal size to ${cols}x${rows} (was ${tab.term.cols}x${tab.term.rows})`);
+            tab.term.resize(cols, rows);
+        }
+    }
+
     function cleanupWebSocket(tab: Tab): void {
         // Cancel any pending rAF flush
         const state = tabStates.get(tab.id);
@@ -269,6 +282,18 @@ export function createConnectionService(
                         switch (msg.type) {
                             case 'session_info':
                                 callbacks.onSessionInfo(tab, msg.session_id, msg.tab_id ?? null);
+                                // Sync terminal dimensions if server provides them
+                                // This ensures new clients adapt to existing session dimensions
+                                if (msg.cols && msg.rows) {
+                                    syncTerminalSize(tab, msg.cols, msg.rows);
+                                }
+                                break;
+                            case 'resize_sync':
+                                // Server rejected our resize or is syncing dimensions
+                                // Resize local terminal to match session dimensions
+                                if (msg.cols && msg.rows) {
+                                    syncTerminalSize(tab, msg.cols, msg.rows);
+                                }
                                 break;
                             case 'ping':
                                 if (tab.ws?.readyState === WebSocket.OPEN) {

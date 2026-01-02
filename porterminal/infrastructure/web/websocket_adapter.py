@@ -1,7 +1,6 @@
 """FastAPI WebSocket adapter implementing ConnectionPort."""
 
 import json
-import uuid
 from typing import Any
 
 from fastapi import WebSocket
@@ -16,12 +15,6 @@ class FastAPIWebSocketAdapter(ConnectionPort):
     def __init__(self, websocket: WebSocket) -> None:
         self._websocket = websocket
         self._closed = False
-        self._id = str(uuid.uuid4())[:8]  # Short unique ID for debugging
-
-    @property
-    def connection_id(self) -> str:
-        """Get unique connection ID for debugging."""
-        return self._id
 
     async def send_output(self, data: bytes) -> None:
         """Send terminal output to client."""

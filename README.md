@@ -40,9 +40,10 @@ I wanted to vibe code from bed. ngrok requires registration and the free tier su
 ## Features
 
 - **One command, instant access** - No SSH, no port forwarding, no config files. Cloudflare tunnel + QR code.
-- **Actually usable on mobile** - + Essential buttons and gestures for everyday terminals use for vibe coding and mroe.
+- **Actually usable on mobile** - Essential buttons and gestures for everyday terminal use.
 - **Multi-tab shared sessions** - Run builds in one tab, tail logs in another. Sessions persist across reconnects.
 - **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish). Auto-detects your shells.
+- **Auto-update** - Checks for updates daily and upgrades automatically when using `uvx`.
 
 ## Install
 
@@ -62,25 +63,23 @@ ptn                    # Start in current directory
 ptn ~/projects/myapp   # Start in specific folder
 ptn --no-tunnel        # Local network only
 ptn -b                 # Run in background
-ptn -v                 # Verbose logs
+ptn --init             # Create .ptn/ptn.yaml config
+ptn -U                 # Update to latest version
 ```
 
 ## Configuration
 
-Create `ptn.yaml` in your working directory, `.ptn/ptn.yaml`, or `~/.ptn/ptn.yaml` (optional):
+Run `ptn --init` to create a starter config, or create `ptn.yaml` manually:
 
 ```yaml
-terminal:
-  default_shell: bash
-  cols: 120
-  rows: 30
-
 buttons:
   - label: "git"
     send: "git status\r"
   - label: "build"
     send: "npm run build\r"
 ```
+
+Config is searched in order: `$PORTERMINAL_CONFIG_PATH`, `./ptn.yaml`, `./.ptn/ptn.yaml`, `~/.ptn/ptn.yaml`.
 
 ## Security
 

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Update settings in shared config (`ptn.yaml`):
+  - `update.notify_on_startup`: enable/disable startup notification (default: true)
+  - `update.check_interval`: seconds between PyPI checks (default: 86400 = 24h)
+
+### Changed
+- Consolidated update system: merged `update_checker.py` into `updater.py` (~260 lines removed)
+- Fixed execution order: CLI args now parsed before update check (flags always work)
+- Single cache location: `~/.ptn/update_check.json`
+- Notification-only updates: no more auto-exec, just prints message
+
+### Fixed
+- Version comparison now handles `0.9` vs `0.10` correctly (was using string compare)
+- Install method detection checks executable path, not just binary existence
+- Narrowed exception handling (specific types instead of `except Exception`)
+
+### Removed
+- Auto-update exec behavior (was replacing process mid-run)
+- `update_checker.py` (functionality merged into `updater.py`)
+- Second cache location at `~/.cache/porterminal/`
+
 ## [0.2.4] - 2025-01-02
 
 ### Added

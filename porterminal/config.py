@@ -69,6 +69,13 @@ class CloudflareConfig(BaseModel):
     access_aud: str = ""
 
 
+class UpdateConfig(BaseModel):
+    """Update checker configuration."""
+
+    notify_on_startup: bool = True  # Show "update available" on startup
+    check_interval: int = Field(default=86400, ge=0)  # Seconds between checks (0 = always)
+
+
 class Config(BaseModel):
     """Application configuration."""
 
@@ -76,6 +83,7 @@ class Config(BaseModel):
     terminal: TerminalConfig = Field(default_factory=TerminalConfig)
     buttons: list[ButtonConfig] = Field(default_factory=list)
     cloudflare: CloudflareConfig = Field(default_factory=CloudflareConfig)
+    update: UpdateConfig = Field(default_factory=UpdateConfig)
 
 
 def find_config_file(cwd: Path | None = None) -> Path | None:

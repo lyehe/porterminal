@@ -11,179 +11,139 @@ from urllib.request import Request, urlopen
 
 from porterminal import __version__
 
+# Constants
 PACKAGE_NAME = "ptn"
 PYPI_URL = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
-CACHE_DIR = Path.home() / ".cache" / "porterminal"
+CACHE_DIR = Path.home() / ".ptn"
 CACHE_FILE = CACHE_DIR / "update_check.json"
-CACHE_TTL = 86400  # 24 hours
 
 
-def parse_version(version: str) -> tuple[int, ...]:
-    """Parse version string into comparable tuple.
+def _detect_install_method() -> str:
+    """Detect how ptn was installed: uv, pipx, or pip."""
+    executable = sys.executable
+    file_path = str(Path(__file__).resolve())
 
-    Handles PEP 440 versions like "0.1.0", "1.0.0a1", "2.0.0.post1".
+    uv_patterns = ["/uv/tools/", "\\uv\\tools\\"]
+    if any(p in executable or p in file_path for p in uv_patterns):
+        return "uv"
+
+    pipx_patterns = ["/pipx/venvs/", "\\pipx\\venvs\\"]
+    if any(p in executable or p in file_path for p in pipx_patterns):
+        return "pipx"
+
+    return "pip"
+
+
+def _is_newer(latest: str, current: str) -> bool:
+    """Return True if latest > current."""
+    try:
+        from packaging.version import Version
+
+        return Version(latest) > Version(current)
+    except Exception:
+        # Fallback: tuple comparison (handles 0.9 vs 0.10 correctly)
+        def to_tuple(v: str) -> tuple[int, ...]:
+            v = v.lstrip("v").split("+")[0].split(".dev")[0]
+            return tuple(int(p) for p in v.split(".")[:3] if p.isdigit())
+
+        try:
+            return to_tuple(latest) > to_tuple(current)
+        except ValueError:
+            return False
+
+
+def _get_check_interval() -> int:
+    """Get check interval from config."""
+    try:
+        from porterminal.config import get_config
+
+        return get_config().update.check_interval
+    except Exception:
+        return 86400  # Default 24h
+
+
+def _should_check() -> bool:
+    """Check if enough time passed since last check."""
+    if not CACHE_FILE.exists():
+        return True
+    try:
+        data = json.loads(CACHE_FILE.read_text())
+        return time.time() - data.get("timestamp", 0) > _get_check_interval()
+    except (OSError, json.JSONDecodeError, KeyError):
+        return True
+
+
+def _save_cache(version: str) -> None:
+    """Save check result to cache."""
+    try:
+        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        CACHE_FILE.write_text(json.dumps({"version": version, "timestamp": time.time()}))
+    except OSError:
+        pass
+
+
+def get_latest_version(use_cache: bool = True) -> str | None:
+    """Fetch latest version from PyPI.
 
     Args:
-        version: Version string.
-
-    Returns:
-        Tuple of integers for comparison (ignores pre/post/dev).
-    """
-    version = version.lstrip("v")
-    # Extract just the release numbers (before any pre/post/dev markers)
-    base = version.split("a")[0].split("b")[0].split("rc")[0]
-    base = base.split(".dev")[0].split(".post")[0].split("+")[0]
-    parts = []
-    for p in base.split("."):
-        try:
-            parts.append(int(p))
-        except ValueError:
-            break
-    return tuple(parts) if parts else (0,)
-
-
-def get_latest_version() -> str | None:
-    """Fetch the latest version from PyPI.
+        use_cache: Use cached result if valid.
 
     Returns:
         Latest version string or None if fetch failed.
     """
+    # Try cache first
+    if use_cache and CACHE_FILE.exists():
+        try:
+            data = json.loads(CACHE_FILE.read_text())
+            if time.time() - data.get("timestamp", 0) < _get_check_interval():
+                return data.get("version")
+        except (OSError, json.JSONDecodeError, KeyError):
+            pass
+
+    # Fetch from PyPI
     try:
         request = Request(PYPI_URL, headers={"User-Agent": f"{PACKAGE_NAME}/{__version__}"})
         with urlopen(request, timeout=5) as response:
             data = json.loads(response.read().decode())
-            return data["info"]["version"]
-    except (URLError, json.JSONDecodeError, KeyError, TimeoutError):
+            version = data["info"]["version"]
+            _save_cache(version)
+            return version
+    except (URLError, json.JSONDecodeError, KeyError, TimeoutError, OSError):
         return None
-
-
-def get_cached_version() -> str | None:
-    """Get cached latest version if still valid.
-
-    Returns:
-        Cached version string or None if cache expired/missing.
-    """
-    if not CACHE_FILE.exists():
-        return None
-    try:
-        data = json.loads(CACHE_FILE.read_text())
-        if time.time() - data.get("timestamp", 0) < CACHE_TTL:
-            return data.get("version")
-    except (json.JSONDecodeError, KeyError):
-        pass
-    return None
-
-
-def cache_version(version: str) -> None:
-    """Cache the latest version.
-
-    Args:
-        version: Version string to cache.
-    """
-    try:
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        CACHE_FILE.write_text(
-            json.dumps(
-                {
-                    "version": version,
-                    "timestamp": time.time(),
-                }
-            )
-        )
-    except OSError:
-        pass  # Ignore cache write failures
 
 
 def check_for_updates(use_cache: bool = True) -> tuple[bool, str | None]:
     """Check if a newer version is available.
 
     Args:
-        use_cache: Whether to use cached version check.
+        use_cache: Use cached version check.
 
     Returns:
         Tuple of (update_available, latest_version).
     """
-    # Try cache first
-    if use_cache:
-        latest = get_cached_version()
-        if latest:
-            try:
-                return parse_version(latest) > parse_version(__version__), latest
-            except (ValueError, TypeError):
-                pass
-
-    # Fetch from PyPI
-    latest = get_latest_version()
+    latest = get_latest_version(use_cache=use_cache)
     if latest is None:
         return False, None
-
-    # Cache the result
-    cache_version(latest)
-
-    try:
-        return parse_version(latest) > parse_version(__version__), latest
-    except (ValueError, TypeError):
-        return False, latest
-
-
-def detect_install_method() -> str:
-    """Detect how porterminal was installed.
-
-    Returns:
-        One of: 'uv', 'pipx', 'pip'
-    """
-    executable = sys.executable
-    file_path = str(Path(__file__).resolve())
-
-    # Check for uv tool install
-    uv_patterns = [
-        "/.local/share/uv/tools/",
-        "/uv/tools/",
-        "\\uv\\tools\\",
-    ]
-    for pattern in uv_patterns:
-        if pattern in executable or pattern in file_path:
-            return "uv"
-
-    # Check for pipx install
-    pipx_patterns = [
-        "/pipx/venvs/",
-        "/.local/share/pipx/",
-        "/.local/pipx/",
-        "\\pipx\\venvs\\",
-    ]
-    for pattern in pipx_patterns:
-        if pattern in executable or pattern in file_path:
-            return "pipx"
-
-    # Default to pip
-    return "pip"
+    return _is_newer(latest, __version__), latest
 
 
 def get_upgrade_command() -> str:
-    """Get the appropriate upgrade command for the installation method.
-
-    Returns:
-        Shell command string to upgrade porterminal.
-    """
-    method = detect_install_method()
+    """Get appropriate upgrade command for the installation method."""
+    method = _detect_install_method()
     commands = {
         "uv": f"uv tool upgrade {PACKAGE_NAME}",
         "pipx": f"pipx upgrade {PACKAGE_NAME}",
-        "pip": f"pip install --upgrade {PACKAGE_NAME}",
+        "pip": f"pip install -U {PACKAGE_NAME}",
     }
     return commands.get(method, commands["pip"])
 
 
 def update_package() -> bool:
-    """Update porterminal to the latest version.
+    """Update ptn to the latest version.
 
     Returns:
         True if update succeeded, False otherwise.
     """
-    method = detect_install_method()
-
-    # Check if update is available first
     has_update, latest = check_for_updates(use_cache=False)
     if not has_update:
         if latest:
@@ -192,66 +152,53 @@ def update_package() -> bool:
             print("Could not check for updates (network error)")
         return True
 
-    print(f"Updating {PACKAGE_NAME} {__version__} → {latest}")
+    print(f"Updating {PACKAGE_NAME} {__version__} -> {latest}")
+
+    method = _detect_install_method()
+
+    # Build command
+    if method == "uv" and shutil.which("uv"):
+        cmd = ["uv", "tool", "upgrade", PACKAGE_NAME]
+    elif method == "pipx" and shutil.which("pipx"):
+        cmd = ["pipx", "upgrade", PACKAGE_NAME]
+    else:
+        cmd = [sys.executable, "-m", "pip", "install", "-U", PACKAGE_NAME]
 
     try:
-        if method == "uv":
-            if not shutil.which("uv"):
-                print("uv not found, falling back to pip")
-                method = "pip"
-            else:
-                cmd = ["uv", "tool", "upgrade", PACKAGE_NAME]
-
-        if method == "pipx":
-            if not shutil.which("pipx"):
-                print("pipx not found, falling back to pip")
-                method = "pip"
-            else:
-                cmd = ["pipx", "upgrade", PACKAGE_NAME]
-
-        if method == "pip":
-            cmd = [sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE_NAME]
-
         result = subprocess.run(cmd, timeout=120)
-
         if result.returncode == 0:
-            print(f"Successfully updated to {latest}")
-            print("Restart porterminal to use the new version")
+            print(f"Updated to {latest}. Restart to use new version.")
             return True
-        else:
-            print(f"Update failed (exit code {result.returncode})")
-            print(f"Try manually: {get_upgrade_command()}")
-            return False
-
+        print(f"Update failed (exit code {result.returncode})")
+        print(f"Try: {get_upgrade_command()}")
+        return False
     except subprocess.TimeoutExpired:
         print("Update timed out")
-        print(f"Try manually: {get_upgrade_command()}")
+        print(f"Try: {get_upgrade_command()}")
         return False
     except FileNotFoundError as e:
         print(f"Command not found: {e}")
-        print(f"Try manually: {get_upgrade_command()}")
+        print(f"Try: {get_upgrade_command()}")
         return False
 
 
-def print_update_notice(latest: str) -> None:
-    """Print a styled update notice.
+def check_and_notify() -> None:
+    """Check for updates and print notification if available.
 
-    Args:
-        latest: Latest available version.
+    Call at startup. Non-blocking, respects config settings, never exec's.
     """
-    from rich.console import Console
-    from rich.panel import Panel
+    # Check if notifications are enabled
+    try:
+        from porterminal.config import get_config
 
-    console = Console(stderr=True)
-    upgrade_cmd = get_upgrade_command()
+        if not get_config().update.notify_on_startup:
+            return
+    except Exception:
+        pass  # Default to enabled if config fails
 
-    console.print()
-    console.print(
-        Panel(
-            f"[yellow]Update available:[/yellow] {__version__} → [green]{latest}[/green]\n"
-            f"[dim]Run:[/dim] [cyan]{upgrade_cmd}[/cyan]",
-            title="[bold]Porterminal[/bold]",
-            border_style="yellow",
-            padding=(0, 2),
-        )
-    )
+    if not _should_check():
+        return
+
+    has_update, latest = check_for_updates(use_cache=False)
+    if has_update and latest:
+        print(f"Update available: {__version__} -> {latest}. Run: {get_upgrade_command()}")

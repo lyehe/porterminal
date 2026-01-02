@@ -43,7 +43,7 @@ I wanted to vibe code from bed. ngrok requires registration and the free tier su
 - **Actually usable on mobile** - Essential buttons and gestures for everyday terminal use.
 - **Multi-tab shared sessions** - Run builds in one tab, tail logs in another. Sessions persist across reconnects.
 - **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish). Auto-detects your shells.
-- **Auto-update** - Checks for updates daily and upgrades automatically when using `uvx`.
+- **Update notifications** - Checks PyPI daily, notifies on startup if update available. Run `ptn -U` to update.
 
 ## Install
 
@@ -65,6 +65,7 @@ ptn --no-tunnel        # Local network only
 ptn -b                 # Run in background
 ptn --init             # Create .ptn/ptn.yaml config
 ptn -U                 # Update to latest version
+ptn --check-update     # Check if update available
 ```
 
 ## Configuration
@@ -72,6 +73,7 @@ ptn -U                 # Update to latest version
 Run `ptn --init` to create a starter config, or create `ptn.yaml` manually:
 
 ```yaml
+# Custom buttons (appear in toolbar)
 buttons:
   - label: "claude"
     send:
@@ -80,6 +82,11 @@ buttons:
       - "\r"
   - label: "tmux"
     send: "tmux\r"
+
+# Update checker settings
+update:
+  notify_on_startup: true   # Show update notification
+  check_interval: 86400     # Seconds between checks (default: 24h)
 ```
 
 Config is searched in order: `$PORTERMINAL_CONFIG_PATH`, `./ptn.yaml`, `./.ptn/ptn.yaml`, `~/.ptn/ptn.yaml`.

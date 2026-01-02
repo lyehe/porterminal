@@ -141,12 +141,12 @@ def _run_in_background(args) -> int:
 
 def main() -> int:
     """Main entry point."""
-    # Check for updates first (may not return if update found)
-    from porterminal.update_checker import check_and_update
-
-    check_and_update()
-
     args = parse_args()
+
+    # Check for updates (notification only, never exec's)
+    from porterminal.updater import check_and_notify
+
+    check_and_notify()
     verbose = args.verbose
 
     # Handle background mode

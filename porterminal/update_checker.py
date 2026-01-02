@@ -10,8 +10,39 @@ from pathlib import Path
 
 # Check once per day
 CHECK_INTERVAL = 86400
-CACHE_FILE = Path.home() / ".ptn" / "update_check.json"
+CONFIG_DIR = Path.home() / ".ptn"
+CONFIG_FILE = CONFIG_DIR / "ptn.yaml"
+CACHE_FILE = CONFIG_DIR / "update_check.json"
 PYPI_URL = "https://pypi.org/pypi/ptn/json"
+
+DEFAULT_GLOBAL_CONFIG = """\
+# ptn global configuration (~/.ptn/ptn.yaml)
+# This file is auto-generated on first run.
+
+# Auto-update: check for new versions and update automatically (uvx only)
+auto_update: true
+"""
+
+
+def _get_auto_update_setting() -> bool:
+    """Get auto_update setting from global config. Creates config if missing."""
+    # Create config on first run
+    if not CONFIG_FILE.exists():
+        try:
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            CONFIG_FILE.write_text(DEFAULT_GLOBAL_CONFIG)
+        except Exception:
+            pass
+        return True  # Default to enabled
+
+    # Read config
+    try:
+        import yaml
+
+        data = yaml.safe_load(CONFIG_FILE.read_text()) or {}
+        return data.get("auto_update", True)
+    except Exception:
+        return True  # Default to enabled on error
 
 
 def _get_current_version() -> str:
@@ -76,9 +107,15 @@ def check_and_update() -> None:
     """Check for updates and auto-update if available.
 
     Call this at the very beginning of main(), before any other setup.
-    If an update is found, this function will not return - it replaces
-    the current process with an updated version.
+    If an update is found and auto_update is enabled, this function will
+    not return - it replaces the current process with an updated version.
+
+    Auto-update can be disabled in ~/.ptn/ptn.yaml:
+        auto_update: false
     """
+    # Check if auto-update is enabled (also creates config on first run)
+    auto_update_enabled = _get_auto_update_setting()
+
     if not _should_check():
         return
 
@@ -93,10 +130,10 @@ def check_and_update() -> None:
         return
 
     # Update available
-    if not _is_uvx():
-        # Not using uvx, just notify
+    if not _is_uvx() or not auto_update_enabled:
+        # Not using uvx or auto-update disabled, just notify
         print(f"\n📦 Update available: ptn {current} → {latest}")
-        print("   Run: pip install -U ptn\n")
+        print("   Run: uvx --refresh ptn\n" if _is_uvx() else "   Run: pip install -U ptn\n")
         return
 
     # Auto-update via uvx

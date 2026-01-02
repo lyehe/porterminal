@@ -116,7 +116,7 @@ class TestSessionLimitChecker:
     def test_should_cleanup_reconnect_window_expired(self, sample_session):
         """Test cleanup for expired reconnection window."""
         checker = SessionLimitChecker(SessionLimitConfig(reconnect_window_seconds=60))
-        sample_session.is_connected = False
+        sample_session.connected_clients = 0  # Disconnect the session
 
         # Session has been idle for 2 minutes
         now = sample_session.last_activity + timedelta(minutes=2)
@@ -133,7 +133,7 @@ class TestSessionLimitChecker:
     def test_connected_session_not_affected_by_reconnect_window(self, sample_session):
         """Test that connected sessions aren't affected by reconnect window."""
         checker = SessionLimitChecker(SessionLimitConfig(reconnect_window_seconds=60))
-        sample_session.is_connected = True
+        # sample_session already has connected_clients=1 from fixture
 
         # Session has been "idle" for 2 minutes but is still connected
         now = sample_session.last_activity + timedelta(minutes=2)
@@ -164,7 +164,7 @@ class TestSessionLimitChecker:
     def test_unlimited_reconnect_with_zero(self, sample_session):
         """Test that reconnect_window_seconds=0 means unlimited."""
         checker = SessionLimitChecker(SessionLimitConfig(reconnect_window_seconds=0))
-        sample_session.is_connected = False
+        sample_session.connected_clients = 0  # Disconnect the session
 
         # Session has been idle for a very long time
         now = sample_session.last_activity + timedelta(days=365)

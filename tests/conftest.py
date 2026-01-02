@@ -194,7 +194,7 @@ def fake_pty_factory(fake_pty):
 def sample_session(session_id, user_id, default_dimensions, fake_pty):
     """Sample session for testing."""
     now = datetime.now(UTC)
-    return Session(
+    session = Session(
         id=session_id,
         user_id=user_id,
         shell_id="bash",
@@ -202,8 +202,9 @@ def sample_session(session_id, user_id, default_dimensions, fake_pty):
         created_at=now,
         last_activity=now,
         pty_handle=fake_pty,
-        is_connected=True,
+        connected_clients=1,  # Start with one connected client
     )
+    return session
 
 
 # ============= Repository Fixtures =============

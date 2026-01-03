@@ -154,6 +154,12 @@ def update_package() -> bool:
 
     print(f"Updating {PACKAGE_NAME} {__version__} -> {latest}")
 
+    # Windows: can't upgrade while running (exe is locked)
+    if sys.platform == "win32":
+        print("On Windows, close ptn first then run from another terminal:")
+        print(f"  {get_upgrade_command()}")
+        return False
+
     method = _detect_install_method()
 
     # Build command

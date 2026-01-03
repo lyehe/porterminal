@@ -260,3 +260,20 @@ class TestShellDetector:
         shell_ids = [s.id for s in shells]
 
         assert "fish" in shell_ids
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_default_shell_respects_shell_env(self, monkeypatch):
+        """Test that get_default_shell_id() respects $SHELL (PR #12)."""
+        import shutil
+
+        fish_path = shutil.which("fish")
+        if not fish_path:
+            pytest.skip("fish not installed")
+
+        # Set $SHELL to fish (simulates user's login shell)
+        monkeypatch.setenv("SHELL", fish_path)
+
+        detector = ShellDetector()
+        default_id = detector.get_default_shell_id()
+
+        assert default_id == "fish"

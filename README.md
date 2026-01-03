@@ -17,6 +17,9 @@
   <a href="https://github.com/lyehe/porterminal/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/lyehe/porterminal?style=flat-square" alt="License">
   </a>
+  <a href="https://github.com/lyehe/porterminal/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/lyehe/porterminal/ci.yml?branch=master&style=flat-square&logo=github&label=CI" alt="CI">
+  </a>
 </p>
 
 

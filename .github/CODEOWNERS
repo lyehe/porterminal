@@ -1,0 +1,14 @@
+# Default owner for everything
+* @lyehe
+
+# Security-sensitive areas (require owner review)
+/porterminal/pty/           @lyehe
+/porterminal/infrastructure/ @lyehe
+/.github/workflows/         @lyehe
+/SECURITY.md                @lyehe
+
+# Frontend
+/frontend/                  @lyehe
+
+# Configuration
+pyproject.toml              @lyehe

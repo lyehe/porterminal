@@ -176,3 +176,73 @@ class TestShellDetector:
         assert "*/" not in result
         assert "comment" not in result
         assert '"key": "value"' in result
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_get_user_shell_id_returns_fish(self, monkeypatch):
+        """Test that $SHELL=/usr/bin/fish returns 'fish'."""
+        monkeypatch.setenv("SHELL", "/usr/bin/fish")
+        detector = ShellDetector()
+
+        result = detector._get_user_shell_id()
+
+        assert result == "fish"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_get_user_shell_id_returns_zsh(self, monkeypatch):
+        """Test that $SHELL=/bin/zsh returns 'zsh'."""
+        monkeypatch.setenv("SHELL", "/bin/zsh")
+        detector = ShellDetector()
+
+        result = detector._get_user_shell_id()
+
+        assert result == "zsh"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_get_user_shell_id_returns_bash(self, monkeypatch):
+        """Test that $SHELL=/bin/bash returns 'bash'."""
+        monkeypatch.setenv("SHELL", "/bin/bash")
+        detector = ShellDetector()
+
+        result = detector._get_user_shell_id()
+
+        assert result == "bash"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_get_user_shell_id_returns_none_for_unknown(self, monkeypatch):
+        """Test that unknown shell returns None."""
+        monkeypatch.setenv("SHELL", "/usr/bin/unknown-shell")
+        detector = ShellDetector()
+
+        result = detector._get_user_shell_id()
+
+        assert result is None
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_get_user_shell_id_returns_none_when_unset(self, monkeypatch):
+        """Test that missing $SHELL returns None."""
+        monkeypatch.delenv("SHELL", raising=False)
+        detector = ShellDetector()
+
+        result = detector._get_user_shell_id()
+
+        assert result is None
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_macos_default_uses_user_shell(self, monkeypatch):
+        """Test that macOS default respects $SHELL."""
+        monkeypatch.setenv("SHELL", "/usr/local/bin/fish")
+        detector = ShellDetector()
+
+        result = detector._get_macos_default()
+
+        assert result == "fish"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_linux_default_uses_user_shell(self, monkeypatch):
+        """Test that Linux default respects $SHELL."""
+        monkeypatch.setenv("SHELL", "/usr/bin/fish")
+        detector = ShellDetector()
+
+        result = detector._get_linux_default()
+
+        assert result == "fish"

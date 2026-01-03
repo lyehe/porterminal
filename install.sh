@@ -41,8 +41,8 @@ fi
 
 echo "[2/2] Installing Porterminal..."
 
-# Install porterminal using uv tool
-if ! uv tool install --force porterminal; then
+# Install ptn using uv tool
+if ! uv tool install --force ptn; then
     echo "Failed to install Porterminal"
     exit 1
 fi
@@ -51,8 +51,8 @@ echo ""
 echo "[OK] Porterminal installed!"
 echo ""
 echo "Run:"
-echo "  porterminal"
+echo "  ptn"
 echo ""
 echo "Or run without installing:"
-echo "  uvx porterminal"
+echo "  uvx ptn"
 echo ""

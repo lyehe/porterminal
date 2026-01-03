@@ -45,9 +45,9 @@ else {
 
 Write-Host "[2/2] Installing Porterminal..." -ForegroundColor Yellow
 
-# Install porterminal using uv tool
+# Install ptn using uv tool
 try {
-    & uv tool install --force porterminal
+    & uv tool install --force ptn
 }
 catch {
     Write-Host "Failed to install Porterminal: $_" -ForegroundColor Red
@@ -58,8 +58,8 @@ Write-Host ""
 Write-Host "[OK] Porterminal installed!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Run:" -ForegroundColor White
-Write-Host "  porterminal" -ForegroundColor Cyan
+Write-Host "  ptn" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Or run without installing:" -ForegroundColor DarkGray
-Write-Host "  uvx porterminal" -ForegroundColor DarkGray
+Write-Host "  uvx ptn" -ForegroundColor DarkGray
 Write-Host ""

@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Callable
 
-from porterminal.application.ports import ConnectionPort
+from porterminal.application.ports import ConnectionPort, ConnectionRegistryPort
 from porterminal.application.services.session_service import SessionService
 from porterminal.application.services.tab_service import TabService
 from porterminal.domain import (
@@ -11,7 +11,6 @@ from porterminal.domain import (
     TerminalDimensions,
     UserId,
 )
-from porterminal.infrastructure.registry import UserConnectionRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ class ManagementService:
         self,
         session_service: SessionService,
         tab_service: TabService,
-        connection_registry: UserConnectionRegistry,
+        connection_registry: ConnectionRegistryPort,
         shell_provider: Callable[[str | None], ShellCommand | None],
         default_dimensions: TerminalDimensions,
     ) -> None:

@@ -16,8 +16,8 @@
 
     <!-- Icons (PWA disabled - not useful for tunnel-based access) -->
     <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
-  <script type="module" crossorigin src="/static/assets/app-DoBiVkTD.js"></script>
-  <link rel="stylesheet" crossorigin href="/static/assets/app-DQePboVd.css">
+  <script type="module" crossorigin src="/static/assets/app-D9ELFbEO.js"></script>
+  <link rel="stylesheet" crossorigin href="/static/assets/app-nMNFwMa6.css">
 </head>
 <body>
     <div id="app">
@@ -123,6 +123,18 @@
                 <button id="textview-close">×</button>
             </div>
             <pre id="textview-body"></pre>
+        </div>
+    </div>
+
+    <!-- Auth Overlay -->
+    <div id="auth-overlay" class="hidden">
+        <div id="auth-content">
+            <div id="auth-header">Authentication Required</div>
+            <div id="auth-body">
+                <div id="auth-error" class="hidden"></div>
+                <input type="password" id="auth-password" placeholder="Enter password" autocomplete="current-password">
+                <button id="auth-submit">Connect</button>
+            </div>
         </div>
     </div>
 

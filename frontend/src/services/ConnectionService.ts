@@ -41,6 +41,9 @@ export interface ConnectionService {
 
     /** Clean up all state for a tab (call when tab is closed) */
     cleanupTabState(tabId: number): void;
+
+    /** Set auth password for connections (null to clear) */
+    setAuthPassword(password: string | null): void;
 }
 
 /** Internal state for each tab's connection */
@@ -86,6 +89,9 @@ export function createConnectionService(
     const textEncoder = new TextEncoder();
     const textDecoder = new TextDecoder();
     const tabStates = new Map<number, TabConnectionState>();
+
+    // Auth password (set by main.ts after successful management auth)
+    let authPassword: string | null = null;
 
     function getTabState(tabId: number): TabConnectionState {
         if (!tabStates.has(tabId)) {
@@ -203,6 +209,11 @@ export function createConnectionService(
                 if (state.state !== 'connecting') {
                     ws.close();
                     return;
+                }
+
+                // Send auth as first message if password is set
+                if (authPassword) {
+                    ws.send(JSON.stringify({ type: 'auth', password: authPassword }));
                 }
 
                 tab.reconnectAttempts = 0;
@@ -406,6 +417,10 @@ export function createConnectionService(
             }
             cancelPendingReconnect(tabId);
             tabStates.delete(tabId);
+        },
+
+        setAuthPassword(password: string | null): void {
+            authPassword = password;
         },
     };
 

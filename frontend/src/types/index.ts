@@ -173,9 +173,32 @@ export interface CloseTabResponse {
     error?: string;
 }
 
+/** Authentication messages */
+export interface AuthRequiredMessage {
+    type: 'auth_required';
+}
+
+export interface AuthSuccessMessage {
+    type: 'auth_success';
+}
+
+export interface AuthFailedMessage {
+    type: 'auth_failed';
+    attempts_remaining: number;
+    error?: string;
+}
+
+export interface AuthMessage {
+    type: 'auth';
+    password: string;
+}
+
 export type ManagementMessage =
     | TabStateSyncMessage
     | TabStateUpdateMessage
     | CreateTabResponse
     | CloseTabResponse
-    | PongMessage;
+    | PongMessage
+    | AuthRequiredMessage
+    | AuthSuccessMessage
+    | AuthFailedMessage;

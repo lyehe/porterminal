@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-01-03
+
+### Added
+- **Password protection** - Secure terminal access with a disposable session password
+  - `-p` flag prompts for password at startup
+  - `-dp` flag toggles password requirement in config (persistent)
+  - Password hashed with bcrypt, stored only in memory (never written to disk)
+  - Auth overlay UI with retry support
+  - Configurable retry limits (`security.max_auth_attempts`)
+- New `docs/security.md` with authentication documentation
+
+### Security
+- WebSocket authentication protocol with `auth_required`/`auth_success`/`auth_failed` messages
+- Failed auth attempts tracked per connection with configurable limits
+- Server shuts down with warning after max failed attempts (prevents brute force)
+- Password is per-session (server restart = new password)
+
 ## [0.2.7] - 2026-01-03
 
 ### Fixed
@@ -192,7 +209,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/lyehe/porterminal/compare/v0.2.7...v0.3.0
+[0.2.7]: https://github.com/lyehe/porterminal/compare/v0.2.6...v0.2.7
+[0.2.6]: https://github.com/lyehe/porterminal/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/lyehe/porterminal/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/lyehe/porterminal/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/lyehe/porterminal/compare/v0.2.2...v0.2.3

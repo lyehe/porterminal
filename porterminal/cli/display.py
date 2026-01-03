@@ -136,7 +136,7 @@ def display_startup_screen(
         *tagline_colored,
         "",
         f"[bold yellow]{get_caution()}[/bold yellow]",
-        "[bright_red]The URL is the only security. Use at your own risk.[/bright_red]",
+        "[dim]Use -p for password protection if your screen is exposed[/dim]",
         status,
         f"[bold cyan]{url}[/bold cyan]",
     ]

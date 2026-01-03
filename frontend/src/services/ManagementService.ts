@@ -29,6 +29,9 @@ export interface ManagementService {
 
     /** Check if connected */
     isConnected(): boolean;
+
+    /** Send authentication password */
+    authenticate(password: string): void;
 }
 
 export interface ManagementCallbacks {
@@ -43,6 +46,15 @@ export interface ManagementCallbacks {
 
     /** Called when connection is established */
     onConnect?: () => void;
+
+    /** Called when authentication is required */
+    onAuthRequired?: () => void;
+
+    /** Called when authentication fails */
+    onAuthFailed?: (attemptsRemaining: number, error?: string) => void;
+
+    /** Called when authentication succeeds */
+    onAuthSuccess?: () => void;
 }
 
 interface PendingRequest {
@@ -113,6 +125,18 @@ export function createManagementService(
 
                 case 'pong':
                     // Heartbeat response - nothing to do
+                    break;
+
+                case 'auth_required':
+                    callbacks.onAuthRequired?.();
+                    break;
+
+                case 'auth_success':
+                    callbacks.onAuthSuccess?.();
+                    break;
+
+                case 'auth_failed':
+                    callbacks.onAuthFailed?.(msg.attempts_remaining, msg.error);
                     break;
             }
         } catch (e) {
@@ -231,6 +255,12 @@ export function createManagementService(
 
         isConnected(): boolean {
             return ws?.readyState === WebSocket.OPEN;
+        },
+
+        authenticate(password: string): void {
+            if (ws?.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'auth', password }));
+            }
         },
     };
 }

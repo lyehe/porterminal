@@ -76,6 +76,13 @@ class UpdateConfig(BaseModel):
     check_interval: int = Field(default=86400, ge=0)  # Seconds between checks (0 = always)
 
 
+class SecurityConfig(BaseModel):
+    """Security configuration."""
+
+    require_password: bool = False  # Prompt for password at startup
+    max_auth_attempts: int = Field(default=5, ge=1, le=100)
+
+
 class Config(BaseModel):
     """Application configuration."""
 
@@ -84,6 +91,7 @@ class Config(BaseModel):
     buttons: list[ButtonConfig] = Field(default_factory=list)
     cloudflare: CloudflareConfig = Field(default_factory=CloudflareConfig)
     update: UpdateConfig = Field(default_factory=UpdateConfig)
+    security: SecurityConfig = Field(default_factory=SecurityConfig)
 
 
 def find_config_file(cwd: Path | None = None) -> Path | None:

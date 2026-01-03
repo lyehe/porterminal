@@ -124,6 +124,18 @@
         </div>
     </div>
 
+    <!-- Auth Overlay -->
+    <div id="auth-overlay" class="hidden">
+        <div id="auth-content">
+            <div id="auth-header">Authentication Required</div>
+            <div id="auth-body">
+                <div id="auth-error" class="hidden"></div>
+                <input type="password" id="auth-password" placeholder="Enter password" autocomplete="current-password">
+                <button id="auth-submit">Connect</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

@@ -10,6 +10,7 @@ Porterminal provides a mobile-friendly terminal interface that you can access fr
 
 - [Installation](installation.md) - Get started with Porterminal
 - [Configuration](configuration.md) - Customize your setup
+- [Security](security.md) - Password protection & best practices
 - [Architecture](architecture.md) - Technical details
 - [Development](development.md) - Contributing & release process
 - [Changelog](CHANGELOG.md) - Version history
@@ -21,7 +22,7 @@ Porterminal provides a mobile-friendly terminal interface that you can access fr
 | Mobile UI | Touch-friendly virtual keyboard with modifier keys |
 | Multi-tab | Run multiple terminal sessions simultaneously |
 | Persistence | Reconnect to running sessions after disconnect |
-| Secure | Environment variables sanitized, API keys blocked |
+| Secure | Optional password protection, env vars sanitized |
 | Zero-config | Cloudflare tunnel with QR code for instant access |
 | Cross-platform | Windows, Linux, and macOS support |
 

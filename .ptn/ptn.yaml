@@ -1,39 +1,38 @@
-# Example configuration file
-# This is searched after ./ptn.yaml and before ~/.ptn/ptn.yaml
-
 buttons:
-  - label: "new"
-    send:
-      - "/new"
-      - 100
-      - "\r"
-  - label: "init"
-    send:
-      - "/init"
-      - 100
-      - "\r"
-  - label: "resume"
-    send:
-      - "/resume"
-      - 100
-      - "\r"
-  - label: "compact"
-    send:
-      - "/compact"
-      - 100
-      - "\r"
-  - label: "claude"
-    send:
-      - "claude"
-      - 100
-      - "\r"
-  - label: "codex"
-    send:
-      - "codex"
-      - 100
-      - "\r"
-  - label: "tmux"
-    send:
-      - "tmux"
-      - 100
-      - "\r"
+- label: new
+  send:
+  - /new
+  - 100
+  - "\r"
+- label: init
+  send:
+  - /init
+  - 100
+  - "\r"
+- label: resume
+  send:
+  - /resume
+  - 100
+  - "\r"
+- label: compact
+  send:
+  - /compact
+  - 100
+  - "\r"
+- label: claude
+  send:
+  - claude
+  - 100
+  - "\r"
+- label: codex
+  send:
+  - codex
+  - 100
+  - "\r"
+- label: tmux
+  send:
+  - tmux
+  - 100
+  - "\r"
+security:
+  require_password: false

@@ -164,7 +164,7 @@ def start_cloudflared(port: int) -> tuple[subprocess.Popen, str | None]:
 
 
 def drain_process_output(process: subprocess.Popen) -> None:
-    """Drain process output silently (only print errors).
+    """Drain process output silently (only print errors and security warnings).
 
     Args:
         process: Subprocess to drain output from.
@@ -174,8 +174,20 @@ def drain_process_output(process: subprocess.Popen) -> None:
             if not line:
                 break
             line = line.strip()
+            if not line:
+                continue
+            # Always print security warnings and related messages
+            if any(
+                kw in line.lower()
+                for kw in (
+                    "security warning",
+                    "authentication attempts",
+                    "url may have been leaked",
+                )
+            ):
+                console.print(f"[bold red]{line}[/bold red]")
             # Print errors, but ignore harmless ICMP/ping warnings
-            if line and "error" in line.lower() and not _is_icmp_warning(line):
+            elif "error" in line.lower() and not _is_icmp_warning(line):
                 console.print(f"[red]{line}[/red]")
     except (OSError, ValueError):
         pass

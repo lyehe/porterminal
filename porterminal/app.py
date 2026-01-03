@@ -17,6 +17,7 @@ from . import __version__
 from .composition import create_container
 from .container import Container
 from .domain import UserId
+from .infrastructure.auth import authenticate_connection, validate_auth_message
 from .infrastructure.web import FastAPIWebSocketAdapter
 from .logging_setup import setup_logging_from_env
 
@@ -55,7 +56,12 @@ async def lifespan(app: FastAPI):
     # config_path=None uses find_config_file() to search standard locations
     cwd = os.environ.get("PORTERMINAL_CWD")
 
-    container = create_container(config_path=None, cwd=cwd)
+    # Get password hash from environment if set
+    password_hash = None
+    if hash_str := os.environ.get("PORTERMINAL_PASSWORD_HASH"):
+        password_hash = hash_str.encode()
+
+    container = create_container(config_path=None, cwd=cwd, password_hash=password_hash)
     app.state.container = container
 
     # Wire up cascade: when session is destroyed, close associated tabs and broadcast
@@ -225,6 +231,17 @@ def create_app() -> FastAPI:
         )
 
         try:
+            # Authentication phase if password is set
+            if container.password_hash is not None:
+                authenticated = await authenticate_connection(
+                    connection,
+                    container.password_hash,
+                    max_attempts=container.max_auth_attempts,
+                )
+                if not authenticated:
+                    await websocket.close(code=4001, reason="Auth failed")
+                    return
+
             # Register for broadcasts
             await connection_registry.register(user_id, connection)
 
@@ -332,6 +349,13 @@ def create_app() -> FastAPI:
             tab_id,
             session.session_id,
         )
+
+        # Authentication check if password is set
+        if container.password_hash is not None:
+            if not await validate_auth_message(connection, container.password_hash):
+                logger.warning("Terminal WebSocket auth failed user_id=%s", user_id)
+                await websocket.close(code=4001, reason="Auth failed")
+                return
 
         # Update tab access time
         tab_service.touch_tab(tab_id, user_id)

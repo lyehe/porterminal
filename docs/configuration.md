@@ -150,6 +150,35 @@ This is secure because:
 
 When running locally or without Access, users are identified as `local-user` and share sessions.
 
+## Security Settings
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `require_password` | `false` | Prompt for password at startup |
+| `max_auth_attempts` | `5` | Max failed attempts before disconnect |
+
+```yaml
+security:
+  require_password: true
+  max_auth_attempts: 5
+```
+
+### Password Protection
+
+When enabled, the server prompts for a password at startup. Clients must authenticate before accessing the terminal.
+
+**Enable for current session:**
+```bash
+ptn -p
+```
+
+**Enable by default (toggle in config):**
+```bash
+ptn -dp
+```
+
+See [security.md](security.md) for details on how authentication works.
+
 ## Environment Variables
 
 | Variable | Description |

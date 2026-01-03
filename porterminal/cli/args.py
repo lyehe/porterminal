@@ -66,6 +66,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Create .ptn/ptn.yaml config file in current directory",
     )
+    parser.add_argument(
+        "-p",
+        "--password",
+        action="store_true",
+        help="Prompt for password to protect terminal access",
+    )
+    parser.add_argument(
+        "-dp",
+        "--default-password",
+        action="store_true",
+        help="Toggle password requirement in config (on/off)",
+    )
     # Internal argument for background mode communication
     parser.add_argument(
         "--_url-file",
@@ -95,6 +107,10 @@ def parse_args() -> argparse.Namespace:
 
     if args.init:
         _init_config()
+        sys.exit(0)
+
+    if args.default_password:
+        _toggle_password_requirement()
         sys.exit(0)
 
     return args
@@ -139,3 +155,40 @@ def _init_config() -> None:
     config_dir.mkdir(exist_ok=True)
     config_file.write_text(DEFAULT_CONFIG)
     print(f"Created: {config_file}")
+
+
+def _toggle_password_requirement() -> None:
+    """Toggle security.require_password in config file."""
+    from pathlib import Path
+
+    import yaml
+
+    from porterminal.config import find_config_file
+
+    # Find existing config or use default location
+    config_path = find_config_file()
+    if config_path is None:
+        config_dir = Path.cwd() / ".ptn"
+        config_path = config_dir / "ptn.yaml"
+        config_dir.mkdir(exist_ok=True)
+
+    # Read existing config or create empty
+    if config_path.exists():
+        with open(config_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    else:
+        data = {}
+
+    # Toggle the value
+    if "security" not in data:
+        data["security"] = {}
+    current = data["security"].get("require_password", False)
+    data["security"]["require_password"] = not current
+
+    # Write back
+    with open(config_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
+
+    new_value = data["security"]["require_password"]
+    status = "enabled" if new_value else "disabled"
+    print(f"Password requirement {status} in {config_path}")

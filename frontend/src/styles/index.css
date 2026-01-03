@@ -559,6 +559,99 @@ html, body {
     color: var(--text-white);
 }
 
+/* ========== AUTH OVERLAY ========== */
+#auth-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--overlay-bg);
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+#auth-content {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-light);
+    border-radius: 0;
+    max-width: 320px;
+    width: 100%;
+    box-shadow: var(--shadow-elevated);
+    animation: helpAppear var(--transition-fast);
+}
+
+#auth-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--content-padding) 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-high);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+#auth-body {
+    padding: var(--content-padding) 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#auth-error {
+    padding: 8px 12px;
+    background: var(--color-danger-bg);
+    border: 1px solid var(--color-danger-border);
+    border-radius: 0;
+    color: var(--color-danger-text);
+    font-size: 12px;
+    text-align: center;
+}
+
+#auth-password {
+    padding: 10px 12px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-medium);
+    border-radius: 0;
+    color: var(--text-high);
+    font-size: 14px;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+#auth-password:focus {
+    border-color: var(--color-accent);
+}
+
+#auth-password::placeholder {
+    color: var(--text-disabled);
+}
+
+#auth-submit {
+    padding: var(--content-padding) 16px;
+    background: var(--color-accent-bg);
+    border: 1px solid var(--color-accent);
+    border-radius: 0;
+    color: var(--color-accent-text);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+#auth-submit:active {
+    background: var(--color-accent-strong);
+    color: var(--text-white);
+}
+
+#auth-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* ========== FLOATING COPY BUTTON (iOS) ========== */
 #copy-button {
     position: fixed;

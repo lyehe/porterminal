@@ -14,6 +14,7 @@ except ImportError:
     __version__ = "0.0.0-dev"  # Fallback before first build
 
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -149,6 +150,30 @@ def main() -> int:
     check_and_notify()
     verbose = args.verbose
 
+    # Load config to check require_password setting
+    from porterminal.config import get_config
+
+    config = get_config()
+
+    # Handle password mode (CLI flag or config setting)
+    if args.password or config.security.require_password:
+        import getpass
+
+        try:
+            password = getpass.getpass("Enter password: ")
+            if not password:
+                console.print("[red]Error:[/red] Password cannot be empty")
+                return 1
+
+            import bcrypt
+
+            password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+            os.environ["PORTERMINAL_PASSWORD_HASH"] = password_hash.decode()
+            console.print("[green]Password protection enabled[/green]")
+        except KeyboardInterrupt:
+            console.print("\n[dim]Cancelled[/dim]")
+            return 0
+
     # Handle background mode
     if args.background:
         return _run_in_background(args)
@@ -170,9 +195,6 @@ def main() -> int:
         cwd_str = str(cwd)
         os.environ["PORTERMINAL_CWD"] = cwd_str
 
-    from porterminal.config import get_config
-
-    config = get_config()
     bind_host = config.server.host
     preferred_port = config.server.port
     port = preferred_port
@@ -314,11 +336,14 @@ def main() -> int:
                 proc.kill()
                 proc.wait()
 
-    cleanup_process(server_process, "server")
-    cleanup_process(tunnel_process, "tunnel")
-
-    # Give processes time to release the port
-    time.sleep(0.5)
+    # Ignore Ctrl+C during cleanup to prevent orphaned processes
+    # Cleanup has timeouts so it won't hang forever
+    old_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        cleanup_process(server_process, "server")
+        cleanup_process(tunnel_process, "tunnel")
+    finally:
+        signal.signal(signal.SIGINT, old_handler)
 
     return 0
 

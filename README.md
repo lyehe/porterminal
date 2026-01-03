@@ -64,6 +64,8 @@ ptn                    # Start in current directory
 ptn ~/projects/myapp   # Start in specific folder
 ptn --no-tunnel        # Local network only
 ptn -b                 # Run in background
+ptn -p                 # Enable password protection
+ptn -dp                # Toggle default password requirement in config
 ptn -v                 # Verbose startup logs
 ptn --init             # Create .ptn/ptn.yaml config
 ptn -V                 # Show version
@@ -90,18 +92,28 @@ buttons:
 update:
   notify_on_startup: true   # Show update notification
   check_interval: 86400     # Seconds between checks (default: 24h)
+
+# Security settings
+security:
+  require_password: true    # Always prompt for password at startup
+  max_auth_attempts: 5      # Max failed attempts before disconnect
 ```
 
 Config is searched in order: `$PORTERMINAL_CONFIG_PATH`, `./ptn.yaml`, `./.ptn/ptn.yaml`, `~/.ptn/ptn.yaml`.
 
 ## Security
 
-> **Warning:** The URL is the only authentication. Anyone with the link has full terminal access.
+Use password if your screen can be exposed to others:
+```bash
+ptn -p                 # Prompt for password this session
+ptn -dp                # Enable password by default (toggle)
+```
 
-- Don't share the URL
-- Stop the server when not in use (`Ctrl+C`)
-- Use `--no-tunnel` for local network only
-- Environment variables are sanitized (API keys, tokens stripped)
+Password is per-session (never saved to disk). See [docs/security.md](docs/security.md) for details.
+
+## Troubleshooting
+
+**Connection fails?** Cloudflare tunnel sometimes blocks connections. Restart the server (`Ctrl+C`, then `ptn`) to get a fresh tunnel URL.
 
 ## Contributing
 

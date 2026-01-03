@@ -52,3 +52,7 @@ class Container:
 
     # Working directory
     cwd: str | None = None
+
+    # Security
+    password_hash: bytes | None = None
+    max_auth_attempts: int = 5

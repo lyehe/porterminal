@@ -40,9 +40,13 @@ import { createResizeManager } from '@/terminal/ResizeManager';
 // UI
 import { createCopyButton } from '@/ui/CopyButton';
 import { createDisconnectOverlay } from '@/ui/DisconnectOverlay';
+import { createAuthOverlay } from '@/ui/AuthOverlay';
 import { createConnectionStatus } from '@/ui/ConnectionStatus';
 import { createTextViewOverlay } from '@/ui/TextViewOverlay';
 import { renderToolbar } from '@/ui/Toolbar';
+
+// Auth storage
+import { getSavedPassword, savePassword, clearPassword } from '@/utils/storage';
 
 // Types
 import type { SwipeDirection } from '@/types';
@@ -68,7 +72,11 @@ async function init(): Promise<void> {
     // Create UI components
     const connectionStatus = createConnectionStatus();
     const disconnectOverlay = createDisconnectOverlay();
+    const authOverlay = createAuthOverlay();
     const textViewOverlay = createTextViewOverlay();
+
+    // Auth state
+    let currentPassword = getSavedPassword();
 
     // Create clipboard manager
     const clipboardManager = createClipboardManager();
@@ -81,6 +89,9 @@ async function init(): Promise<void> {
 
     // Forward declaration for tabService
     let tabService: TabService;
+
+    // Forward declaration for connectionService (needed in auth callbacks)
+    let connectionService: ReturnType<typeof createConnectionService>;
 
     // Create management service (control plane)
     const managementService = createManagementService({
@@ -100,11 +111,45 @@ async function init(): Promise<void> {
         onConnect: () => {
             console.log('Management WebSocket connected');
             disconnectOverlay.hide();
+            // Auto-auth if we have saved password
+            if (currentPassword) {
+                managementService.authenticate(currentPassword);
+            }
+        },
+        onAuthRequired: () => {
+            console.log('Authentication required');
+            if (currentPassword) {
+                // Try saved password first
+                managementService.authenticate(currentPassword);
+            } else {
+                authOverlay.show();
+            }
+        },
+        onAuthFailed: (attemptsRemaining, error) => {
+            console.log('Authentication failed:', error, 'attempts remaining:', attemptsRemaining);
+            clearPassword();
+            currentPassword = null;
+            connectionService?.setAuthPassword(null);
+            if (attemptsRemaining > 0) {
+                authOverlay.showError(error || `Invalid password. ${attemptsRemaining} attempts remaining.`);
+            } else {
+                authOverlay.showError(error || 'Too many failed attempts.');
+            }
+            authOverlay.clearInput();
+            authOverlay.show();
+        },
+        onAuthSuccess: () => {
+            console.log('Authentication successful');
+            if (currentPassword) {
+                savePassword(currentPassword);
+                connectionService?.setAuthPassword(currentPassword);
+            }
+            authOverlay.hide();
         },
     });
 
     // Create connection service (data plane for terminal I/O)
-    const connectionService = createConnectionService(
+    connectionService = createConnectionService(
         eventBus,
         {
             maxReconnectAttempts: CONFIG.maxReconnectAttempts,
@@ -240,6 +285,12 @@ async function init(): Promise<void> {
         } catch (e) {
             console.error('Retry failed:', e);
         }
+    });
+
+    // Setup auth overlay
+    authOverlay.setup((password) => {
+        currentPassword = password;
+        managementService.authenticate(password);
     });
 
     // Load configuration

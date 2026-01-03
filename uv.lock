@@ -235,7 +235,7 @@ wheels = [
 
 [[package]]
 name = "ptn"
-version = "0.2.5.dev15+gd5a4ca18a.d20260103"
+version = "0.2.6.dev19+gbfa597d14.d20260103"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-01-03
+
+### Added
+- Shell detection from Windows Terminal `settings.json`
+- Visual Studio Developer shells detection (Dev CMD, Dev PS)
+- Abbreviated shell names for cleaner display (e.g., "Windows PowerShell" → "WinPS")
+
+### Fixed
+- Ctrl+C now properly kills server and all child processes on Windows (uses `taskkill /T`)
+- Keyboard now hides when clicking shutdown button on mobile
+
+### Changed
+- Shell detection priority: Windows Terminal profiles → VS shells → hardcoded defaults
+
 ## [0.2.5] - 2026-01-02
 
 ### Added

@@ -287,15 +287,38 @@ def main() -> int:
     def cleanup_process(proc: subprocess.Popen | None, name: str) -> None:
         if proc is None or proc.poll() is not None:
             return
-        try:
-            proc.terminate()
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()  # Reap the killed process
+
+        if sys.platform == "win32":
+            # Windows: use taskkill /T to kill entire process tree
+            try:
+                subprocess.run(
+                    ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                    capture_output=True,
+                    timeout=10,
+                )
+                # Wait for process to actually terminate
+                proc.wait(timeout=5)
+            except (subprocess.TimeoutExpired, OSError):
+                # Last resort: try to kill just the main process
+                try:
+                    proc.kill()
+                    proc.wait(timeout=2)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+        else:
+            # Unix: terminate gracefully, then kill
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
 
     cleanup_process(server_process, "server")
     cleanup_process(tunnel_process, "tunnel")
+
+    # Give processes time to release the port
+    time.sleep(0.5)
 
     return 0
 

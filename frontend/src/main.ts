@@ -717,6 +717,9 @@ function setupShutdownButton(disconnectOverlay: ReturnType<typeof createDisconne
     if (!btn) return;
 
     btn.addEventListener('click', async () => {
+        // Hide keyboard on mobile
+        (document.activeElement as HTMLElement)?.blur();
+
         if (confirm('Shutdown server and tunnel?\n\nThis will terminate all sessions.')) {
             try {
                 const response = await fetch('/api/shutdown', { method: 'POST' });

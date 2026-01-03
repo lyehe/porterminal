@@ -76,15 +76,22 @@ def start_server(host: str, port: int, *, verbose: bool = False) -> subprocess.P
         "--no-access-log",  # Disable access logging
     ]
 
+    # On Windows, use CREATE_NEW_PROCESS_GROUP to prevent Ctrl+C from propagating
+    # to the child process - we handle cleanup ourselves
+    kwargs = {}
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+
     if verbose:
         # Let output go directly to console
-        process = subprocess.Popen(cmd)
+        process = subprocess.Popen(cmd, **kwargs)
     else:
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            **kwargs,
         )
 
     return process
@@ -120,6 +127,11 @@ def start_cloudflared(port: int) -> tuple[subprocess.Popen, str | None]:
     # Point to a non-existent config to force quick tunnel mode
     env["TUNNEL_CONFIG"] = os.devnull
 
+    # On Windows, use CREATE_NEW_PROCESS_GROUP to prevent Ctrl+C from propagating
+    kwargs = {}
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -127,6 +139,7 @@ def start_cloudflared(port: int) -> tuple[subprocess.Popen, str | None]:
         text=True,
         bufsize=1,
         env=env,
+        **kwargs,
     )
 
     # Parse URL from cloudflared output (flexible pattern for different Cloudflare domains)

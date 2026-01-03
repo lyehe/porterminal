@@ -1,10 +1,18 @@
 """Shell detection for available shells on the system."""
 
+import json
+import logging
+import os
+import re
+import shlex
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 from porterminal.domain import ShellCommand
+
+logger = logging.getLogger(__name__)
 
 
 class ShellDetector:
@@ -48,19 +56,318 @@ class ShellDetector:
             List of (name, id, command, args) tuples.
         """
         if sys.platform == "win32":
-            return [
+            # Get Windows Terminal profiles first, then hardcoded defaults
+            wt_profiles = self._get_windows_terminal_profiles()
+            hardcoded = [
                 ("PS 7", "pwsh", "pwsh.exe", ["-NoLogo"]),
                 ("PS", "powershell", "powershell.exe", ["-NoLogo"]),
                 ("CMD", "cmd", "cmd.exe", []),
                 ("WSL", "wsl", "wsl.exe", []),
                 ("Git Bash", "gitbash", r"C:\Program Files\Git\bin\bash.exe", ["--login"]),
             ]
+            # Merge WT profiles with hardcoded (dedupe by command)
+            merged = self._merge_candidates(wt_profiles, hardcoded)
+            # Add VS dev shells (no deduplication - they're unique due to args)
+            vs_shells = self._get_visual_studio_shells()
+            return merged + vs_shells
         return [
             ("Bash", "bash", "bash", ["--login"]),
             ("Zsh", "zsh", "zsh", ["--login"]),
             ("Fish", "fish", "fish", []),
             ("Sh", "sh", "sh", []),
         ]
+
+    def _get_windows_terminal_profiles(self) -> list[tuple[str, str, str, list[str]]]:
+        """Read shell profiles from Windows Terminal settings.json.
+
+        Returns:
+            List of (name, id, command, args) tuples from Windows Terminal.
+        """
+        settings_path = Path(
+            os.environ.get("LOCALAPPDATA", ""),
+            "Packages",
+            "Microsoft.WindowsTerminal_8wekyb3d8bbwe",
+            "LocalState",
+            "settings.json",
+        )
+
+        if not settings_path.exists():
+            return []
+
+        try:
+            # Read and parse JSON (WT uses JSON with comments, strip them)
+            content = settings_path.read_text(encoding="utf-8")
+            content = self._strip_json_comments(content)
+            data = json.loads(content)
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning("Failed to read Windows Terminal settings: %s", e)
+            return []
+
+        profiles = []
+        profile_list = data.get("profiles", {}).get("list", [])
+
+        for profile in profile_list:
+            name = profile.get("name", "")
+            commandline = profile.get("commandline", "")
+
+            if not name or not commandline:
+                continue
+
+            # Parse commandline into command and args
+            command, args = self._parse_commandline(commandline)
+            if not command:
+                continue
+
+            # Expand environment variables in command path
+            command = os.path.expandvars(command)
+
+            # Create a slug ID from the name
+            shell_id = self._slugify(name)
+
+            # Shorten display name
+            short_name = self._abbreviate_name(name)
+
+            profiles.append((short_name, shell_id, command, args))
+
+        return profiles
+
+    def _get_visual_studio_shells(self) -> list[tuple[str, str, str, list[str]]]:
+        """Detect Visual Studio Developer Command Prompts and PowerShells.
+
+        Returns:
+            List of (name, id, command, args) tuples for VS dev shells.
+        """
+        vswhere = Path(
+            os.environ.get("ProgramFiles(x86)", ""),
+            "Microsoft Visual Studio",
+            "Installer",
+            "vswhere.exe",
+        )
+
+        if not vswhere.exists():
+            return []
+
+        try:
+            result = subprocess.run(
+                [
+                    str(vswhere),
+                    "-all",
+                    "-prerelease",
+                    "-property",
+                    "installationPath",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            vs_paths = [p.strip() for p in result.stdout.strip().split("\n") if p.strip()]
+        except (subprocess.TimeoutExpired, OSError) as e:
+            logger.warning("Failed to run vswhere: %s", e)
+            return []
+
+        shells = []
+        for vs_path in vs_paths:
+            vs_path = Path(vs_path)
+            # Extract VS version and edition from path
+            # e.g., "C:\Program Files\Microsoft Visual Studio\2022\Community"
+            edition = vs_path.name  # Community, Professional, Enterprise
+            year = vs_path.parent.name  # 2022, 2019, etc.
+
+            # Developer Command Prompt (CMD)
+            vsdevcmd = vs_path / "Common7" / "Tools" / "VsDevCmd.bat"
+            if vsdevcmd.exists():
+                name = f"Dev CMD {year}"
+                shell_id = f"devcmd-{year}-{edition.lower()}"
+                # cmd.exe /k "path\to\VsDevCmd.bat"
+                shells.append(
+                    (
+                        name,
+                        shell_id,
+                        "cmd.exe",
+                        ["/k", str(vsdevcmd)],
+                    )
+                )
+
+            # Developer PowerShell
+            launch_ps = vs_path / "Common7" / "Tools" / "Launch-VsDevShell.ps1"
+            if launch_ps.exists():
+                name = f"Dev PS {year}"
+                shell_id = f"devps-{year}-{edition.lower()}"
+                # powershell.exe -NoExit -Command "& 'path\to\Launch-VsDevShell.ps1'"
+                shells.append(
+                    (
+                        name,
+                        shell_id,
+                        "powershell.exe",
+                        ["-NoExit", "-Command", f"& '{launch_ps}'"],
+                    )
+                )
+
+        return shells
+
+    def _strip_json_comments(self, content: str) -> str:
+        """Strip comments from JSON content while preserving strings.
+
+        Handles:
+        - Single-line comments: // comment
+        - Multi-line comments: /* comment */
+        - Preserves // inside quoted strings (e.g., URLs)
+
+        Args:
+            content: JSON content with possible comments
+
+        Returns:
+            JSON content without comments
+        """
+        result = []
+        i = 0
+        in_string = False
+        escape_next = False
+
+        while i < len(content):
+            char = content[i]
+
+            if escape_next:
+                result.append(char)
+                escape_next = False
+                i += 1
+                continue
+
+            if char == "\\" and in_string:
+                result.append(char)
+                escape_next = True
+                i += 1
+                continue
+
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                result.append(char)
+                i += 1
+                continue
+
+            if not in_string:
+                # Check for single-line comment
+                if content[i : i + 2] == "//":
+                    # Skip to end of line
+                    while i < len(content) and content[i] != "\n":
+                        i += 1
+                    continue
+                # Check for multi-line comment
+                if content[i : i + 2] == "/*":
+                    i += 2
+                    while i < len(content) - 1 and content[i : i + 2] != "*/":
+                        i += 1
+                    i += 2  # Skip */
+                    continue
+
+            result.append(char)
+            i += 1
+
+        return "".join(result)
+
+    def _parse_commandline(self, commandline: str) -> tuple[str, list[str]]:
+        """Parse a commandline string into command and args.
+
+        Args:
+            commandline: The command line string (e.g., 'cmd.exe /k "vcvars64.bat"')
+
+        Returns:
+            Tuple of (command, args_list)
+        """
+        try:
+            # Use shlex to properly handle quoted arguments
+            parts = shlex.split(commandline, posix=False)
+            if not parts:
+                return "", []
+            return parts[0], parts[1:]
+        except ValueError:
+            # Fallback: simple split on first space
+            parts = commandline.split(None, 1)
+            if not parts:
+                return "", []
+            return parts[0], parts[1:] if len(parts) > 1 else []
+
+    def _abbreviate_name(self, name: str) -> str:
+        """Abbreviate a shell name for display.
+
+        Args:
+            name: Full shell name (e.g., "Windows PowerShell")
+
+        Returns:
+            Abbreviated name (e.g., "WinPS")
+        """
+        # Common abbreviations
+        abbrevs = {
+            "Windows PowerShell": "WinPS",
+            "Command Prompt": "CMD",
+            "PowerShell": "PS",
+            "Developer Command Prompt": "DevCMD",
+            "Developer PowerShell": "DevPS",
+            "Azure Cloud Shell": "Azure",
+            "Git Bash": "GitBash",
+        }
+
+        # Check for exact or prefix match
+        for full, short in abbrevs.items():
+            if name == full or name.startswith(full):
+                # Append suffix if there's more (e.g., "for VS 2022")
+                suffix = name[len(full) :].strip()
+                if suffix:
+                    # Extract version/year if present
+                    parts = suffix.split()
+                    for part in parts:
+                        if part.isdigit() and len(part) == 4:  # Year like 2022
+                            return f"{short} {part}"
+                return short
+
+        # Fallback: first 8 chars if name is long
+        if len(name) > 10:
+            return name[:8].strip()
+        return name
+
+    def _slugify(self, name: str) -> str:
+        """Convert a profile name to a slug ID.
+
+        Args:
+            name: Profile name (e.g., "Developer PowerShell for VS 2022")
+
+        Returns:
+            Slug ID (e.g., "developer-powershell-for-vs-2022")
+        """
+        # Lowercase, replace non-alphanumeric with hyphens, collapse multiple hyphens
+        slug = re.sub(r"[^a-z0-9]+", "-", name.lower())
+        return slug.strip("-")
+
+    def _merge_candidates(
+        self,
+        primary: list[tuple[str, str, str, list[str]]],
+        secondary: list[tuple[str, str, str, list[str]]],
+    ) -> list[tuple[str, str, str, list[str]]]:
+        """Merge two candidate lists, deduplicating by command executable.
+
+        Args:
+            primary: First list (takes priority)
+            secondary: Second list (skipped if command already in primary)
+
+        Returns:
+            Merged and deduplicated list
+        """
+        result = list(primary)
+        seen_commands = set()
+
+        # Track commands from primary (normalize to lowercase basename)
+        for _, _, command, _ in primary:
+            cmd_name = Path(command).name.lower()
+            seen_commands.add(cmd_name)
+
+        # Add secondary items if command not already seen
+        for item in secondary:
+            cmd_name = Path(item[2]).name.lower()
+            if cmd_name not in seen_commands:
+                result.append(item)
+                seen_commands.add(cmd_name)
+
+        return result
 
     def _get_windows_default(self) -> str:
         """Get default shell ID for Windows."""

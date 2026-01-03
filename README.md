@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <video src="assets/demo.mov" width="600" controls></video>
+  <video src="assets/demo.mp4" width="600" controls></video>
 </p>
 
 ---
@@ -46,6 +46,20 @@ I wanted to vibe code from bed. ngrok requires registration and the free tier su
 | **uv tool** | `uv tool install ptn` | `uv tool upgrade ptn` |
 | **pipx** | `pipx install ptn` | `pipx upgrade ptn` |
 | **pip** | `pip install ptn` | `pip install -U ptn` |
+
+<details>
+<summary>One-line install (installs uv if needed)</summary>
+
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/lyehe/porterminal/master/install.ps1 | iex
+```
+
+**macOS/Linux:**
+```bash
+curl -LsSf https://raw.githubusercontent.com/lyehe/porterminal/master/install.sh | sh
+```
+</details>
 
 Requires Python 3.12+ and [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (auto-installed if missing).
 

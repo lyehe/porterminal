@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-01-03
+
+### Fixed
+- Add 1s startup delay before opening browser to prevent Cloudflare IP blocking
+
 ## [0.3.0] - 2026-01-03
 
 ### Added
@@ -209,7 +214,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/lyehe/porterminal/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/lyehe/porterminal/compare/v0.2.7...v0.3.0
 [0.2.7]: https://github.com/lyehe/porterminal/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/lyehe/porterminal/compare/v0.2.5...v0.2.6

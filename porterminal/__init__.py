@@ -248,6 +248,10 @@ def main() -> int:
             status.update("[cyan]Establishing tunnel...[/cyan]")
             tunnel_process, tunnel_url = start_cloudflared(port)
 
+            if tunnel_url:
+                # Wait for tunnel to stabilize before showing URL
+                time.sleep(1)
+
             if not tunnel_url:
                 console.print("[red]Error:[/red] Failed to establish tunnel")
                 for proc in [server_process, tunnel_process]:

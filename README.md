@@ -1,25 +1,15 @@
 <p align="center">
   <a href="https://github.com/lyehe/porterminal">
-    <img src="assets/banner.jpg" alt="Porterminal - Vibe Code From Anywhere" width="600">
+    <img src="assets/banner.png" alt="Porterminal - Vibe Code From Anywhere" width="600">
   </a>
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/ptn/">
-    <img src="https://img.shields.io/pypi/v/ptn?style=flat-square&logo=pypi&logoColor=white&label=PyPI" alt="PyPI">
-  </a>
-  <a href="https://pypi.org/project/ptn/">
-    <img src="https://img.shields.io/pypi/pyversions/ptn?style=flat-square&logo=python&logoColor=white" alt="Python">
-  </a>
-  <a href="https://pypi.org/project/ptn/">
-    <img src="https://img.shields.io/pypi/dm/ptn?style=flat-square&label=Downloads" alt="Downloads">
-  </a>
-  <a href="https://github.com/lyehe/porterminal/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/lyehe/porterminal?style=flat-square" alt="License">
-  </a>
-  <a href="https://github.com/lyehe/porterminal/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/lyehe/porterminal/ci.yml?branch=master&style=flat-square&logo=github&label=CI" alt="CI">
-  </a>
+  <a href="https://pypi.org/project/ptn/"><img src="https://img.shields.io/pypi/v/ptn?style=flat-square&logo=pypi&logoColor=white&label=PyPI" alt="PyPI"></a>
+  <a href="https://pypi.org/project/ptn/"><img src="https://img.shields.io/pypi/pyversions/ptn?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
+  <a href="https://pypi.org/project/ptn/"><img src="https://img.shields.io/pypi/dm/ptn?style=flat-square&label=Downloads" alt="Downloads"></a>
+  <a href="https://github.com/lyehe/porterminal/blob/main/LICENSE"><img src="https://img.shields.io/github/license/lyehe/porterminal?style=flat-square" alt="License"></a>
+  <a href="https://github.com/lyehe/porterminal/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/lyehe/porterminal/ci.yml?branch=master&style=flat-square&logo=github&label=CI" alt="CI"></a>
 </p>
 
 

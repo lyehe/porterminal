@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/lyehe/porterminal">
-    <img src="assets/banner.png" alt="Porterminal - Vibe Code From Anywhere" width="600">
+    <img src="assets/banner.jpg" alt="Porterminal - Vibe Code From Anywhere" width="600">
   </a>
 </p>
 

@@ -265,10 +265,18 @@ def main() -> int:
     try:
         while True:
             if server_process is not None and server_process.poll() is not None:
-                console.print("\n[red]Server stopped unexpectedly[/red]")
+                code = server_process.returncode
+                if code == 0 or code < 0:
+                    console.print("\n[dim]Server stopped[/dim]")
+                else:
+                    console.print(f"\n[yellow]Server stopped (exit code {code})[/yellow]")
                 break
             if tunnel_process is not None and tunnel_process.poll() is not None:
-                console.print("\n[red]Tunnel stopped unexpectedly[/red]")
+                code = tunnel_process.returncode
+                if code == 0 or code < 0:
+                    console.print("\n[dim]Tunnel closed[/dim]")
+                else:
+                    console.print(f"\n[yellow]Tunnel stopped (exit code {code})[/yellow]")
                 break
             time.sleep(1)
 

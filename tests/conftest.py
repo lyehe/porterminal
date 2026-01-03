@@ -11,6 +11,9 @@ from porterminal.domain import (
     Session,
     SessionId,
     ShellCommand,
+    Tab,
+    TabId,
+    TabLimitChecker,
     TerminalDimensions,
     UserId,
 )
@@ -216,6 +219,84 @@ def session_repository():
     from porterminal.infrastructure.repositories import InMemorySessionRepository
 
     return InMemorySessionRepository()
+
+
+# ============= Tab Fixtures =============
+
+
+@pytest.fixture
+def tab_id():
+    """Sample tab ID."""
+    return TabId("test-tab-123")
+
+
+@pytest.fixture
+def sample_tab(tab_id, user_id, session_id):
+    """Sample tab for testing."""
+    now = datetime.now(UTC)
+    return Tab(
+        id=tab_id,
+        user_id=user_id,
+        session_id=session_id,
+        shell_id="bash",
+        name="Test Tab",
+        created_at=now,
+        last_accessed=now,
+    )
+
+
+@pytest.fixture
+def tab_repository():
+    """Empty in-memory tab repository."""
+    from porterminal.infrastructure.repositories import InMemoryTabRepository
+
+    return InMemoryTabRepository()
+
+
+@pytest.fixture
+def tab_limit_checker():
+    """Default tab limit checker."""
+    return TabLimitChecker()
+
+
+# ============= Mock Connection Fixtures =============
+
+
+class MockConnection:
+    """Mock implementation of ConnectionPort protocol."""
+
+    def __init__(self):
+        self.sent_messages: list[dict] = []
+        self._is_connected = True
+
+    async def send_message(self, message: dict) -> None:
+        self.sent_messages.append(message)
+
+    async def send_output(self, data: bytes) -> None:
+        pass
+
+    async def receive(self) -> dict | bytes:
+        return b""
+
+    async def close(self, code: int = 1000, reason: str = "") -> None:
+        self._is_connected = False
+
+    def is_connected(self) -> bool:
+        return self._is_connected
+
+
+@pytest.fixture
+def mock_connection():
+    """Mock connection for testing."""
+    return MockConnection()
+
+
+@pytest.fixture
+def connection_registry():
+    """Empty user connection registry."""
+    from porterminal.infrastructure.registry import UserConnectionRegistry
+
+    return UserConnectionRegistry()
 
 
 # ============= Async Fixtures =============

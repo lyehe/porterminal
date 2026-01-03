@@ -20,9 +20,9 @@
   <b>3.</b> Access your terminal from your phone<br>
 </p>
 
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/79a1db0d-5bdc-4f88-83ee-c5adbda2d2d0" width="600" controls></video>
-</p>
+<div align="center">
+  <video src="https://github.com/user-attachments/assets/79a1db0d-5bdc-4f88-83ee-c5adbda2d2d0" width="600" autoplay loop muted playsinline></video>
+</div>
 
 ---
 

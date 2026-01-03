@@ -379,14 +379,47 @@ class ShellDetector:
 
     def _get_macos_default(self) -> str:
         """Get default shell ID for macOS."""
+        # Check user's configured shell from $SHELL
+        user_shell = self._get_user_shell_id()
+        if user_shell:
+            return user_shell
+        # Fallback to zsh (macOS default since Catalina)
         if shutil.which("zsh"):
             return "zsh"
         return "bash"
 
     def _get_linux_default(self) -> str:
         """Get default shell ID for Linux."""
+        # Check user's configured shell from $SHELL
+        user_shell = self._get_user_shell_id()
+        if user_shell:
+            return user_shell
+        # Fallback
         if shutil.which("bash"):
             return "bash"
         if shutil.which("zsh"):
             return "zsh"
         return "sh"
+
+    def _get_user_shell_id(self) -> str | None:
+        """Get shell ID from user's $SHELL environment variable.
+
+        Returns:
+            Shell ID if $SHELL is set and matches a known shell, None otherwise.
+        """
+        shell_path = os.environ.get("SHELL", "")
+        if not shell_path:
+            return None
+
+        # Extract shell name from path (e.g., /usr/bin/fish -> fish)
+        shell_name = Path(shell_path).name.lower()
+
+        # Map common shell names to IDs
+        shell_map = {
+            "bash": "bash",
+            "zsh": "zsh",
+            "fish": "fish",
+            "sh": "sh",
+        }
+
+        return shell_map.get(shell_name)

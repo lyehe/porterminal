@@ -47,19 +47,12 @@ I wanted to vibe code from bed. ngrok requires registration and the free tier su
 | **pipx** | `pipx install ptn` | `pipx upgrade ptn` |
 | **pip** | `pip install ptn` | `pip install -U ptn` |
 
-<details>
-<summary>One-line install (installs uv if needed)</summary>
+**One-line install (uv + ptn):**
 
-**Windows (PowerShell):**
-```powershell
-irm https://raw.githubusercontent.com/lyehe/porterminal/master/install.ps1 | iex
-```
-
-**macOS/Linux:**
-```bash
-curl -LsSf https://raw.githubusercontent.com/lyehe/porterminal/master/install.sh | sh
-```
-</details>
+| OS | Command |
+|----|---------|
+| **Windows** | `powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/lyehe/porterminal/master/install.ps1 \| iex"` |
+| **macOS/Linux** | `curl -LsSf https://raw.githubusercontent.com/lyehe/porterminal/master/install.sh \| sh` |
 
 Requires Python 3.12+ and [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (auto-installed if missing).
 

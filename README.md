@@ -61,7 +61,9 @@ ptn                    # Start in current directory
 ptn ~/projects/myapp   # Start in specific folder
 ptn --no-tunnel        # Local network only
 ptn -b                 # Run in background
+ptn -v                 # Verbose startup logs
 ptn --init             # Create .ptn/ptn.yaml config
+ptn -V                 # Show version
 ptn -U                 # Update to latest version
 ptn --check-update     # Check if update available
 ```

@@ -1,9 +1,27 @@
-import { defineConfig } from 'vite';
+import { defineConfig, Plugin } from 'vite';
 import { resolve } from 'path';
+import { readdirSync, unlinkSync, existsSync } from 'fs';
+
+/** Clean old app-*.js and app-*.css before build */
+function cleanOldAssets(): Plugin {
+  const assetsDir = resolve(__dirname, '../porterminal/static/assets');
+  return {
+    name: 'clean-old-assets',
+    buildStart() {
+      if (!existsSync(assetsDir)) return;
+      for (const file of readdirSync(assetsDir)) {
+        if (file.startsWith('app-') && (file.endsWith('.js') || file.endsWith('.css'))) {
+          unlinkSync(resolve(assetsDir, file));
+        }
+      }
+    },
+  };
+}
 
 export default defineConfig({
   root: '.',
   base: '/static/',
+  plugins: [cleanOldAssets()],
 
   resolve: {
     alias: {

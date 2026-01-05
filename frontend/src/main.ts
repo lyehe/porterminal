@@ -52,11 +52,11 @@ import { getSavedPassword, savePassword, clearPassword } from '@/utils/storage';
 import type { SwipeDirection } from '@/types';
 import type { TabService } from '@/services/TabService';
 
-// Configuration
+// Configuration (heartbeat matches backend HEARTBEAT_INTERVAL = 30s)
 const CONFIG = {
     maxReconnectAttempts: 5,
     reconnectDelayMs: 1000,
-    heartbeatMs: 25000,
+    heartbeatMs: 30000,
 };
 
 /**
@@ -258,7 +258,11 @@ async function init(): Promise<void> {
             scheduleFitAfterFontChange: () => {
                 const tab = tabService.activeTab;
                 if (tab) {
-                    setTimeout(() => tab.fitAddon.fit(), 50);
+                    setTimeout(() => {
+                        // Flush pending writes before resize to prevent buffer corruption
+                        connectionService.flushWriteBuffer(tab);
+                        tab.fitAddon.fit();
+                    }, 50);
                 }
             },
         }
@@ -394,7 +398,21 @@ async function init(): Promise<void> {
 
     // Setup text view button
     textViewOverlay.setup();
-    setupTextViewButton(textViewOverlay, () => tabService.activeTab?.term ?? null);
+    setupTextViewButton(
+        textViewOverlay,
+        () => tabService.activeTab?.term ?? null,
+        () => {
+            const tab = tabService.activeTab;
+            if (tab) connectionService.flushWriteBuffer(tab);
+        },
+        () => {
+            const tab = tabService.activeTab;
+            if (tab) {
+                // Force xterm.js to repaint all rows from buffer
+                tab.term.refresh(0, tab.term.rows - 1);
+            }
+        }
+    );
 
     // Attach gesture recognizer
     const terminalContainer = document.getElementById('terminal-container');
@@ -461,6 +479,7 @@ async function init(): Promise<void> {
         resizeDebounce = setTimeout(() => {
             const tab = tabService.activeTab;
             if (tab) {
+                connectionService.flushWriteBuffer(tab);
                 tab.fitAddon.fit();
             }
         }, 50);
@@ -471,6 +490,7 @@ async function init(): Promise<void> {
         setTimeout(() => {
             const tab = tabService.activeTab;
             if (tab) {
+                connectionService.flushWriteBuffer(tab);
                 tab.fitAddon.fit();
             }
         }, 100);
@@ -488,6 +508,7 @@ async function init(): Promise<void> {
             viewportTimeout = setTimeout(() => {
                 const tab = tabService.activeTab;
                 if (tab) {
+                    connectionService.flushWriteBuffer(tab);
                     tab.fitAddon.fit();
                 }
             }, 50);
@@ -804,14 +825,33 @@ function setupHelpButton(): void {
 
 function setupTextViewButton(
     textViewOverlay: ReturnType<typeof createTextViewOverlay>,
-    getTerminal: () => import('@xterm/xterm').Terminal | null
+    getTerminal: () => import('@xterm/xterm').Terminal | null,
+    flushWriteBuffer: () => void,
+    refreshTerminal: () => void
 ): void {
     setupTapButton('btn-textview', () => {
         const term = getTerminal();
         if (term) {
+            // Flush pending writes before reading terminal buffer
+            // This ensures getTerminalText() sees the most up-to-date state
+            flushWriteBuffer();
             textViewOverlay.show(term);
         }
     }, { preventDefault: false });
+
+    // Force terminal refresh when overlay closes to repaint from buffer
+    const closeBtn = document.getElementById('textview-close');
+    const overlay = document.getElementById('textview-overlay');
+
+    const onClose = () => {
+        textViewOverlay.hide();
+        refreshTerminal();
+    };
+
+    closeBtn?.addEventListener('click', onClose);
+    overlay?.addEventListener('click', (e) => {
+        if (e.target === overlay) onClose();
+    });
 }
 
 // Start the app

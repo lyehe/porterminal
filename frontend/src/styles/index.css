@@ -112,7 +112,7 @@ html, body {
     /* Prevent any page scrolling */
     position: fixed;
     width: 100%;
-    /* Disable ALL browser touch handling - we handle gestures in JS */
+    /* Disable browser touch handling - JS handles all gestures including scroll */
     touch-action: none;
     overscroll-behavior: none;
 }
@@ -321,7 +321,7 @@ html, body {
     user-select: none;
     /* Prevent iOS callout menu during long-press */
     -webkit-touch-callout: none;
-    /* Disable browser touch handling - JS handles selection gestures */
+    /* JS handles all touch gestures including scroll */
     touch-action: none;
     overscroll-behavior: contain;
 
@@ -354,7 +354,7 @@ html, body {
     background: var(--bg-primary) !important;
     /* Overlay scrollbar - doesn't take up layout space */
     overflow-y: overlay !important;
-    /* Disable browser touch handling - xterm.js handles scrolling via wheel events */
+    /* JS handles touch scrolling */
     touch-action: none;
     overscroll-behavior: contain;
     /* Performance: Contain paint operations */

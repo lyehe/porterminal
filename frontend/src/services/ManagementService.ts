@@ -204,12 +204,12 @@ export function createManagementService(
                 ws.onopen = () => {
                     console.log('Management WebSocket connected, waiting for state sync...');
 
-                    // Start heartbeat
+                    // Start heartbeat (matches backend HEARTBEAT_INTERVAL = 30s)
                     heartbeatInterval = setInterval(() => {
                         if (ws?.readyState === WebSocket.OPEN) {
                             ws.send(JSON.stringify({ type: 'ping' }));
                         }
-                    }, 25000);
+                    }, 30000);
 
                     callbacks.onConnect?.();
                     // Don't resolve here - wait for tab_state_sync

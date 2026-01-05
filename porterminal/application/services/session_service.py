@@ -2,14 +2,11 @@
 
 import asyncio
 import logging
-import os
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
 from porterminal.domain import (
-    EnvironmentRules,
-    EnvironmentSanitizer,
     PTYPort,
     Session,
     SessionId,
@@ -32,17 +29,13 @@ class SessionService:
     def __init__(
         self,
         repository: SessionRepository[PTYPort],
-        pty_factory: Callable[
-            [ShellCommand, TerminalDimensions, dict[str, str], str | None], PTYPort
-        ],
+        pty_factory: Callable[[ShellCommand, TerminalDimensions, str | None], PTYPort],
         limit_checker: SessionLimitChecker | None = None,
-        environment_sanitizer: EnvironmentSanitizer | None = None,
         working_directory: str | None = None,
     ) -> None:
         self._repository = repository
         self._pty_factory = pty_factory
         self._limit_checker = limit_checker or SessionLimitChecker()
-        self._sanitizer = environment_sanitizer or EnvironmentSanitizer(EnvironmentRules())
         self._cwd = working_directory
         self._running = False
         self._cleanup_task: asyncio.Task | None = None
@@ -108,9 +101,8 @@ class SessionService:
         if not limit_result.allowed:
             raise ValueError(limit_result.reason)
 
-        # Create PTY with sanitized environment
-        env = self._sanitizer.sanitize(dict(os.environ))
-        pty = self._pty_factory(shell, dimensions, env, self._cwd)
+        # Create PTY (environment sanitization handled by PTY layer)
+        pty = self._pty_factory(shell, dimensions, self._cwd)
 
         # Create session (starts with 0 clients, caller adds via add_client())
         now = datetime.now(UTC)

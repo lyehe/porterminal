@@ -1,6 +1,5 @@
 """Domain value objects - immutable data structures."""
 
-from .environment_rules import DEFAULT_BLOCKED_VARS, DEFAULT_SAFE_VARS, EnvironmentRules
 from .rate_limit_config import RateLimitConfig
 from .session_id import SessionId
 from .shell_command import ShellCommand
@@ -19,7 +18,4 @@ __all__ = [
     "TabId",
     "ShellCommand",
     "RateLimitConfig",
-    "EnvironmentRules",
-    "DEFAULT_SAFE_VARS",
-    "DEFAULT_BLOCKED_VARS",
 ]

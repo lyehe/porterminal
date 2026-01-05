@@ -14,8 +14,6 @@ from porterminal.application.services import (
 from porterminal.config import find_config_file
 from porterminal.container import Container
 from porterminal.domain import (
-    EnvironmentRules,
-    EnvironmentSanitizer,
     PTYPort,
     SessionLimitChecker,
     ShellCommand,
@@ -29,7 +27,7 @@ from porterminal.infrastructure.repositories import InMemorySessionRepository, I
 
 def create_pty_factory(
     cwd: str | None = None,
-) -> Callable[[ShellCommand, TerminalDimensions, dict[str, str], str | None], PTYPort]:
+) -> Callable[[ShellCommand, TerminalDimensions, str | None], PTYPort]:
     """Create a PTY factory function.
 
     This bridges the domain PTYPort interface with the existing
@@ -40,7 +38,6 @@ def create_pty_factory(
     def factory(
         shell: ShellCommand,
         dimensions: TerminalDimensions,
-        environment: dict[str, str],
         working_directory: str | None = None,
     ) -> PTYPort:
         # Use provided cwd or factory default
@@ -60,6 +57,7 @@ def create_pty_factory(
         )
 
         # Create manager (which implements PTY operations)
+        # Environment sanitization is handled internally by SecurePTYManager
         manager = SecurePTYManager(
             backend=backend,
             shell_config=legacy_shell,
@@ -68,8 +66,6 @@ def create_pty_factory(
             cwd=effective_cwd,
         )
 
-        # Spawn with environment (manager handles sanitization internally,
-        # but we pass our sanitized env to be safe)
         manager.spawn()
 
         return PTYManagerAdapter(manager, dimensions)
@@ -173,7 +169,6 @@ def create_container(
         repository=session_repository,
         pty_factory=pty_factory,
         limit_checker=SessionLimitChecker(),
-        environment_sanitizer=EnvironmentSanitizer(EnvironmentRules()),
         working_directory=cwd,
     )
 

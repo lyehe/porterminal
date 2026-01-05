@@ -14,6 +14,7 @@ import type { Tab, ModifierState, ServerTab, TabChange } from '@/types';
 import type { EventBus } from '@/core/events';
 import type { ConnectionService } from './ConnectionService';
 import type { ManagementService } from './ManagementService';
+import { applyModifiers } from '@/input/KeyMapper';
 
 export interface TabService {
     /** All tabs */
@@ -102,6 +103,7 @@ export function createTabService(
 ): TabService {
     const tabs: Tab[] = [];
     const serverIdToTab = new Map<string, Tab>();
+    const voiceTimers = new Map<number, ReturnType<typeof setTimeout>>();  // For cleanup on tab close
     let activeTabId: number | null = null;
     let tabCounter = 0;
 
@@ -262,20 +264,10 @@ export function createTabService(
 
         terminal.open(container);
 
-        // Configure textarea for mobile
+        // Configure textarea for mobile (iOS-specific handlers added after tab creation)
         const textarea = container.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null;
         if (textarea) {
             configureTerminalTextarea(textarea);
-
-            // iOS fix for delete key
-            if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-                textarea.addEventListener('beforeinput', (e: InputEvent) => {
-                    if (e.inputType === 'deleteContentBackward') {
-                        e.preventDefault();
-                        connectionService.sendInput(tab, '\x7f');
-                    }
-                }, { capture: true });
-            }
         }
 
         // Try WebGL for best performance
@@ -300,39 +292,82 @@ export function createTabService(
             reconnectAttempts: 0,
         };
 
+        // iOS-specific event handlers (now that tab is defined)
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        if (isIOS && textarea) {
+            // iOS fix for delete key
+            textarea.addEventListener('beforeinput', (e: InputEvent) => {
+                if (e.inputType === 'deleteContentBackward') {
+                    e.preventDefault();
+                    connectionService.sendInput(tab, '\x7f');
+                }
+            }, { capture: true });
+
+            // iOS voice input fix: clear textarea after each input to prevent accumulation
+            textarea.addEventListener('input', () => {
+                setTimeout(() => { textarea.value = ''; }, 0);
+            });
+        }
+
+        // iOS voice input debouncing state
+        let voiceBuffer = '';
+        const VOICE_DEBOUNCE_MS = 150;
+
+        // Helper to apply modifiers and send input
+        const processAndSend = (data: string) => {
+            let processed = data;
+
+            // Apply modifiers for single printable ASCII characters
+            if (data.length === 1 && data.charCodeAt(0) >= 32 && data.charCodeAt(0) < 127) {
+                processed = applyModifiers(data, modifiers);
+            }
+
+            connectionService.sendInput(tab, processed);
+            callbacks.onInputSend(processed);
+        };
+
         // Handle terminal input
         terminal.onData((data: string) => {
             if (terminal.hasSelection()) {
                 terminal.clearSelection();
             }
 
-            let processed = data;
+            // On iOS, debounce multi-character input to handle voice dictation
+            // Voice recognition sends interim results that we need to deduplicate
+            if (isIOS && data.length > 1) {
+                // Buffer the latest voice input and wait for it to stabilize
+                voiceBuffer = data;
 
-            // Apply modifiers
-            if (data.length === 1 && data.charCodeAt(0) >= 32 && data.charCodeAt(0) < 127) {
-                const ctrlActive = modifiers.ctrl === 'sticky' || modifiers.ctrl === 'locked';
-                const altActive = modifiers.alt === 'sticky' || modifiers.alt === 'locked';
+                const existingTimer = voiceTimers.get(tab.id);
+                if (existingTimer) {
+                    clearTimeout(existingTimer);
+                }
 
-                if (ctrlActive || altActive) {
-                    let char = data;
-
-                    if (ctrlActive) {
-                        const code = char.toUpperCase().charCodeAt(0);
-                        if (code >= 65 && code <= 90) {
-                            char = String.fromCharCode(code - 64);
-                        }
+                const timer = setTimeout(() => {
+                    if (voiceBuffer) {
+                        processAndSend(voiceBuffer);
+                        voiceBuffer = '';
                     }
+                    voiceTimers.delete(tab.id);
+                }, VOICE_DEBOUNCE_MS);
+                voiceTimers.set(tab.id, timer);
 
-                    if (altActive) {
-                        char = '\x1b' + char;
-                    }
+                return; // Don't send immediately
+            }
 
-                    processed = char;
+            // Single character or non-iOS: send immediately
+            // Also flush any pending voice buffer if user switches to keyboard
+            const pendingTimer = voiceTimers.get(tab.id);
+            if (isIOS && pendingTimer) {
+                clearTimeout(pendingTimer);
+                voiceTimers.delete(tab.id);
+                if (voiceBuffer) {
+                    processAndSend(voiceBuffer);
+                    voiceBuffer = '';
                 }
             }
 
-            connectionService.sendInput(tab, processed);
-            callbacks.onInputSend(processed);
+            processAndSend(data);
         });
 
         // Auto-copy on selection
@@ -373,6 +408,14 @@ export function createTabService(
         // Cleanup
         connectionService.disconnect(tab);
         connectionService.cleanupTabState(tab.id);
+
+        // Clear any pending voice timer
+        const voiceTimer = voiceTimers.get(tab.id);
+        if (voiceTimer) {
+            clearTimeout(voiceTimer);
+            voiceTimers.delete(tab.id);
+        }
+
         tab.term.dispose();
         tab.container.remove();
 
@@ -467,6 +510,8 @@ export function createTabService(
             // Note: for new tabs, opacity is managed by ConnectionService after buffer flush
             tab.term.focus();
             requestAnimationFrame(() => {
+                // Flush pending writes before resize to prevent buffer corruption
+                connectionService.flushWriteBuffer(tab);
                 tab.fitAddon.fit();
                 // If already visible (reconnect/switch back), scroll to bottom
                 if (tab.container.style.opacity !== '0') {

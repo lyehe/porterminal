@@ -1,6 +1,5 @@
 """Pure domain layer - no infrastructure dependencies."""
 
-# Value Objects
 # Entities
 from .entities import (
     CLEAR_SCREEN_SEQUENCE,
@@ -23,7 +22,6 @@ from .ports import (
 # Services
 from .services import (
     Clock,
-    EnvironmentSanitizer,
     SessionLimitChecker,
     SessionLimitConfig,
     SessionLimitResult,
@@ -33,13 +31,10 @@ from .services import (
     TokenBucketRateLimiter,
 )
 from .values import (
-    DEFAULT_BLOCKED_VARS,
-    DEFAULT_SAFE_VARS,
     MAX_COLS,
     MAX_ROWS,
     MIN_COLS,
     MIN_ROWS,
-    EnvironmentRules,
     RateLimitConfig,
     SessionId,
     ShellCommand,
@@ -60,9 +55,6 @@ __all__ = [
     "TabId",
     "ShellCommand",
     "RateLimitConfig",
-    "EnvironmentRules",
-    "DEFAULT_SAFE_VARS",
-    "DEFAULT_BLOCKED_VARS",
     # Entities
     "Session",
     "MAX_SESSIONS_PER_USER",
@@ -75,7 +67,6 @@ __all__ = [
     # Services
     "TokenBucketRateLimiter",
     "Clock",
-    "EnvironmentSanitizer",
     "SessionLimitChecker",
     "SessionLimitConfig",
     "SessionLimitResult",

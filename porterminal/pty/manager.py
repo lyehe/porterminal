@@ -5,6 +5,8 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from porterminal.domain.values import MAX_COLS, MAX_ROWS, MIN_COLS, MIN_ROWS
+
 from .env import build_safe_environment
 from .protocol import PTYBackend
 
@@ -43,8 +45,8 @@ class SecurePTYManager:
         """
         self._backend = backend
         self.shell_config = shell_config
-        self.cols = max(40, min(cols, 500))
-        self.rows = max(10, min(rows, 200))
+        self.cols = max(MIN_COLS, min(cols, MAX_COLS))
+        self.rows = max(MIN_ROWS, min(rows, MAX_ROWS))
         self.cwd = cwd
         self._closed = False
 
@@ -133,8 +135,8 @@ class SecurePTYManager:
         if self._closed:
             return
 
-        cols = max(40, min(cols, 500))
-        rows = max(10, min(rows, 200))
+        cols = max(MIN_COLS, min(cols, MAX_COLS))
+        rows = max(MIN_ROWS, min(rows, MAX_ROWS))
 
         try:
             self._backend.resize(rows, cols)

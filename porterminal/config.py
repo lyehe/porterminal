@@ -7,6 +7,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
+from porterminal.domain.values import MAX_COLS, MAX_ROWS, MIN_COLS, MIN_ROWS
 from porterminal.infrastructure.config import ShellDetector
 
 
@@ -43,8 +44,8 @@ class TerminalConfig(BaseModel):
     """Terminal configuration."""
 
     default_shell: str = ""
-    cols: int = Field(default=120, ge=40, le=500)
-    rows: int = Field(default=30, ge=10, le=200)
+    cols: int = Field(default=120, ge=MIN_COLS, le=MAX_COLS)
+    rows: int = Field(default=30, ge=MIN_ROWS, le=MAX_ROWS)
     shells: list[ShellConfig] = Field(default_factory=list)
 
     def get_shell(self, shell_id: str) -> ShellConfig | None:

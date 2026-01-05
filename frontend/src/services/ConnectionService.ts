@@ -44,6 +44,9 @@ export interface ConnectionService {
 
     /** Set auth password for connections (null to clear) */
     setAuthPassword(password: string | null): void;
+
+    /** Flush pending writes immediately (call before resize operations) */
+    flushWriteBuffer(tab: Tab): void;
 }
 
 /** Internal state for each tab's connection */
@@ -62,16 +65,20 @@ const REJECTION_CODES = {
     SESSION_ENDED: 4005,
 } as const;
 
-/**
- * Filter terminal response sequences that shouldn't be sent to PTY.
- * xterm.js generates these in response to queries (DA, cursor position).
- * If sent to PTY, they get echoed back and displayed as garbage.
- */
-const TERMINAL_RESPONSE_PATTERN = /\x1b\[\?[\d;]*c|\x1b\[[\d;]*R/g;
+// Buffer size limits to prevent memory exhaustion
+const MAX_EARLY_BUFFER_SIZE = 1024 * 1024;  // 1MB
+const MAX_WRITE_BUFFER_SIZE = 256 * 1024;   // 256KB
 
-function filterTerminalResponses(data: string): string {
-    if (!data.includes('\x1b[')) return data;
-    return data.replace(TERMINAL_RESPONSE_PATTERN, '');
+/** Calculate total size of string buffer */
+function getBufferSize(buffer: string[]): number {
+    return buffer.reduce((acc, s) => acc + s.length, 0);
+}
+
+/** Trim buffer from front until under size limit */
+function trimBuffer(buffer: string[], maxSize: number): void {
+    while (buffer.length > 1 && getBufferSize(buffer) > maxSize) {
+        buffer.shift();
+    }
 }
 
 /**
@@ -133,6 +140,25 @@ export function createConnectionService(
     }
 
     /**
+     * Flush pending writes immediately to prevent buffer corruption during resize.
+     */
+    function flushPendingWrites(tab: Tab): void {
+        const state = tabStates.get(tab.id);
+        if (!state) return;
+
+        if (state.rafHandle !== null) {
+            cancelAnimationFrame(state.rafHandle);
+            state.rafHandle = null;
+        }
+
+        if (state.writeBuffer.length > 0) {
+            const combined = state.writeBuffer.join('');
+            state.writeBuffer = [];
+            tab.term.write(combined);
+        }
+    }
+
+    /**
      * Sync terminal size to match server dimensions.
      * Called when server sends dimensions (session_info or resize_sync).
      * This ensures all clients sharing a session have consistent dimensions.
@@ -140,6 +166,8 @@ export function createConnectionService(
     function syncTerminalSize(tab: Tab, cols: number, rows: number): void {
         // Only resize if dimensions differ
         if (tab.term.cols !== cols || tab.term.rows !== rows) {
+            // Flush pending writes before resize to prevent buffer corruption
+            flushPendingWrites(tab);
             console.log(`Syncing terminal size to ${cols}x${rows} (was ${tab.term.cols}x${tab.term.rows})`);
             tab.term.resize(cols, rows);
         }
@@ -257,14 +285,13 @@ export function createConnectionService(
                             // Terminal starts with opacity:0 (set in TabService).
                             // Write buffer while hidden, then show after rendering completes.
                             tab.term.write(combined, () => {
-                                // Wait for xterm.js to fully render before showing.
-                                // Use setTimeout to yield, then rAF for the render frame.
-                                setTimeout(() => {
+                                // Double rAF: first frame for xterm.js render, second for paint
+                                requestAnimationFrame(() => {
                                     requestAnimationFrame(() => {
                                         tab.term.scrollToBottom();
                                         tab.container.style.opacity = '';
                                     });
-                                }, 0);
+                                });
                             });
                         } else {
                             // No buffer to flush - show terminal immediately
@@ -280,10 +307,12 @@ export function createConnectionService(
                     const text = textDecoder.decode(event.data);
                     if (state.state === 'connecting') {
                         state.earlyBuffer.push(text);
+                        trimBuffer(state.earlyBuffer, MAX_EARLY_BUFFER_SIZE);
                     } else if (state.state === 'connected') {
                         // Batch writes within animation frame to prevent flickering
                         // when backend sends rapid cursor/text updates
                         state.writeBuffer.push(text);
+                        trimBuffer(state.writeBuffer, MAX_WRITE_BUFFER_SIZE);
                         scheduleFlush(tab, state);
                     }
                 } else {
@@ -313,6 +342,16 @@ export function createConnectionService(
                                 break;
                             case 'error':
                                 console.error('Server error:', msg.message);
+                                // Flush pending writes first to maintain message ordering
+                                if (state.writeBuffer.length > 0) {
+                                    const pending = state.writeBuffer.join('');
+                                    state.writeBuffer = [];
+                                    if (state.rafHandle !== null) {
+                                        cancelAnimationFrame(state.rafHandle);
+                                        state.rafHandle = null;
+                                    }
+                                    tab.term.write(pending);
+                                }
                                 tab.term.write(`\r\n\x1b[31mError: ${msg.message}\x1b[0m\r\n`);
                                 eventBus.emit('connection:error', { tabId: tab.id, error: msg.message });
                                 break;
@@ -387,10 +426,8 @@ export function createConnectionService(
             if (state.state !== 'connected' || !tab.ws || tab.ws.readyState !== WebSocket.OPEN) {
                 return;
             }
-            // Filter terminal response sequences before sending
-            const filtered = filterTerminalResponses(data);
-            if (!filtered) return;
-            tab.ws.send(textEncoder.encode(filtered));
+            // Terminal response filtering handled by backend
+            tab.ws.send(textEncoder.encode(data));
         },
 
         sendResize(tab: Tab, cols: number, rows: number): void {
@@ -421,6 +458,10 @@ export function createConnectionService(
 
         setAuthPassword(password: string | null): void {
             authPassword = password;
+        },
+
+        flushWriteBuffer(tab: Tab): void {
+            flushPendingWrites(tab);
         },
     };
 

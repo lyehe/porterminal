@@ -3,7 +3,9 @@
 import asyncio
 import logging
 import re
+import time
 from contextlib import suppress
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,6 +20,20 @@ from porterminal.domain import (
 from ..ports.connection_port import ConnectionPort
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ConnectionFlowState:
+    """Per-connection flow control state.
+
+    Implements xterm.js recommended watermark-based flow control.
+    When client sends 'pause', we stop sending to that connection.
+    When client sends 'ack', we resume sending.
+    """
+
+    paused: bool = False
+    pause_time: float | None = None
+
 
 # Terminal response sequences that should NOT be written to PTY.
 # These are responses from the terminal emulator to queries from applications.
@@ -36,6 +52,7 @@ OUTPUT_BATCH_INTERVAL = 0.016  # ~60Hz output (batch writes for smoother renderi
 OUTPUT_BATCH_MAX_SIZE = 16384  # Flush if batch exceeds 16KB
 INTERACTIVE_THRESHOLD = 64  # Bytes - flush immediately for small interactive data
 MAX_INPUT_SIZE = 4096
+FLOW_PAUSE_TIMEOUT = 15.0  # seconds - auto-resume if client stops sending ACKs
 
 
 class AsyncioClock:
@@ -65,6 +82,8 @@ class TerminalService:
         self._session_read_tasks: dict[str, asyncio.Task[None]] = {}
         # Per-session locks to prevent race between buffer replay and broadcast
         self._session_locks: dict[str, asyncio.Lock] = {}
+        # Per-connection flow control state (watermark-based backpressure)
+        self._flow_state: dict[ConnectionPort, ConnectionFlowState] = {}
 
     # -------------------------------------------------------------------------
     # Multi-client connection tracking
@@ -85,10 +104,15 @@ class TerminalService:
         if session_id not in self._session_connections:
             self._session_connections[session_id] = set()
         self._session_connections[session_id].add(connection)
+        # Initialize flow control state for this connection
+        self._flow_state[connection] = ConnectionFlowState()
         return len(self._session_connections[session_id])
 
     def _unregister_connection(self, session_id: str, connection: ConnectionPort) -> int:
         """Unregister a connection. Returns remaining count."""
+        # Clean up flow control state
+        self._flow_state.pop(connection, None)
+
         if session_id not in self._session_connections:
             return 0
         self._session_connections[session_id].discard(connection)
@@ -98,12 +122,27 @@ class TerminalService:
         return count
 
     async def _send_to_connections(self, connections: list[ConnectionPort], data: bytes) -> None:
-        """Send data to a list of connections (used with pre-snapshotted list)."""
+        """Send data to connections, respecting flow control.
+
+        Skips paused connections (client overwhelmed) but auto-resumes
+        after FLOW_PAUSE_TIMEOUT to prevent permanent pause from dead clients.
+        """
+        current_time = time.time()
         for conn in connections:
+            flow = self._flow_state.get(conn)
+            if flow and flow.paused:
+                # Check timeout - auto-resume if client stopped responding
+                if flow.pause_time and (current_time - flow.pause_time) > FLOW_PAUSE_TIMEOUT:
+                    flow.paused = False
+                    flow.pause_time = None
+                    logger.debug("Auto-resumed paused connection after timeout")
+                else:
+                    continue  # Skip paused connection
+
             try:
                 await conn.send_output(data)
-            except Exception:
-                pass  # Connection cleanup handled elsewhere
+            except Exception as e:
+                logger.debug("Failed to send output to connection: %s", e)
 
     async def _broadcast_output(self, session_id: str, data: bytes) -> None:
         """Broadcast PTY output to all connections for a session.
@@ -415,6 +454,20 @@ class TerminalService:
             session.touch(datetime.now(UTC))
         elif msg_type == "pong":
             session.touch(datetime.now(UTC))
+        elif msg_type == "pause":
+            # Client is overwhelmed - stop sending data to this connection
+            flow = self._flow_state.get(connection)
+            if flow:
+                flow.paused = True
+                flow.pause_time = time.time()
+                logger.debug("Connection paused (client overwhelmed) session_id=%s", session.id)
+        elif msg_type == "ack":
+            # Client caught up - resume sending data
+            flow = self._flow_state.get(connection)
+            if flow and flow.paused:
+                flow.paused = False
+                flow.pause_time = None
+                logger.debug("Connection resumed (client caught up) session_id=%s", session.id)
         else:
             logger.warning("Unknown message type session_id=%s type=%s", session.id, msg_type)
 

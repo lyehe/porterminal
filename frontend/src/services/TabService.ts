@@ -245,7 +245,7 @@ export function createTabService(
                 brightCyan: '#29b8db',
                 brightWhite: '#e5e5e5',
             },
-            scrollback: 5000,
+            scrollback: 1500,  // Reduced from 5000 for mobile performance
             convertEol: true,
             allowProposedApi: true,
             rightClickSelectsWord: true,
@@ -510,8 +510,6 @@ export function createTabService(
             // Note: for new tabs, opacity is managed by ConnectionService after buffer flush
             tab.term.focus();
             requestAnimationFrame(() => {
-                // Flush pending writes before resize to prevent buffer corruption
-                connectionService.flushWriteBuffer(tab);
                 tab.fitAddon.fit();
                 // If already visible (reconnect/switch back), scroll to bottom
                 if (tab.container.style.opacity !== '0') {

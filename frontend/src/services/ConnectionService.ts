@@ -44,9 +44,6 @@ export interface ConnectionService {
 
     /** Set auth password for connections (null to clear) */
     setAuthPassword(password: string | null): void;
-
-    /** Flush pending writes immediately (call before resize operations) */
-    flushWriteBuffer(tab: Tab): void;
 }
 
 /** Internal state for each tab's connection */
@@ -54,8 +51,10 @@ interface TabConnectionState {
     state: ConnectionState;
     pendingReconnect: ReturnType<typeof setTimeout> | null;
     earlyBuffer: string[];
-    writeBuffer: string[];      // Buffer for rAF batching during connected state
-    rafHandle: number | null;   // requestAnimationFrame handle for batched writes
+    // Watermark-based flow control (xterm.js recommended approach)
+    watermark: number;        // Bytes queued in xterm.js render pipeline (written but not yet rendered)
+    connectionGen: number;    // Detect stale callbacks after reconnect
+    pauseSent: boolean;       // Track if we've sent pause to server
 }
 
 // Server rejection codes that should NOT trigger reconnect
@@ -65,9 +64,13 @@ const REJECTION_CODES = {
     SESSION_ENDED: 4005,
 } as const;
 
-// Buffer size limits to prevent memory exhaustion
+// Buffer size limit for early buffer (data received before connected)
 const MAX_EARLY_BUFFER_SIZE = 1024 * 1024;  // 1MB
-const MAX_WRITE_BUFFER_SIZE = 256 * 1024;   // 256KB
+
+// Watermark-based flow control constants (from xterm.js flow control guide)
+// Keep HIGH_WATERMARK <= 500KB for responsive keystrokes
+const HIGH_WATERMARK = 100000;   // 100KB - send pause to server when exceeded
+const LOW_WATERMARK = 10000;     // 10KB - send ACK to server when below
 
 /** Calculate total size of string buffer */
 function getBufferSize(buffer: string[]): number {
@@ -106,8 +109,9 @@ export function createConnectionService(
                 state: 'disconnected',
                 pendingReconnect: null,
                 earlyBuffer: [],
-                writeBuffer: [],
-                rafHandle: null,
+                watermark: 0,
+                connectionGen: 0,
+                pauseSent: false,
             });
         }
         return tabStates.get(tabId)!;
@@ -122,39 +126,55 @@ export function createConnectionService(
     }
 
     /**
-     * Schedule a batched write to the terminal.
-     * Collects all data within an animation frame and flushes in single write.
-     * This prevents flickering when backend sends rapid cursor/text updates.
+     * Write data to terminal with watermark-based flow control.
+     *
+     * This implements the xterm.js recommended flow control pattern:
+     * 1. Track watermark (bytes written - bytes processed)
+     * 2. When watermark exceeds HIGH_WATERMARK, send 'pause' to server
+     * 3. When watermark drops below LOW_WATERMARK, send 'ack' to server
+     *
+     * The server should stop sending data when paused and resume on ack.
+     * This prevents data from arriving faster than xterm.js can process.
      */
-    function scheduleFlush(tab: Tab, state: TabConnectionState): void {
-        if (state.rafHandle !== null) return;  // Already scheduled
+    function writeWithFlowControl(tab: Tab, state: TabConnectionState, data: string): void {
+        const currentGen = state.connectionGen;
+        const dataLength = data.length;
 
-        state.rafHandle = requestAnimationFrame(() => {
-            state.rafHandle = null;
-            if (state.writeBuffer.length === 0) return;
+        // Update watermark (bytes in flight)
+        state.watermark += dataLength;
 
-            const combined = state.writeBuffer.join('');
-            state.writeBuffer = [];
-            tab.term.write(combined);
+        // Write to xterm.js with callback for flow control
+        tab.term.write(data, () => {
+            // Ignore stale callbacks from previous connections
+            if (currentGen !== state.connectionGen) return;
+
+            // Decrease watermark - this data has been processed
+            state.watermark = Math.max(0, state.watermark - dataLength);
+
+            // Send ACK to resume server if watermark dropped below threshold
+            if (state.pauseSent && state.watermark < LOW_WATERMARK) {
+                try {
+                    if (tab.ws?.readyState === WebSocket.OPEN) {
+                        tab.ws.send(JSON.stringify({ type: 'ack' }));
+                        state.pauseSent = false;
+                    }
+                } catch (e) {
+                    console.warn('Failed to send flow control ack:', e);
+                    state.pauseSent = false;  // Reset to allow retry on next callback
+                }
+            }
         });
-    }
 
-    /**
-     * Flush pending writes immediately to prevent buffer corruption during resize.
-     */
-    function flushPendingWrites(tab: Tab): void {
-        const state = tabStates.get(tab.id);
-        if (!state) return;
-
-        if (state.rafHandle !== null) {
-            cancelAnimationFrame(state.rafHandle);
-            state.rafHandle = null;
-        }
-
-        if (state.writeBuffer.length > 0) {
-            const combined = state.writeBuffer.join('');
-            state.writeBuffer = [];
-            tab.term.write(combined);
+        // Send pause to server if watermark exceeds threshold
+        if (!state.pauseSent && state.watermark > HIGH_WATERMARK) {
+            try {
+                if (tab.ws?.readyState === WebSocket.OPEN) {
+                    tab.ws.send(JSON.stringify({ type: 'pause' }));
+                    state.pauseSent = true;
+                }
+            } catch (e) {
+                console.warn('Failed to send flow control pause:', e);
+            }
         }
     }
 
@@ -166,22 +186,12 @@ export function createConnectionService(
     function syncTerminalSize(tab: Tab, cols: number, rows: number): void {
         // Only resize if dimensions differ
         if (tab.term.cols !== cols || tab.term.rows !== rows) {
-            // Flush pending writes before resize to prevent buffer corruption
-            flushPendingWrites(tab);
             console.log(`Syncing terminal size to ${cols}x${rows} (was ${tab.term.cols}x${tab.term.rows})`);
             tab.term.resize(cols, rows);
         }
     }
 
     function cleanupWebSocket(tab: Tab): void {
-        // Cancel any pending rAF flush
-        const state = tabStates.get(tab.id);
-        if (state && state.rafHandle !== null) {
-            cancelAnimationFrame(state.rafHandle);
-            state.rafHandle = null;
-            state.writeBuffer = [];
-        }
-
         if (tab.ws) {
             tab.ws.onopen = null;
             tab.ws.onmessage = null;
@@ -227,6 +237,10 @@ export function createConnectionService(
 
             state.state = 'connecting';
             state.earlyBuffer = [];
+            // Reset flow control state for new connection
+            state.connectionGen++;
+            state.watermark = 0;
+            state.pauseSent = false;
 
             const url = buildWebSocketUrl(tab.tabId, skipBuffer);
             const ws = new WebSocket(url);
@@ -309,11 +323,8 @@ export function createConnectionService(
                         state.earlyBuffer.push(text);
                         trimBuffer(state.earlyBuffer, MAX_EARLY_BUFFER_SIZE);
                     } else if (state.state === 'connected') {
-                        // Batch writes within animation frame to prevent flickering
-                        // when backend sends rapid cursor/text updates
-                        state.writeBuffer.push(text);
-                        trimBuffer(state.writeBuffer, MAX_WRITE_BUFFER_SIZE);
-                        scheduleFlush(tab, state);
+                        // Write with watermark-based flow control
+                        writeWithFlowControl(tab, state, text);
                     }
                 } else {
                     // JSON control messages
@@ -342,16 +353,6 @@ export function createConnectionService(
                                 break;
                             case 'error':
                                 console.error('Server error:', msg.message);
-                                // Flush pending writes first to maintain message ordering
-                                if (state.writeBuffer.length > 0) {
-                                    const pending = state.writeBuffer.join('');
-                                    state.writeBuffer = [];
-                                    if (state.rafHandle !== null) {
-                                        cancelAnimationFrame(state.rafHandle);
-                                        state.rafHandle = null;
-                                    }
-                                    tab.term.write(pending);
-                                }
                                 tab.term.write(`\r\n\x1b[31mError: ${msg.message}\x1b[0m\r\n`);
                                 eventBus.emit('connection:error', { tabId: tab.id, error: msg.message });
                                 break;
@@ -448,20 +449,12 @@ export function createConnectionService(
         },
 
         cleanupTabState(tabId: number): void {
-            const state = tabStates.get(tabId);
-            if (state && state.rafHandle !== null) {
-                cancelAnimationFrame(state.rafHandle);
-            }
             cancelPendingReconnect(tabId);
             tabStates.delete(tabId);
         },
 
         setAuthPassword(password: string | null): void {
             authPassword = password;
-        },
-
-        flushWriteBuffer(tab: Tab): void {
-            flushPendingWrites(tab);
         },
     };
 

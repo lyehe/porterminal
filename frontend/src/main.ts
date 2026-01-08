@@ -255,14 +255,15 @@ async function init(): Promise<void> {
             focusTerminal: () => {
                 tabService.focusTerminal();
             },
-            scheduleFitAfterFontChange: () => {
+            scheduleFitAfterFontChange: (wasAtBottom: boolean) => {
                 const tab = tabService.activeTab;
                 if (tab) {
-                    setTimeout(() => {
-                        // Flush pending writes before resize to prevent buffer corruption
-                        connectionService.flushWriteBuffer(tab);
-                        tab.fitAddon.fit();
-                    }, 50);
+                    tab.fitAddon.fit();
+
+                    // Restore scroll position after fit if user was at bottom
+                    if (wasAtBottom) {
+                        requestAnimationFrame(() => tab.term.scrollToBottom());
+                    }
                 }
             },
         }
@@ -403,10 +404,6 @@ async function init(): Promise<void> {
         () => tabService.activeTab?.term ?? null,
         () => {
             const tab = tabService.activeTab;
-            if (tab) connectionService.flushWriteBuffer(tab);
-        },
-        () => {
-            const tab = tabService.activeTab;
             if (tab) {
                 // Force xterm.js to repaint all rows from buffer
                 tab.term.refresh(0, tab.term.rows - 1);
@@ -479,7 +476,6 @@ async function init(): Promise<void> {
         resizeDebounce = setTimeout(() => {
             const tab = tabService.activeTab;
             if (tab) {
-                connectionService.flushWriteBuffer(tab);
                 tab.fitAddon.fit();
             }
         }, 50);
@@ -490,7 +486,6 @@ async function init(): Promise<void> {
         setTimeout(() => {
             const tab = tabService.activeTab;
             if (tab) {
-                connectionService.flushWriteBuffer(tab);
                 tab.fitAddon.fit();
             }
         }, 100);
@@ -508,7 +503,6 @@ async function init(): Promise<void> {
             viewportTimeout = setTimeout(() => {
                 const tab = tabService.activeTab;
                 if (tab) {
-                    connectionService.flushWriteBuffer(tab);
                     tab.fitAddon.fit();
                 }
             }, 50);
@@ -826,15 +820,11 @@ function setupHelpButton(): void {
 function setupTextViewButton(
     textViewOverlay: ReturnType<typeof createTextViewOverlay>,
     getTerminal: () => import('@xterm/xterm').Terminal | null,
-    flushWriteBuffer: () => void,
     refreshTerminal: () => void
 ): void {
     setupTapButton('btn-textview', () => {
         const term = getTerminal();
         if (term) {
-            // Flush pending writes before reading terminal buffer
-            // This ensures getTerminalText() sees the most up-to-date state
-            flushWriteBuffer();
             textViewOverlay.show(term);
         }
     }, { preventDefault: false });

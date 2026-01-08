@@ -29,8 +29,8 @@ export interface GestureCallbacks {
     showCopyButton: (text: string, x: number, y: number) => void;
     /** Focus terminal */
     focusTerminal: () => void;
-    /** Schedule resize after font change */
-    scheduleFitAfterFontChange: () => void;
+    /** Schedule resize after font change, with viewport restoration if wasAtBottom */
+    scheduleFitAfterFontChange: (wasAtBottom: boolean) => void;
 }
 
 export interface GestureRecognizer {
@@ -76,6 +76,22 @@ export function createGestureRecognizer(
     let scrollVelocity = 0;
     let momentumAnimationId: number | null = null;
     let attachedContainer: HTMLElement | null = null;
+    let pinchTargetFontSize = 14;
+    let pinchContainer: HTMLElement | null = null;
+    let pinchStartedAtBottom = false;
+
+    /** Reset pinch zoom state and clear CSS transform */
+    function resetPinchState(): void {
+        if (pinchContainer) {
+            pinchContainer.style.transform = '';
+            pinchContainer.style.transformOrigin = '';
+        }
+        pinchContainer = null;
+        pinchStartedAtBottom = false;
+        pinchTargetFontSize = 14;
+        state.initialDistance = 0;
+        state.fontSizeChanged = false;
+    }
 
     function stopMomentumScroll(): void {
         if (momentumAnimationId !== null) {
@@ -126,9 +142,11 @@ export function createGestureRecognizer(
         touchstart?: (e: TouchEvent) => void;
         touchmove?: (e: TouchEvent) => void;
         touchend?: (e: TouchEvent) => void;
+        touchcancel?: (e: TouchEvent) => void;
         mousedown?: (e: MouseEvent) => void;
         mousemove?: (e: MouseEvent) => void;
         mouseup?: (e: MouseEvent) => void;
+        click?: (e: MouseEvent) => void;
     } = {};
 
     function clearLongPressTimer(): void {
@@ -357,6 +375,7 @@ export function createGestureRecognizer(
                 isScrolling = false;
                 scrollAccumulator = 0;
                 touchGestureActive = false;
+                resetPinchState();
             };
 
             // Touch events (for pinch-zoom only)
@@ -375,6 +394,20 @@ export function createGestureRecognizer(
 
                     const term = callbacks.getActiveTerminal();
                     state.initialFontSize = term?.options.fontSize ?? 14;
+                    pinchTargetFontSize = state.initialFontSize;
+
+                    // Track if user was at bottom (within 2 lines tolerance for reflow variance)
+                    if (term) {
+                        const buffer = term.buffer.active;
+                        pinchStartedAtBottom = buffer.baseY - buffer.viewportY <= 2;
+                    } else {
+                        pinchStartedAtBottom = false;
+                    }
+
+                    // Get container reference for CSS transform
+                    if (term?.element) {
+                        pinchContainer = term.element as HTMLElement;
+                    }
                 }
             };
 
@@ -384,31 +417,49 @@ export function createGestureRecognizer(
 
                     const t0 = e.touches[0]!;
                     const t1 = e.touches[1]!;
-                    const dx = t0.clientX - t1.clientX;
-                    const dy = t0.clientY - t1.clientY;
-                    const distance = Math.hypot(dx, dy);
+                    const distance = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
                     const scale = distance / state.initialDistance;
 
+                    // Calculate target font size (clamped)
                     let newSize = Math.round(state.initialFontSize * scale);
                     newSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, newSize));
 
-                    const term = callbacks.getActiveTerminal();
-                    if (term && newSize !== term.options.fontSize) {
-                        term.options.fontSize = newSize;
-                        // Force re-render to prevent text duplication artifacts
-                        term.refresh(0, term.rows - 1);
+                    // Calculate effective scale (accounts for clamping)
+                    const effectiveScale = newSize / state.initialFontSize;
+
+                    // Apply CSS transform for visual zoom (no buffer reflow)
+                    if (pinchContainer) {
+                        pinchContainer.style.transformOrigin = 'center center';
+                        pinchContainer.style.transform = `scale(${effectiveScale})`;
+                    }
+
+                    if (newSize !== pinchTargetFontSize) {
+                        pinchTargetFontSize = newSize;
                         state.fontSizeChanged = true;
-                        eventBus.emit('gesture:pinch', { scale });
+                        eventBus.emit('gesture:pinch', { scale: effectiveScale });
                     }
                 }
             };
 
             handlers.touchend = () => {
+                // Capture scroll state before reset
+                const wasAtBottom = pinchStartedAtBottom;
+
+                // Apply actual font size change if needed
                 if (state.fontSizeChanged) {
-                    callbacks.scheduleFitAfterFontChange();
-                    state.fontSizeChanged = false;
+                    const term = callbacks.getActiveTerminal();
+                    if (term) {
+                        term.options.fontSize = pinchTargetFontSize;
+                        callbacks.scheduleFitAfterFontChange(wasAtBottom);
+                    }
                 }
-                state.initialDistance = 0;
+
+                resetPinchState();
+            };
+
+            // Handle touch cancellation (e.g., incoming call, OS gesture conflict)
+            handlers.touchcancel = () => {
+                resetPinchState();
             };
 
             // Block mouse events during touch
@@ -433,6 +484,13 @@ export function createGestureRecognizer(
                 }
             };
 
+            handlers.click = (e: MouseEvent) => {
+                if (touchGestureActive) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            };
+
             // Attach all handlers
             container.addEventListener('pointerdown', handlers.pointerdown, { passive: false, capture: true });
             container.addEventListener('pointermove', handlers.pointermove, { passive: false, capture: true });
@@ -441,9 +499,11 @@ export function createGestureRecognizer(
             container.addEventListener('touchstart', handlers.touchstart, { passive: false, capture: true });
             container.addEventListener('touchmove', handlers.touchmove, { passive: false, capture: true });
             container.addEventListener('touchend', handlers.touchend, { passive: false, capture: true });
+            container.addEventListener('touchcancel', handlers.touchcancel, { passive: false, capture: true });
             container.addEventListener('mousedown', handlers.mousedown, { passive: false, capture: true });
             container.addEventListener('mousemove', handlers.mousemove, { passive: false, capture: true });
             container.addEventListener('mouseup', handlers.mouseup, { passive: false, capture: true });
+            container.addEventListener('click', handlers.click, { passive: false, capture: true });
         },
 
         detach(): void {
@@ -470,6 +530,9 @@ export function createGestureRecognizer(
             if (handlers.touchend) {
                 attachedContainer.removeEventListener('touchend', handlers.touchend, { capture: true });
             }
+            if (handlers.touchcancel) {
+                attachedContainer.removeEventListener('touchcancel', handlers.touchcancel, { capture: true });
+            }
             if (handlers.mousedown) {
                 attachedContainer.removeEventListener('mousedown', handlers.mousedown, { capture: true });
             }
@@ -478,6 +541,9 @@ export function createGestureRecognizer(
             }
             if (handlers.mouseup) {
                 attachedContainer.removeEventListener('mouseup', handlers.mouseup, { capture: true });
+            }
+            if (handlers.click) {
+                attachedContainer.removeEventListener('click', handlers.click, { capture: true });
             }
 
             attachedContainer = null;

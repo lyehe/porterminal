@@ -35,9 +35,10 @@ So I built something simpler: **run a command, scan a QR, start typing.**
 ## Features
 
 - **One command, instant access** - No SSH, no port forwarding, no config files. Cloudflare tunnel + QR code.
-- **Actually usable on mobile** - Essential buttons and gestures for everyday terminal use.
+- **Actually usable on mobile** - Touch-optimized with momentum scrolling, pinch-to-zoom, swipe gestures, and modifier keys (Ctrl, Alt).
+- **Full terminal apps** - vim, htop, less, tmux all work correctly with proper alt-screen buffer handling.
 - **Persistent multi-tab sessions** - Sessions survive disconnects. Close the browser, switch networks, reconnect from another device—your shell and running processes are still there. Multiple devices can view the same session simultaneously.
-- **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish, and any shell via `$SHELL`). Auto-detects your shells.
+- **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish, Nushell, and any shell via `$SHELL`). Auto-detects your shells.
 
 ## Install
 
@@ -62,22 +63,47 @@ Requires Python 3.12+ and [cloudflared](https://developers.cloudflare.com/cloudf
 ```bash
 ptn                    # Start in current directory
 ptn ~/projects/myapp   # Start in specific folder
-ptn --no-tunnel        # Local network only
-ptn -b                 # Run in background
-ptn -p                 # Enable password protection
-ptn -dp                # Toggle default password requirement in config
-ptn -v                 # Verbose startup logs
-ptn --init             # Create .ptn/ptn.yaml config
-ptn -V                 # Show version
-ptn -U                 # Update to latest version
-ptn --check-update     # Check if update available
 ```
+
+| Flag | Description |
+|------|-------------|
+| `-n, --no-tunnel` | Local network only (no Cloudflare tunnel) |
+| `-b, --background` | Run in background and return immediately |
+| `-p, --password` | Prompt for password to protect this session |
+| `-dp, --default-password` | Toggle password requirement in config (on/off) |
+| `-v, --verbose` | Show detailed startup logs |
+| `-i, --init` | Create `.ptn/ptn.yaml` config in current directory |
+| `-u, --update` | Update to the latest version |
+| `-c, --check-update` | Check if a newer version is available |
+| `-V, --version` | Show version |
+
+## Mobile Gestures
+
+| Gesture | Action |
+|---------|--------|
+| **Tap** | Focus terminal, clear selection |
+| **Long-press** | Start text selection |
+| **Double-tap** | Select word |
+| **Swipe left/right** | Arrow keys (← →) |
+| **Scroll** | Momentum scrolling with physics |
+| **Pinch** | Zoom text (10-24px) |
+
+**Modifier keys** (Ctrl, Alt, Shift): Tap once for sticky (one keystroke), double-tap for lock.
 
 ## Configuration
 
 Run `ptn --init` to create a starter config, or create `ptn.yaml` manually:
 
 ```yaml
+# Terminal settings
+terminal:
+  default_shell: nu              # Default shell ID
+  shells:                        # Custom shell definitions
+    - id: nu
+      name: Nushell
+      command: nu
+      args: []
+
 # Custom buttons (appear in toolbar)
 buttons:
   - label: "claude"
@@ -114,6 +140,8 @@ Password is per-session (never saved to disk). See [docs/security.md](docs/secur
 ## Troubleshooting
 
 **Connection fails?** Cloudflare tunnel sometimes blocks connections. Restart the server (`Ctrl+C`, then `ptn`) to get a fresh tunnel URL.
+
+**Shell not detected?** Set your `$SHELL` environment variable or configure shells in `ptn.yaml`.
 
 ## Contributing
 

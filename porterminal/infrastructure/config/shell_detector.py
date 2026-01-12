@@ -21,6 +21,9 @@ class ShellDetector:
     def detect_shells(self) -> list[ShellCommand]:
         """Auto-detect available shells.
 
+        Detects platform-specific shells and includes the user's $SHELL
+        if it's not already in the list (supports any shell).
+
         Returns:
             List of detected shell configurations.
         """
@@ -38,6 +41,12 @@ class ShellDetector:
                         args=tuple(args),
                     )
                 )
+
+        # Include user's $SHELL if not already detected (supports unknown shells)
+        user_shell = self._create_shell_from_env()
+        if user_shell and not any(s.id == user_shell.id for s in shells):
+            # Insert at beginning so user's preferred shell is first
+            shells.insert(0, user_shell)
 
         return shells
 
@@ -405,16 +414,23 @@ class ShellDetector:
         """Get shell ID from user's $SHELL environment variable.
 
         Returns:
-            Shell ID if $SHELL is set and matches a known shell, None otherwise.
+            Shell ID if $SHELL is set and valid, None otherwise.
+            For unknown shells, returns the executable name as the ID.
         """
         shell_path = os.environ.get("SHELL", "")
         if not shell_path:
             return None
 
-        # Extract shell name from path (e.g., /usr/bin/fish -> fish)
-        shell_name = Path(shell_path).name.lower()
+        path = Path(shell_path)
 
-        # Map common shell names to IDs
+        # Validate shell exists
+        if not path.exists() and not shutil.which(shell_path):
+            return None
+
+        # Extract shell name from path (e.g., /usr/bin/fish -> fish)
+        shell_name = path.name.lower()
+
+        # Map common shell names to canonical IDs (for consistency)
         shell_map = {
             "bash": "bash",
             "zsh": "zsh",
@@ -422,4 +438,45 @@ class ShellDetector:
             "sh": "sh",
         }
 
-        return shell_map.get(shell_name)
+        # Return known ID or use executable name for unknown shells
+        return shell_map.get(shell_name, shell_name)
+
+    def _create_shell_from_env(self) -> ShellCommand | None:
+        """Create a ShellCommand from user's $SHELL environment variable.
+
+        Returns:
+            ShellCommand if $SHELL is set and valid, None otherwise.
+        """
+        shell_path = os.environ.get("SHELL", "")
+        if not shell_path:
+            return None
+
+        path = Path(shell_path)
+
+        # Validate shell exists
+        if not path.exists() and not shutil.which(shell_path):
+            return None
+
+        shell_name = path.name.lower()
+
+        # Known shells with their display names and args
+        known_shells = {
+            "bash": ("Bash", ["--login"]),
+            "zsh": ("Zsh", ["--login"]),
+            "fish": ("Fish", []),
+            "sh": ("Sh", []),
+        }
+
+        if shell_name in known_shells:
+            display_name, args = known_shells[shell_name]
+        else:
+            # Unknown shell - use capitalized name, no special args
+            display_name = shell_name.capitalize()
+            args = []
+
+        return ShellCommand(
+            id=shell_name,
+            name=display_name,
+            command=shell_path,
+            args=tuple(args),
+        )

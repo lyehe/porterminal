@@ -7,6 +7,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-01-12
+
+This release focuses on mobile experience improvements and robust shell support.
+
+### Added
+
+#### Shell Support
+- **Dynamic shell detection** - Supports any shell (Nushell, Xonsh, Elvish, Ion, Oil, etc.) by automatically detecting shells from the `$SHELL` environment variable ([#13](https://github.com/lyehe/porterminal/issues/13))
+  - Unknown shells are dynamically added to the shell list
+  - User's preferred shell appears first in the dropdown
+  - Validates shell exists before adding to list
+  - No code changes needed to support new shells
+
+#### Terminal Output
+- **Alt-screen buffer handling** - Proper handling of applications that use the alternate screen buffer (vim, less, htop, nano, tmux)
+  - Snapshots normal buffer on alt-screen entry
+  - Restores normal buffer on alt-screen exit
+  - Detects DEC Private Mode sequences (`?47h`, `?1047h`, `?1049h`)
+  - Clean screen transitions without history loss
+- **Watermark-based flow control** - Improved output buffering with high/low watermark system
+  - Prevents overwhelming the frontend during high-output scenarios (e.g., `cat large_file.txt`)
+  - 100KB high watermark triggers pause, 10KB low watermark resumes
+  - Early buffer (1MB) during connection handshake for initial screen draw
+  - Proper backpressure signaling to backend
+
+#### Mobile Touch Experience
+- **Momentum scrolling** - Physics-based smooth scrolling on touch devices
+  - Velocity tracking with exponential moving average smoothing
+  - Natural deceleration (0.95 friction per frame)
+  - Accumulator pattern for fractional line scrolling
+  - Respects terminal scroll boundaries
+- **Pinch-to-zoom** - Zoom terminal text with pinch gestures
+  - Uses CSS `transform: scale()` during gesture (no reflow)
+  - Applies actual font size change on gesture end
+  - Font size range: 10-24px
+  - Preserves scroll position (stays at bottom if was at bottom)
+- **Mobile keyboard control** - `setKeyboardEnabled` API to prevent virtual keyboard from appearing during text selection
+  - Sets textarea to readonly during selection
+  - Blurs terminal to dismiss keyboard
+  - Re-enables on selection complete
+
+#### UI Improvements
+- **CopyButton API** - `isVisible()` and `setOnHide()` callbacks for better gesture integration
+  - Allows gesture system to check button visibility
+  - Callback on hide for terminal refocus
+- **TextViewOverlay enhancements** - Improved text selection overlay for mobile
+  - Better touch target sizing
+  - Clearer selection feedback
+
+#### Documentation
+- **Buffer architecture** - Comprehensive `docs/buffer.md` documenting the entire data flow:
+  - PTY read (4KB) → Session buffer (1MB) → Batch buffer (16KB/16ms) → WebSocket → Frontend early buffer → Watermark flow control → xterm.js
+- **Frontend features guide** - `docs/frontend_features.md` covering:
+  - Dual WebSocket architecture
+  - Gesture recognition system
+  - Three-state modifier system
+  - Connection handshake protocol
+  - iOS workarounds and gotchas
+- **Debug documentation** - `docs/debug.md` and debug case studies:
+  - Touch scrolling implementation
+  - Pinch-zoom stale text fix
+  - Frontend design fixes
+
+#### Testing
+- **Output buffer tests** - New `tests/domain/test_output_buffer.py` with comprehensive coverage:
+  - Basic operations, size limits, clear screen handling
+  - Alt-screen enter/exit transitions
+  - Nested alt-screen handling
+  - Buffer snapshot/restore
+
+### Changed
+- **Upgraded to xterm.js 6.0** - Latest terminal emulator with improved performance and rendering
+- **ConnectionService refactor** - Cleaner WebSocket state management with explicit states
+- **GestureRecognizer improvements** - Better touch event handling, cleaner state machine
+- **ManagementService simplification** - Reduced complexity in tab management
+- **TerminalService cleanup** - Streamlined output handling and batch flush logic
+- **Domain layer cleanup** - Removed unused barrel exports from domain packages
+- **KeyMapper updates** - Better special key handling
+- **Vite config updates** - Improved build configuration
+
+### Fixed
+- Keyboard no longer flickers during text selection on mobile
+- Copy button properly integrates with gesture system
+- Shell detection no longer ignores valid shells not in hardcoded list
+- Alt-screen apps (vim, htop) no longer corrupt buffer history
+- Scroll position preserved correctly during font size changes
+- Touch events properly deduplicated (no ghost taps)
+
+### Removed
+- Unused environment sanitizer tests (logic moved to integration tests)
+- Redundant domain service exports
+
+## [0.3.4] - 2026-01-05
+
+### Fixed
+- Windows auto-update error when checking for new versions
+
+## [0.3.3] - 2026-01-04
+
+### Changed
+- Password protection warning now highlighted for better visibility
+
 ## [0.3.2] - 2026-01-03
 
 ### Fixed
@@ -219,7 +321,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/lyehe/porterminal/compare/v0.3.4...v0.4.0
+[0.3.4]: https://github.com/lyehe/porterminal/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/lyehe/porterminal/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/lyehe/porterminal/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/lyehe/porterminal/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/lyehe/porterminal/compare/v0.2.7...v0.3.0

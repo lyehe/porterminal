@@ -44,16 +44,8 @@ class InMemoryTabRepository(TabRepository):
         session_id = str(tab.session_id)
 
         self._tabs[tab_id] = tab
-
-        # Index by user
-        if user_id not in self._user_tabs:
-            self._user_tabs[user_id] = set()
-        self._user_tabs[user_id].add(tab_id)
-
-        # Index by session
-        if session_id not in self._session_tabs:
-            self._session_tabs[session_id] = set()
-        self._session_tabs[session_id].add(tab_id)
+        self._user_tabs.setdefault(user_id, set()).add(tab_id)
+        self._session_tabs.setdefault(session_id, set()).add(tab_id)
 
     def update(self, tab: Tab) -> None:
         """Update an existing tab (name, last_accessed)."""

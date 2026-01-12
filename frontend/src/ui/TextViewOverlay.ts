@@ -20,26 +20,112 @@ const MAX_FONT_SIZE = 32;
 const FONT_STEP = 1;
 
 /**
- * Extract plain text from terminal buffer
+ * Detect and remove duplicated content in text.
+ * xterm.js buffer can contain duplicates during rapid output or resize.
+ *
+ * Strategy: Find the longest repeated suffix and remove it.
+ * If text is "ABC...XYZ...ABC...XYZ", we want "ABC...XYZ".
  */
-function getTerminalText(term: Terminal): string {
-    const buffer = term.buffer.active;
-    const lines: string[] = [];
+function removeDuplicates(text: string): string {
+    if (text.length < 100) return text;
 
-    // Get all lines from scrollback + viewport
-    for (let i = 0; i < buffer.length; i++) {
-        const line = buffer.getLine(i);
-        if (line) {
-            lines.push(line.translateToString(true));
+    // Check if the second half is a repeat of the first half
+    const len = text.length;
+    for (let splitPoint = Math.floor(len / 2); splitPoint > len / 4; splitPoint--) {
+        const firstHalf = text.slice(0, splitPoint);
+        const secondHalf = text.slice(splitPoint, splitPoint * 2);
+
+        if (firstHalf === secondHalf) {
+            // Found duplicate - return first half plus any remainder
+            const remainder = text.slice(splitPoint * 2);
+            return removeDuplicates(firstHalf + remainder);
         }
     }
 
-    // Trim trailing empty lines
-    while (lines.length > 0 && (lines[lines.length - 1] ?? '').trim() === '') {
-        lines.pop();
+    // Also check for repeated blocks at line level
+    const lines = text.split('\n');
+    if (lines.length < 6) return text;
+
+    // Look for point where content starts repeating
+    for (let splitIdx = Math.floor(lines.length / 2); splitIdx > lines.length / 4; splitIdx--) {
+        let isRepeat = true;
+        const blockSize = Math.min(splitIdx, lines.length - splitIdx);
+
+        for (let j = 0; j < blockSize; j++) {
+            if (lines[j] !== lines[splitIdx + j]) {
+                isRepeat = false;
+                break;
+            }
+        }
+
+        if (isRepeat) {
+            // Content from splitIdx onwards is a repeat
+            return lines.slice(0, splitIdx).join('\n');
+        }
     }
 
-    return lines.join('\n');
+    return text;
+}
+
+/**
+ * Extract plain text from terminal buffer
+ * Handles wrapped lines by joining continuations properly.
+ *
+ * Note: buffer.length can exceed actual content during reflow.
+ * We use baseY + cursorY to find the actual content end.
+ */
+function getTerminalText(term: Terminal): string {
+    const buffer = term.buffer.active;
+    const logicalLines: string[] = [];
+    let currentLine = '';
+
+    // Calculate actual content length:
+    // - baseY is the scroll offset (how many lines are in scrollback above viewport)
+    // - cursorY is cursor position within viewport (0-indexed)
+    // - Total content lines = baseY + cursorY + 1 (include cursor line)
+    // But we also need to account for content below cursor, so use buffer.length
+    // but cap it at a reasonable limit based on scrollback settings
+    const contentEnd = Math.min(
+        buffer.length,
+        buffer.baseY + term.rows  // scrollback + viewport
+    );
+
+    // Get all lines from scrollback + viewport
+    // Handle wrapped lines: isWrapped=true means continuation of previous line
+    for (let i = 0; i < contentEnd; i++) {
+        const line = buffer.getLine(i);
+        if (!line) continue;
+
+        // translateToString(true) trims trailing whitespace
+        // translateToString(false) preserves whitespace for wrapped continuations
+        const text = line.isWrapped
+            ? line.translateToString(false)  // preserve whitespace for wrapped lines
+            : line.translateToString(true);
+
+        if (line.isWrapped) {
+            // Continuation of previous line - join without newline
+            currentLine += text;
+        } else {
+            // Start of new logical line
+            if (currentLine) {
+                logicalLines.push(currentLine.trimEnd());
+            }
+            currentLine = text;
+        }
+    }
+
+    // Push the last line
+    if (currentLine) {
+        logicalLines.push(currentLine.trimEnd());
+    }
+
+    // Trim trailing empty lines
+    while (logicalLines.length > 0 && (logicalLines[logicalLines.length - 1] ?? '').trim() === '') {
+        logicalLines.pop();
+    }
+
+    // Remove any duplicated content caused by xterm.js buffer issues
+    return removeDuplicates(logicalLines.join('\n'));
 }
 
 /**
@@ -47,7 +133,6 @@ function getTerminalText(term: Terminal): string {
  */
 export function createTextViewOverlay(): TextViewOverlay {
     const overlay = document.getElementById('textview-overlay');
-    const closeBtn = document.getElementById('textview-close');
     const zoomInBtn = document.getElementById('textview-zoom-in');
     const zoomOutBtn = document.getElementById('textview-zoom-out');
     const body = document.getElementById('textview-body') as HTMLPreElement | null;
@@ -131,7 +216,7 @@ export function createTextViewOverlay(): TextViewOverlay {
         },
 
         setup(): void {
-            closeBtn?.addEventListener('click', () => this.hide());
+            // Note: close button handler is set up in main.ts to enable terminal refresh on close
             zoomInBtn?.addEventListener('click', zoomIn);
             zoomOutBtn?.addEventListener('click', zoomOut);
 

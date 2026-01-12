@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 import pytest
 
 from porterminal.domain import (
-    EnvironmentRules,
     OutputBuffer,
     RateLimitConfig,
     Session,
@@ -83,12 +82,6 @@ def rate_limit_config():
 def strict_rate_limit_config():
     """Strict rate limit config for testing."""
     return RateLimitConfig(rate=10.0, burst=20)
-
-
-@pytest.fixture
-def environment_rules():
-    """Default environment rules."""
-    return EnvironmentRules()
 
 
 @pytest.fixture

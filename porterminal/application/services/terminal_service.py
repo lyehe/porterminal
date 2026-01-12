@@ -3,7 +3,9 @@
 import asyncio
 import logging
 import re
+import time
 from contextlib import suppress
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -19,6 +21,20 @@ from ..ports.connection_port import ConnectionPort
 
 logger = logging.getLogger(__name__)
 
+
+@dataclass
+class ConnectionFlowState:
+    """Per-connection flow control state.
+
+    Implements xterm.js recommended watermark-based flow control.
+    When client sends 'pause', we stop sending to that connection.
+    When client sends 'ack', we resume sending.
+    """
+
+    paused: bool = False
+    pause_time: float | None = None
+
+
 # Terminal response sequences that should NOT be written to PTY.
 # These are responses from the terminal emulator to queries from applications.
 # If written to PTY, they get echoed back and displayed as garbage.
@@ -31,11 +47,20 @@ TERMINAL_RESPONSE_PATTERN = re.compile(rb"\x1b\[\?[\d;]*c|\x1b\[[\d;]*R")
 # Constants
 HEARTBEAT_INTERVAL = 30  # seconds
 HEARTBEAT_TIMEOUT = 300  # 5 minutes
-PTY_READ_INTERVAL = 0.008  # ~120Hz polling
-OUTPUT_BATCH_INTERVAL = 0.016  # ~60Hz output (batch writes for smoother rendering)
+
+# Adaptive PTY read interval: fast when data flowing, slow when idle
+PTY_READ_INTERVAL_MIN = 0.001  # 1ms when data is flowing (high throughput)
+PTY_READ_INTERVAL_MAX = 0.008  # 8ms when idle (save CPU)
+PTY_READ_BURST_THRESHOLD = 5  # Consecutive reads with data before going fast
+
+# Tiered batch intervals: faster for interactive, slower for bulk
+OUTPUT_BATCH_INTERVAL_INTERACTIVE = 0.004  # 4ms for small data (<256 bytes)
+OUTPUT_BATCH_INTERVAL_BULK = 0.016  # 16ms for larger data
+OUTPUT_BATCH_SIZE_THRESHOLD = 256  # Bytes - threshold for interactive vs bulk
 OUTPUT_BATCH_MAX_SIZE = 16384  # Flush if batch exceeds 16KB
-INTERACTIVE_THRESHOLD = 64  # Bytes - flush immediately for small interactive data
+INTERACTIVE_THRESHOLD = 64  # Bytes - flush immediately for very small data
 MAX_INPUT_SIZE = 4096
+FLOW_PAUSE_TIMEOUT = 5.0  # seconds - auto-resume if client stops sending ACKs (was 15s)
 
 
 class AsyncioClock:
@@ -65,6 +90,8 @@ class TerminalService:
         self._session_read_tasks: dict[str, asyncio.Task[None]] = {}
         # Per-session locks to prevent race between buffer replay and broadcast
         self._session_locks: dict[str, asyncio.Lock] = {}
+        # Per-connection flow control state (watermark-based backpressure)
+        self._flow_state: dict[ConnectionPort, ConnectionFlowState] = {}
 
     # -------------------------------------------------------------------------
     # Multi-client connection tracking
@@ -72,9 +99,7 @@ class TerminalService:
 
     def _get_session_lock(self, session_id: str) -> asyncio.Lock:
         """Get or create a lock for a session."""
-        if session_id not in self._session_locks:
-            self._session_locks[session_id] = asyncio.Lock()
-        return self._session_locks[session_id]
+        return self._session_locks.setdefault(session_id, asyncio.Lock())
 
     def _cleanup_session_lock(self, session_id: str) -> None:
         """Remove session lock when no longer needed."""
@@ -82,13 +107,17 @@ class TerminalService:
 
     def _register_connection(self, session_id: str, connection: ConnectionPort) -> int:
         """Register a connection for a session. Returns connection count."""
-        if session_id not in self._session_connections:
-            self._session_connections[session_id] = set()
-        self._session_connections[session_id].add(connection)
-        return len(self._session_connections[session_id])
+        connections = self._session_connections.setdefault(session_id, set())
+        connections.add(connection)
+        # Initialize flow control state for this connection
+        self._flow_state[connection] = ConnectionFlowState()
+        return len(connections)
 
     def _unregister_connection(self, session_id: str, connection: ConnectionPort) -> int:
         """Unregister a connection. Returns remaining count."""
+        # Clean up flow control state
+        self._flow_state.pop(connection, None)
+
         if session_id not in self._session_connections:
             return 0
         self._session_connections[session_id].discard(connection)
@@ -98,12 +127,27 @@ class TerminalService:
         return count
 
     async def _send_to_connections(self, connections: list[ConnectionPort], data: bytes) -> None:
-        """Send data to a list of connections (used with pre-snapshotted list)."""
+        """Send data to connections, respecting flow control.
+
+        Skips paused connections (client overwhelmed) but auto-resumes
+        after FLOW_PAUSE_TIMEOUT to prevent permanent pause from dead clients.
+        """
+        current_time = time.time()
         for conn in connections:
+            flow = self._flow_state.get(conn)
+            if flow and flow.paused:
+                # Check timeout - auto-resume if client stopped responding
+                if flow.pause_time and (current_time - flow.pause_time) > FLOW_PAUSE_TIMEOUT:
+                    flow.paused = False
+                    flow.pause_time = None
+                    logger.debug("Auto-resumed paused connection after timeout")
+                else:
+                    continue  # Skip paused connection
+
             try:
                 await conn.send_output(data)
-            except Exception:
-                pass  # Connection cleanup handled elsewhere
+            except Exception as e:
+                logger.debug("Failed to send output to connection: %s", e)
 
     async def _broadcast_output(self, session_id: str, data: bytes) -> None:
         """Broadcast PTY output to all connections for a session.
@@ -264,6 +308,7 @@ class TerminalService:
         batch_buffer: list[bytes] = []
         batch_size = 0
         last_flush_time = asyncio.get_running_loop().time()
+        consecutive_data_reads = 0  # Track consecutive reads with data for adaptive sleep
 
         async def flush_batch() -> None:
             """Flush batched data with lock protection."""
@@ -295,6 +340,10 @@ class TerminalService:
                 data = session.pty_handle.read(4096)
                 if data:
                     session.touch(datetime.now(UTC))
+                    # Track consecutive reads with data for adaptive sleep
+                    consecutive_data_reads = min(
+                        consecutive_data_reads + 1, PTY_READ_BURST_THRESHOLD
+                    )
 
                     # Small data (interactive): flush immediately for responsiveness
                     if len(data) < INTERACTIVE_THRESHOLD and not batch_buffer:
@@ -312,6 +361,9 @@ class TerminalService:
                         # Flush if batch is large enough
                         if batch_size >= OUTPUT_BATCH_MAX_SIZE:
                             await flush_batch()
+                else:
+                    # No data - reset burst counter
+                    consecutive_data_reads = 0
 
             except Exception as e:
                 logger.error("PTY read error session_id=%s: %s", session.id, e)
@@ -319,12 +371,25 @@ class TerminalService:
                 await self._broadcast_output(session_id, f"\r\n[PTY error: {e}]\r\n".encode())
                 break
 
+            # Tiered batch interval: faster for small batches, slower for large
+            batch_interval = (
+                OUTPUT_BATCH_INTERVAL_INTERACTIVE
+                if batch_size < OUTPUT_BATCH_SIZE_THRESHOLD
+                else OUTPUT_BATCH_INTERVAL_BULK
+            )
+
             # Check if we should flush based on time
             current_time = asyncio.get_running_loop().time()
-            if batch_buffer and (current_time - last_flush_time) >= OUTPUT_BATCH_INTERVAL:
+            if batch_buffer and (current_time - last_flush_time) >= batch_interval:
                 await flush_batch()
 
-            await asyncio.sleep(PTY_READ_INTERVAL)
+            # Adaptive sleep: fast when data flowing, slow when idle
+            sleep_time = (
+                PTY_READ_INTERVAL_MIN
+                if consecutive_data_reads >= PTY_READ_BURST_THRESHOLD
+                else PTY_READ_INTERVAL_MAX
+            )
+            await asyncio.sleep(sleep_time)
 
         # Flush any remaining data
         await flush_batch()
@@ -358,7 +423,7 @@ class TerminalService:
             if isinstance(message, bytes):
                 await self._handle_binary_input(session, message, rate_limiter, connection)
             elif isinstance(message, dict):
-                await self._handle_json_message(session, message, rate_limiter, connection)
+                await self._handle_json_message(session, message, connection)
 
     async def _handle_binary_input(
         self,
@@ -400,7 +465,6 @@ class TerminalService:
         self,
         session: Session[PTYPort],
         message: dict[str, Any],
-        rate_limiter: TokenBucketRateLimiter,
         connection: ConnectionPort,
     ) -> None:
         """Handle JSON control message."""
@@ -408,13 +472,27 @@ class TerminalService:
 
         if msg_type == "resize":
             await self._handle_resize(session, message, connection)
-        elif msg_type == "input":
-            await self._handle_json_input(session, message, rate_limiter, connection)
         elif msg_type == "ping":
             await connection.send_message({"type": "pong"})
             session.touch(datetime.now(UTC))
         elif msg_type == "pong":
             session.touch(datetime.now(UTC))
+        elif msg_type == "pause":
+            # Client is overwhelmed - stop sending data to this connection
+            flow = self._flow_state.get(connection)
+            if flow:
+                flow.paused = True
+                flow.pause_time = time.time()
+                # Send confirmation so client knows pause was received
+                await connection.send_message({"type": "pause_ack"})
+                logger.debug("Connection paused (client overwhelmed) session_id=%s", session.id)
+        elif msg_type == "ack":
+            # Client caught up - resume sending data
+            flow = self._flow_state.get(connection)
+            if flow and flow.paused:
+                flow.paused = False
+                flow.pause_time = None
+                logger.debug("Connection resumed (client caught up) session_id=%s", session.id)
         else:
             logger.warning("Unknown message type session_id=%s type=%s", session.id, msg_type)
 
@@ -475,40 +553,3 @@ class TerminalService:
             new_dims.cols,
             new_dims.rows,
         )
-
-    async def _handle_json_input(
-        self,
-        session: Session[PTYPort],
-        message: dict[str, Any],
-        rate_limiter: TokenBucketRateLimiter,
-        connection: ConnectionPort,
-    ) -> None:
-        """Handle JSON-encoded terminal input."""
-        data = message.get("data", "")
-
-        if len(data) > self._max_input_size:
-            await connection.send_message(
-                {
-                    "type": "error",
-                    "message": "Input too large",
-                }
-            )
-            return
-
-        if data:
-            input_bytes = data.encode("utf-8")
-            # Filter terminal response sequences
-            filtered = TERMINAL_RESPONSE_PATTERN.sub(b"", input_bytes)
-            if not filtered:
-                return
-
-            if rate_limiter.try_acquire(len(filtered)):
-                session.pty_handle.write(filtered)
-                session.touch(datetime.now(UTC))
-            else:
-                await connection.send_message(
-                    {
-                        "type": "error",
-                        "message": "Rate limit exceeded",
-                    }
-                )

@@ -22,7 +22,6 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "-V",
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -34,6 +33,7 @@ def parse_args() -> argparse.Namespace:
         help="Starting directory for the shell (default: current directory)",
     )
     parser.add_argument(
+        "-n",
         "--no-tunnel",
         action="store_true",
         help="Start server only, without Cloudflare tunnel",
@@ -45,12 +45,13 @@ def parse_args() -> argparse.Namespace:
         help="Show detailed startup logs",
     )
     parser.add_argument(
-        "-U",
+        "-u",
         "--update",
         action="store_true",
         help="Update to the latest version",
     )
     parser.add_argument(
+        "-c",
         "--check-update",
         action="store_true",
         help="Check if a newer version is available",
@@ -62,6 +63,7 @@ def parse_args() -> argparse.Namespace:
         help="Run in background and return immediately",
     )
     parser.add_argument(
+        "-i",
         "--init",
         action="store_true",
         help="Create .ptn/ptn.yaml config file in current directory",

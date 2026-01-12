@@ -38,10 +38,7 @@ class InMemorySessionRepository(SessionRepository[PTYHandle]):
         user_id = str(session.user_id)
 
         self._sessions[session_id] = session
-
-        if user_id not in self._user_sessions:
-            self._user_sessions[user_id] = set()
-        self._user_sessions[user_id].add(session_id)
+        self._user_sessions.setdefault(user_id, set()).add(session_id)
 
     def remove(self, session_id: SessionId) -> Session[PTYHandle] | None:
         """Remove and return a session."""

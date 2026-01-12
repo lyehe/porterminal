@@ -51,9 +51,25 @@ interface TabConnectionState {
     state: ConnectionState;
     pendingReconnect: ReturnType<typeof setTimeout> | null;
     earlyBuffer: string[];
-    writeBuffer: string[];      // Buffer for rAF batching during connected state
-    rafHandle: number | null;   // requestAnimationFrame handle for batched writes
+    // Watermark-based flow control (xterm.js recommended approach)
+    watermark: number;        // Bytes queued in xterm.js render pipeline (written but not yet rendered)
+    connectionGen: number;    // Detect stale callbacks after reconnect
+    pauseSent: boolean;       // Track if we've sent pause to server
+    // Emergency watermark reset tracking
+    lastWatermarkActivity: number;  // Timestamp of last watermark change
+    emergencyResetTimer: ReturnType<typeof setTimeout> | null;
+    // Pause confirmation tracking
+    pauseConfirmPending: boolean;
+    pauseRetryTimer: ReturnType<typeof setTimeout> | null;
+    // RAF-batched writes for high throughput
+    writeBatch: string[];
+    writeScheduled: boolean;
 }
+
+// Emergency reset timeout (ms) - reset watermark if no progress
+const EMERGENCY_RESET_TIMEOUT = 5000;
+// Maximum watermark before hard cap (500KB)
+const MAX_WATERMARK = 500000;
 
 // Server rejection codes that should NOT trigger reconnect
 const REJECTION_CODES = {
@@ -62,16 +78,32 @@ const REJECTION_CODES = {
     SESSION_ENDED: 4005,
 } as const;
 
-/**
- * Filter terminal response sequences that shouldn't be sent to PTY.
- * xterm.js generates these in response to queries (DA, cursor position).
- * If sent to PTY, they get echoed back and displayed as garbage.
- */
-const TERMINAL_RESPONSE_PATTERN = /\x1b\[\?[\d;]*c|\x1b\[[\d;]*R/g;
+// Buffer size limit for early buffer (data received before connected)
+const MAX_EARLY_BUFFER_SIZE = 1024 * 1024;  // 1MB
 
-function filterTerminalResponses(data: string): string {
-    if (!data.includes('\x1b[')) return data;
-    return data.replace(TERMINAL_RESPONSE_PATTERN, '');
+// Watermark-based flow control constants (from xterm.js flow control guide)
+// Keep HIGH_WATERMARK <= 500KB for responsive keystrokes
+// Adaptive thresholds: lower for mobile/slow devices to prevent jamming
+function getWatermarks(): { high: number; low: number } {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const isSlowDevice = typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4;
+    if (isMobile || isSlowDevice) {
+        return { high: 32000, low: 4000 };   // 32KB / 4KB for mobile/slow devices
+    }
+    return { high: 100000, low: 10000 };     // 100KB / 10KB for desktop
+}
+const { high: HIGH_WATERMARK, low: LOW_WATERMARK } = getWatermarks();
+
+/** Calculate total size of string buffer */
+function getBufferSize(buffer: string[]): number {
+    return buffer.reduce((acc, s) => acc + s.length, 0);
+}
+
+/** Trim buffer from front until under size limit */
+function trimBuffer(buffer: string[], maxSize: number): void {
+    while (buffer.length > 1 && getBufferSize(buffer) > maxSize) {
+        buffer.shift();
+    }
 }
 
 /**
@@ -99,8 +131,15 @@ export function createConnectionService(
                 state: 'disconnected',
                 pendingReconnect: null,
                 earlyBuffer: [],
-                writeBuffer: [],
-                rafHandle: null,
+                watermark: 0,
+                connectionGen: 0,
+                pauseSent: false,
+                lastWatermarkActivity: 0,
+                emergencyResetTimer: null,
+                pauseConfirmPending: false,
+                pauseRetryTimer: null,
+                writeBatch: [],
+                writeScheduled: false,
             });
         }
         return tabStates.get(tabId)!;
@@ -115,21 +154,146 @@ export function createConnectionService(
     }
 
     /**
-     * Schedule a batched write to the terminal.
-     * Collects all data within an animation frame and flushes in single write.
-     * This prevents flickering when backend sends rapid cursor/text updates.
+     * Clear emergency reset timer for a tab state.
      */
-    function scheduleFlush(tab: Tab, state: TabConnectionState): void {
-        if (state.rafHandle !== null) return;  // Already scheduled
+    function clearEmergencyTimer(state: TabConnectionState): void {
+        if (state.emergencyResetTimer) {
+            clearTimeout(state.emergencyResetTimer);
+            state.emergencyResetTimer = null;
+        }
+    }
 
-        state.rafHandle = requestAnimationFrame(() => {
-            state.rafHandle = null;
-            if (state.writeBuffer.length === 0) return;
+    /**
+     * Clear pause retry timer for a tab state.
+     */
+    function clearPauseRetryTimer(state: TabConnectionState): void {
+        if (state.pauseRetryTimer) {
+            clearTimeout(state.pauseRetryTimer);
+            state.pauseRetryTimer = null;
+        }
+    }
 
-            const combined = state.writeBuffer.join('');
-            state.writeBuffer = [];
-            tab.term.write(combined);
-        });
+    /**
+     * Send pause message with retry and confirmation tracking.
+     */
+    function sendPauseWithRetry(tab: Tab, state: TabConnectionState): void {
+        if (state.pauseConfirmPending) return;  // Already waiting for confirmation
+
+        try {
+            if (tab.ws?.readyState === WebSocket.OPEN) {
+                tab.ws.send(JSON.stringify({ type: 'pause' }));
+                state.pauseSent = true;
+                state.pauseConfirmPending = true;
+
+                // Retry if no confirmation in 500ms
+                state.pauseRetryTimer = setTimeout(() => {
+                    if (state.pauseConfirmPending && tab.ws?.readyState === WebSocket.OPEN) {
+                        console.warn('Retrying pause message (no ack received)');
+                        tab.ws.send(JSON.stringify({ type: 'pause' }));
+                    }
+                }, 500);
+            }
+        } catch (e) {
+            console.warn('Failed to send flow control pause:', e);
+        }
+    }
+
+    /**
+     * Start emergency watermark reset timer.
+     * If watermark doesn't decrease within timeout, reset it to prevent permanent jam.
+     */
+    function startEmergencyResetTimer(tab: Tab, state: TabConnectionState): void {
+        clearEmergencyTimer(state);
+
+        state.emergencyResetTimer = setTimeout(() => {
+            if (state.pauseSent && (Date.now() - state.lastWatermarkActivity) > EMERGENCY_RESET_TIMEOUT) {
+                console.warn('Emergency watermark reset - xterm.js callbacks stalled');
+                state.watermark = 0;
+                state.pauseSent = false;
+                state.pauseConfirmPending = false;
+                clearPauseRetryTimer(state);
+
+                // Send ACK to resume server
+                try {
+                    if (tab.ws?.readyState === WebSocket.OPEN) {
+                        tab.ws.send(JSON.stringify({ type: 'ack' }));
+                    }
+                } catch (e) {
+                    console.warn('Failed to send emergency ack:', e);
+                }
+            }
+        }, EMERGENCY_RESET_TIMEOUT);
+    }
+
+    /**
+     * Write data to terminal with watermark-based flow control.
+     *
+     * This implements the xterm.js recommended flow control pattern with enhancements:
+     * 1. RAF batching: coalesce multiple writes into single animation frame
+     * 2. Track watermark (bytes written - bytes processed)
+     * 3. When watermark exceeds HIGH_WATERMARK, send 'pause' to server with retry
+     * 4. When watermark drops below LOW_WATERMARK, send 'ack' to server
+     * 5. Emergency reset if watermark doesn't decrease within timeout
+     * 6. Hard cap on watermark to prevent unbounded growth
+     */
+    function writeWithFlowControl(tab: Tab, state: TabConnectionState, data: string): void {
+        // Add to write batch for RAF coalescing
+        state.writeBatch.push(data);
+        // Update watermark with hard cap to prevent unbounded growth
+        state.watermark = Math.min(state.watermark + data.length, MAX_WATERMARK);
+        state.lastWatermarkActivity = Date.now();
+
+        // Schedule RAF-batched write if not already scheduled
+        if (!state.writeScheduled) {
+            state.writeScheduled = true;
+            requestAnimationFrame(() => {
+                if (state.writeBatch.length === 0) {
+                    state.writeScheduled = false;
+                    return;
+                }
+
+                const currentGen = state.connectionGen;
+                const combined = state.writeBatch.join('');
+                const batchLength = combined.length;
+                state.writeBatch = [];
+                state.writeScheduled = false;
+
+                // Write batched data to xterm.js with callback for flow control
+                tab.term.write(combined, () => {
+                    // Ignore stale callbacks from previous connections
+                    if (currentGen !== state.connectionGen) return;
+
+                    // Decrease watermark - this data has been processed
+                    state.watermark = Math.max(0, state.watermark - batchLength);
+                    state.lastWatermarkActivity = Date.now();
+
+                    // Clear emergency timer since we made progress
+                    clearEmergencyTimer(state);
+
+                    // Send ACK to resume server if watermark dropped below threshold
+                    if (state.pauseSent && state.watermark < LOW_WATERMARK) {
+                        try {
+                            if (tab.ws?.readyState === WebSocket.OPEN) {
+                                tab.ws.send(JSON.stringify({ type: 'ack' }));
+                                state.pauseSent = false;
+                                state.pauseConfirmPending = false;
+                                clearPauseRetryTimer(state);
+                            }
+                        } catch (e) {
+                            console.warn('Failed to send flow control ack:', e);
+                            state.pauseSent = false;  // Reset to allow retry on next callback
+                        }
+                    }
+                });
+
+                // Send pause to server if watermark exceeds threshold
+                if (!state.pauseSent && state.watermark > HIGH_WATERMARK) {
+                    sendPauseWithRetry(tab, state);
+                    // Start emergency reset timer in case xterm.js callbacks stall
+                    startEmergencyResetTimer(tab, state);
+                }
+            });
+        }
     }
 
     /**
@@ -146,14 +310,6 @@ export function createConnectionService(
     }
 
     function cleanupWebSocket(tab: Tab): void {
-        // Cancel any pending rAF flush
-        const state = tabStates.get(tab.id);
-        if (state && state.rafHandle !== null) {
-            cancelAnimationFrame(state.rafHandle);
-            state.rafHandle = null;
-            state.writeBuffer = [];
-        }
-
         if (tab.ws) {
             tab.ws.onopen = null;
             tab.ws.onmessage = null;
@@ -199,6 +355,17 @@ export function createConnectionService(
 
             state.state = 'connecting';
             state.earlyBuffer = [];
+            // Reset flow control state for new connection
+            state.connectionGen++;
+            state.watermark = 0;
+            state.pauseSent = false;
+            state.lastWatermarkActivity = 0;
+            state.pauseConfirmPending = false;
+            state.writeBatch = [];
+            state.writeScheduled = false;
+            // Clear any pending timers
+            clearEmergencyTimer(state);
+            clearPauseRetryTimer(state);
 
             const url = buildWebSocketUrl(tab.tabId, skipBuffer);
             const ws = new WebSocket(url);
@@ -257,19 +424,34 @@ export function createConnectionService(
                             // Terminal starts with opacity:0 (set in TabService).
                             // Write buffer while hidden, then show after rendering completes.
                             tab.term.write(combined, () => {
-                                // Wait for xterm.js to fully render before showing.
-                                // Use setTimeout to yield, then rAF for the render frame.
-                                setTimeout(() => {
+                                // Double rAF: first frame for xterm.js render, second for paint
+                                requestAnimationFrame(() => {
                                     requestAnimationFrame(() => {
                                         tab.term.scrollToBottom();
                                         tab.container.style.opacity = '';
+
+                                        // Use onRender to catch async buffer reflow
+                                        let count = 0;
+                                        const disposable = tab.term.onRender(() => {
+                                            tab.term.scrollToBottom();
+                                            if (++count >= 5) disposable.dispose();
+                                        });
+                                        setTimeout(() => disposable.dispose(), 300);
                                     });
-                                }, 0);
+                                });
                             });
                         } else {
                             // No buffer to flush - show terminal immediately
                             tab.term.scrollToBottom();
                             tab.container.style.opacity = '';
+
+                            // Use onRender to catch async buffer reflow
+                            let count = 0;
+                            const disposable = tab.term.onRender(() => {
+                                tab.term.scrollToBottom();
+                                if (++count >= 5) disposable.dispose();
+                            });
+                            setTimeout(() => disposable.dispose(), 300);
                         }
                     });
                 });
@@ -280,11 +462,10 @@ export function createConnectionService(
                     const text = textDecoder.decode(event.data);
                     if (state.state === 'connecting') {
                         state.earlyBuffer.push(text);
+                        trimBuffer(state.earlyBuffer, MAX_EARLY_BUFFER_SIZE);
                     } else if (state.state === 'connected') {
-                        // Batch writes within animation frame to prevent flickering
-                        // when backend sends rapid cursor/text updates
-                        state.writeBuffer.push(text);
-                        scheduleFlush(tab, state);
+                        // Write with watermark-based flow control
+                        writeWithFlowControl(tab, state, text);
                     }
                 } else {
                     // JSON control messages
@@ -315,6 +496,11 @@ export function createConnectionService(
                                 console.error('Server error:', msg.message);
                                 tab.term.write(`\r\n\x1b[31mError: ${msg.message}\x1b[0m\r\n`);
                                 eventBus.emit('connection:error', { tabId: tab.id, error: msg.message });
+                                break;
+                            case 'pause_ack':
+                                // Server confirmed pause - stop retry timer
+                                state.pauseConfirmPending = false;
+                                clearPauseRetryTimer(state);
                                 break;
                         }
                     } catch (e) {
@@ -387,10 +573,8 @@ export function createConnectionService(
             if (state.state !== 'connected' || !tab.ws || tab.ws.readyState !== WebSocket.OPEN) {
                 return;
             }
-            // Filter terminal response sequences before sending
-            const filtered = filterTerminalResponses(data);
-            if (!filtered) return;
-            tab.ws.send(textEncoder.encode(filtered));
+            // Terminal response filtering handled by backend
+            tab.ws.send(textEncoder.encode(data));
         },
 
         sendResize(tab: Tab, cols: number, rows: number): void {
@@ -411,11 +595,12 @@ export function createConnectionService(
         },
 
         cleanupTabState(tabId: number): void {
-            const state = tabStates.get(tabId);
-            if (state && state.rafHandle !== null) {
-                cancelAnimationFrame(state.rafHandle);
-            }
             cancelPendingReconnect(tabId);
+            const state = tabStates.get(tabId);
+            if (state) {
+                clearEmergencyTimer(state);
+                clearPauseRetryTimer(state);
+            }
             tabStates.delete(tabId);
         },
 

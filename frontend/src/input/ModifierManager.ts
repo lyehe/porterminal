@@ -8,6 +8,9 @@ import type { EventBus } from '@/core/events';
 
 export type ModifierKey = 'ctrl' | 'alt' | 'shift';
 
+/** All modifier keys */
+const ALL_MODIFIERS: ModifierKey[] = ['ctrl', 'alt', 'shift'];
+
 export interface ModifierManager {
     /** Current modifier state (readonly) */
     readonly state: Readonly<ModifierState>;
@@ -78,8 +81,7 @@ export function createModifierManager(
         },
 
         consumeSticky(): void {
-            const modifiers: ModifierKey[] = ['ctrl', 'alt', 'shift'];
-            for (const mod of modifiers) {
+            for (const mod of ALL_MODIFIERS) {
                 if (state[mod] === 'sticky') {
                     state[mod] = 'off';
                     emitChange(mod);
@@ -88,8 +90,7 @@ export function createModifierManager(
         },
 
         reset(): void {
-            const modifiers: ModifierKey[] = ['ctrl', 'alt', 'shift'];
-            for (const mod of modifiers) {
+            for (const mod of ALL_MODIFIERS) {
                 if (state[mod] !== 'off') {
                     state[mod] = 'off';
                     emitChange(mod);

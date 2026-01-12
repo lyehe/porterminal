@@ -36,6 +36,23 @@ class ManagementService:
         self._get_shell = shell_provider
         self._default_dims = default_dimensions
 
+    async def _send_error(
+        self,
+        connection: ConnectionPort,
+        response_type: str,
+        request_id: str,
+        error: str,
+    ) -> None:
+        """Send an error response to a connection."""
+        await connection.send_message(
+            {
+                "type": response_type,
+                "request_id": request_id,
+                "success": False,
+                "error": error,
+            }
+        )
+
     async def handle_message(
         self,
         user_id: UserId,
@@ -76,13 +93,8 @@ class ManagementService:
             # Get shell
             shell = self._get_shell(shell_id)
             if not shell:
-                await connection.send_message(
-                    {
-                        "type": "create_tab_response",
-                        "request_id": request_id,
-                        "success": False,
-                        "error": "Invalid shell",
-                    }
+                await self._send_error(
+                    connection, "create_tab_response", request_id, "Invalid shell"
                 )
                 return
 
@@ -127,14 +139,7 @@ class ManagementService:
 
         except ValueError as e:
             logger.warning("Tab creation failed: %s", e)
-            await connection.send_message(
-                {
-                    "type": "create_tab_response",
-                    "request_id": request_id,
-                    "success": False,
-                    "error": str(e),
-                }
-            )
+            await self._send_error(connection, "create_tab_response", request_id, str(e))
 
     async def _handle_close_tab(
         self,
@@ -147,27 +152,13 @@ class ManagementService:
         tab_id = message.get("tab_id")
 
         if not tab_id:
-            await connection.send_message(
-                {
-                    "type": "close_tab_response",
-                    "request_id": request_id,
-                    "success": False,
-                    "error": "Missing tab_id",
-                }
-            )
+            await self._send_error(connection, "close_tab_response", request_id, "Missing tab_id")
             return
 
         # Get tab and session info before closing
         tab = self._tab_service.get_tab(tab_id)
         if not tab:
-            await connection.send_message(
-                {
-                    "type": "close_tab_response",
-                    "request_id": request_id,
-                    "success": False,
-                    "error": "Tab not found",
-                }
-            )
+            await self._send_error(connection, "close_tab_response", request_id, "Tab not found")
             return
 
         session_id = tab.session_id
@@ -175,13 +166,8 @@ class ManagementService:
         # Close the tab
         closed_tab = self._tab_service.close_tab(tab_id, user_id)
         if not closed_tab:
-            await connection.send_message(
-                {
-                    "type": "close_tab_response",
-                    "request_id": request_id,
-                    "success": False,
-                    "error": "Failed to close tab",
-                }
+            await self._send_error(
+                connection, "close_tab_response", request_id, "Failed to close tab"
             )
             return
 
@@ -222,26 +208,16 @@ class ManagementService:
         new_name = message.get("name")
 
         if not tab_id or not new_name:
-            await connection.send_message(
-                {
-                    "type": "rename_tab_response",
-                    "request_id": request_id,
-                    "success": False,
-                    "error": "Missing tab_id or name",
-                }
+            await self._send_error(
+                connection, "rename_tab_response", request_id, "Missing tab_id or name"
             )
             return
 
         # Rename the tab
         tab = self._tab_service.rename_tab(tab_id, user_id, new_name)
         if not tab:
-            await connection.send_message(
-                {
-                    "type": "rename_tab_response",
-                    "request_id": request_id,
-                    "success": False,
-                    "error": "Failed to rename tab",
-                }
+            await self._send_error(
+                connection, "rename_tab_response", request_id, "Failed to rename tab"
             )
             return
 

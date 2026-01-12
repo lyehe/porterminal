@@ -49,8 +49,32 @@ import { renderToolbar } from '@/ui/Toolbar';
 import { getSavedPassword, savePassword, clearPassword } from '@/utils/storage';
 
 // Types
-import type { SwipeDirection } from '@/types';
+import type { SwipeDirection, Tab } from '@/types';
 import type { TabService } from '@/services/TabService';
+
+/**
+ * Perform fitAddon.fit() with scroll-to-bottom preservation.
+ * Uses onRender callbacks to overcome xterm.js async reflow timing.
+ */
+function fitWithScrollToBottom(tab: Tab): void {
+    tab.fitAddon.fit();
+
+    // Immediate scroll
+    tab.term.scrollToBottom();
+
+    // onRender callbacks to catch async reflow
+    let count = 0;
+    const disposable = tab.term.onRender(() => {
+        tab.term.scrollToBottom();
+        if (++count >= 10) disposable.dispose();
+    });
+
+    // Timeout fallback
+    setTimeout(() => {
+        disposable.dispose();
+        tab.term.scrollToBottom();
+    }, 500);
+}
 
 // Configuration (heartbeat matches backend HEARTBEAT_INTERVAL = 30s)
 const CONFIG = {
@@ -255,16 +279,14 @@ async function init(): Promise<void> {
             focusTerminal: () => {
                 tabService.focusTerminal();
             },
-            scheduleFitAfterFontChange: (wasAtBottom: boolean) => {
+            scheduleFitAfterFontChange: () => {
                 const tab = tabService.activeTab;
                 if (tab) {
-                    tab.fitAddon.fit();
-
-                    // Restore scroll position after fit if user was at bottom
-                    if (wasAtBottom) {
-                        requestAnimationFrame(() => tab.term.scrollToBottom());
-                    }
+                    fitWithScrollToBottom(tab);
                 }
+            },
+            setKeyboardEnabled: (enabled) => {
+                tabService.setKeyboardEnabled(enabled);
             },
         }
     );
@@ -476,7 +498,7 @@ async function init(): Promise<void> {
         resizeDebounce = setTimeout(() => {
             const tab = tabService.activeTab;
             if (tab) {
-                tab.fitAddon.fit();
+                fitWithScrollToBottom(tab);
             }
         }, 50);
     });
@@ -486,7 +508,7 @@ async function init(): Promise<void> {
         setTimeout(() => {
             const tab = tabService.activeTab;
             if (tab) {
-                tab.fitAddon.fit();
+                fitWithScrollToBottom(tab);
             }
         }, 100);
     });
@@ -503,7 +525,7 @@ async function init(): Promise<void> {
             viewportTimeout = setTimeout(() => {
                 const tab = tabService.activeTab;
                 if (tab) {
-                    tab.fitAddon.fit();
+                    fitWithScrollToBottom(tab);
                 }
             }, 50);
         });

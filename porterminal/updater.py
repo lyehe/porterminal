@@ -34,6 +34,12 @@ def _detect_install_method() -> str:
     return "pip"
 
 
+def _parse_version(v: str) -> tuple[int, ...]:
+    """Parse version string to comparable tuple."""
+    v = v.lstrip("v").split("+")[0].split(".dev")[0]
+    return tuple(int(p) for p in v.split(".")[:3] if p.isdigit())
+
+
 def _is_newer(latest: str, current: str) -> bool:
     """Return True if latest > current."""
     try:
@@ -42,12 +48,8 @@ def _is_newer(latest: str, current: str) -> bool:
         return Version(latest) > Version(current)
     except Exception:
         # Fallback: tuple comparison (handles 0.9 vs 0.10 correctly)
-        def to_tuple(v: str) -> tuple[int, ...]:
-            v = v.lstrip("v").split("+")[0].split(".dev")[0]
-            return tuple(int(p) for p in v.split(".")[:3] if p.isdigit())
-
         try:
-            return to_tuple(latest) > to_tuple(current)
+            return _parse_version(latest) > _parse_version(current)
         except ValueError:
             return False
 

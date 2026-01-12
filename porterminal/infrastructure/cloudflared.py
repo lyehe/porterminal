@@ -18,6 +18,13 @@ class CloudflaredInstaller:
     """Platform-specific cloudflared installer."""
 
     @staticmethod
+    def _add_to_path(path: str | Path) -> None:
+        """Add directory to PATH for current process."""
+        path_str = str(path)
+        os.environ["PATH"] = path_str + os.pathsep + os.environ.get("PATH", "")
+        console.print(f"[dim]Added to PATH: {path_str}[/dim]")
+
+    @staticmethod
     def is_installed() -> bool:
         """Check if cloudflared is installed."""
         return shutil.which("cloudflared") is not None
@@ -91,8 +98,7 @@ class CloudflaredInstaller:
                     # Try to find and add to PATH for current session
                     install_path = CloudflaredInstaller._find_cloudflared_windows()
                     if install_path:
-                        os.environ["PATH"] = install_path + os.pathsep + os.environ.get("PATH", "")
-                        console.print(f"[dim]Added to PATH: {install_path}[/dim]")
+                        CloudflaredInstaller._add_to_path(install_path)
                     # Return True regardless - winget succeeded, may just need shell restart
                     return True
             except (subprocess.TimeoutExpired, OSError) as e:
@@ -119,7 +125,7 @@ class CloudflaredInstaller:
 
             exe_path = install_dir / "cloudflared.exe"
             if exe_path.exists():
-                os.environ["PATH"] = str(install_dir) + os.pathsep + os.environ.get("PATH", "")
+                CloudflaredInstaller._add_to_path(install_dir)
                 console.print(f"[green]✓ Installed to {install_dir}[/green]")
                 return True
 
@@ -203,10 +209,7 @@ class CloudflaredInstaller:
                         # Try to find and add to PATH
                         install_path = CloudflaredInstaller._find_cloudflared_unix()
                         if install_path:
-                            os.environ["PATH"] = (
-                                install_path + os.pathsep + os.environ.get("PATH", "")
-                            )
-                            console.print(f"[dim]Added to PATH: {install_path}[/dim]")
+                            CloudflaredInstaller._add_to_path(install_path)
                         # Return True regardless - package manager succeeded
                         return True
                 except (subprocess.TimeoutExpired, OSError) as e:
@@ -226,7 +229,7 @@ class CloudflaredInstaller:
             os.chmod(bin_path, 0o755)
 
             # Add to PATH for this session
-            os.environ["PATH"] = str(install_dir) + os.pathsep + os.environ.get("PATH", "")
+            CloudflaredInstaller._add_to_path(install_dir)
             console.print(f"[green]✓ Installed to {bin_path}[/green]")
             return True
 
@@ -257,8 +260,7 @@ class CloudflaredInstaller:
                     # Try to find and add to PATH
                     install_path = CloudflaredInstaller._find_cloudflared_unix()
                     if install_path:
-                        os.environ["PATH"] = install_path + os.pathsep + os.environ.get("PATH", "")
-                        console.print(f"[dim]Added to PATH: {install_path}[/dim]")
+                        CloudflaredInstaller._add_to_path(install_path)
                     # Return True regardless - Homebrew succeeded
                     return True
             except (subprocess.TimeoutExpired, OSError) as e:
@@ -289,7 +291,7 @@ class CloudflaredInstaller:
             bin_path = install_dir / "cloudflared"
             if bin_path.exists():
                 os.chmod(bin_path, 0o755)
-                os.environ["PATH"] = str(install_dir) + os.pathsep + os.environ.get("PATH", "")
+                CloudflaredInstaller._add_to_path(install_dir)
                 console.print(f"[green]✓ Installed to {bin_path}[/green]")
                 return True
 

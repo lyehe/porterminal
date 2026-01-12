@@ -208,14 +208,103 @@ class TestShellDetector:
         assert result == "bash"
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
-    def test_get_user_shell_id_returns_none_for_unknown(self, monkeypatch):
-        """Test that unknown shell returns None."""
-        monkeypatch.setenv("SHELL", "/usr/bin/unknown-shell")
+    def test_get_user_shell_id_returns_none_for_nonexistent(self, monkeypatch):
+        """Test that non-existent shell returns None."""
+        monkeypatch.setenv("SHELL", "/usr/bin/nonexistent-shell-xyz")
         detector = ShellDetector()
 
         result = detector._get_user_shell_id()
 
         assert result is None
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_get_user_shell_id_returns_name_for_unknown_shell(self, monkeypatch, tmp_path):
+        """Test that unknown but existing shell returns its name."""
+        # Create a fake shell executable
+        fake_shell = tmp_path / "nu"
+        fake_shell.touch()
+        fake_shell.chmod(0o755)
+
+        monkeypatch.setenv("SHELL", str(fake_shell))
+        detector = ShellDetector()
+
+        result = detector._get_user_shell_id()
+
+        assert result == "nu"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_create_shell_from_env_unknown_shell(self, monkeypatch, tmp_path):
+        """Test that _create_shell_from_env works for unknown shells."""
+        # Create a fake nushell executable
+        fake_shell = tmp_path / "nu"
+        fake_shell.touch()
+        fake_shell.chmod(0o755)
+
+        monkeypatch.setenv("SHELL", str(fake_shell))
+        detector = ShellDetector()
+
+        shell = detector._create_shell_from_env()
+
+        assert shell is not None
+        assert shell.id == "nu"
+        assert shell.name == "Nu"  # Capitalized
+        assert shell.command == str(fake_shell)
+        assert shell.args == ()  # No special args for unknown shells
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_create_shell_from_env_known_shell(self, monkeypatch):
+        """Test that _create_shell_from_env uses correct args for known shells."""
+        import shutil
+
+        bash_path = shutil.which("bash")
+        if not bash_path:
+            pytest.skip("bash not installed")
+
+        monkeypatch.setenv("SHELL", bash_path)
+        detector = ShellDetector()
+
+        shell = detector._create_shell_from_env()
+
+        assert shell is not None
+        assert shell.id == "bash"
+        assert shell.name == "Bash"
+        assert shell.args == ("--login",)
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_detect_shells_includes_unknown_user_shell(self, monkeypatch, tmp_path):
+        """Test that detect_shells includes user's unknown $SHELL."""
+        # Create a fake nushell executable
+        fake_shell = tmp_path / "nu"
+        fake_shell.touch()
+        fake_shell.chmod(0o755)
+
+        monkeypatch.setenv("SHELL", str(fake_shell))
+        detector = ShellDetector()
+
+        shells = detector.detect_shells()
+        shell_ids = [s.id for s in shells]
+
+        # User's shell should be included and first in the list
+        assert "nu" in shell_ids
+        assert shells[0].id == "nu"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_detect_shells_does_not_duplicate_known_shell(self, monkeypatch):
+        """Test that detect_shells doesn't duplicate a known shell from $SHELL."""
+        import shutil
+
+        bash_path = shutil.which("bash")
+        if not bash_path:
+            pytest.skip("bash not installed")
+
+        monkeypatch.setenv("SHELL", bash_path)
+        detector = ShellDetector()
+
+        shells = detector.detect_shells()
+        bash_shells = [s for s in shells if s.id == "bash"]
+
+        # Should only have one bash entry
+        assert len(bash_shells) == 1
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
     def test_get_user_shell_id_returns_none_when_unset(self, monkeypatch):

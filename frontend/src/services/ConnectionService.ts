@@ -55,7 +55,21 @@ interface TabConnectionState {
     watermark: number;        // Bytes queued in xterm.js render pipeline (written but not yet rendered)
     connectionGen: number;    // Detect stale callbacks after reconnect
     pauseSent: boolean;       // Track if we've sent pause to server
+    // Emergency watermark reset tracking
+    lastWatermarkActivity: number;  // Timestamp of last watermark change
+    emergencyResetTimer: ReturnType<typeof setTimeout> | null;
+    // Pause confirmation tracking
+    pauseConfirmPending: boolean;
+    pauseRetryTimer: ReturnType<typeof setTimeout> | null;
+    // RAF-batched writes for high throughput
+    writeBatch: string[];
+    writeScheduled: boolean;
 }
+
+// Emergency reset timeout (ms) - reset watermark if no progress
+const EMERGENCY_RESET_TIMEOUT = 5000;
+// Maximum watermark before hard cap (500KB)
+const MAX_WATERMARK = 500000;
 
 // Server rejection codes that should NOT trigger reconnect
 const REJECTION_CODES = {
@@ -69,8 +83,16 @@ const MAX_EARLY_BUFFER_SIZE = 1024 * 1024;  // 1MB
 
 // Watermark-based flow control constants (from xterm.js flow control guide)
 // Keep HIGH_WATERMARK <= 500KB for responsive keystrokes
-const HIGH_WATERMARK = 100000;   // 100KB - send pause to server when exceeded
-const LOW_WATERMARK = 10000;     // 10KB - send ACK to server when below
+// Adaptive thresholds: lower for mobile/slow devices to prevent jamming
+function getWatermarks(): { high: number; low: number } {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const isSlowDevice = typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4;
+    if (isMobile || isSlowDevice) {
+        return { high: 32000, low: 4000 };   // 32KB / 4KB for mobile/slow devices
+    }
+    return { high: 100000, low: 10000 };     // 100KB / 10KB for desktop
+}
+const { high: HIGH_WATERMARK, low: LOW_WATERMARK } = getWatermarks();
 
 /** Calculate total size of string buffer */
 function getBufferSize(buffer: string[]): number {
@@ -112,6 +134,12 @@ export function createConnectionService(
                 watermark: 0,
                 connectionGen: 0,
                 pauseSent: false,
+                lastWatermarkActivity: 0,
+                emergencyResetTimer: null,
+                pauseConfirmPending: false,
+                pauseRetryTimer: null,
+                writeBatch: [],
+                writeScheduled: false,
             });
         }
         return tabStates.get(tabId)!;
@@ -126,55 +154,145 @@ export function createConnectionService(
     }
 
     /**
-     * Write data to terminal with watermark-based flow control.
-     *
-     * This implements the xterm.js recommended flow control pattern:
-     * 1. Track watermark (bytes written - bytes processed)
-     * 2. When watermark exceeds HIGH_WATERMARK, send 'pause' to server
-     * 3. When watermark drops below LOW_WATERMARK, send 'ack' to server
-     *
-     * The server should stop sending data when paused and resume on ack.
-     * This prevents data from arriving faster than xterm.js can process.
+     * Clear emergency reset timer for a tab state.
      */
-    function writeWithFlowControl(tab: Tab, state: TabConnectionState, data: string): void {
-        const currentGen = state.connectionGen;
-        const dataLength = data.length;
+    function clearEmergencyTimer(state: TabConnectionState): void {
+        if (state.emergencyResetTimer) {
+            clearTimeout(state.emergencyResetTimer);
+            state.emergencyResetTimer = null;
+        }
+    }
 
-        // Update watermark (bytes in flight)
-        state.watermark += dataLength;
+    /**
+     * Clear pause retry timer for a tab state.
+     */
+    function clearPauseRetryTimer(state: TabConnectionState): void {
+        if (state.pauseRetryTimer) {
+            clearTimeout(state.pauseRetryTimer);
+            state.pauseRetryTimer = null;
+        }
+    }
 
-        // Write to xterm.js with callback for flow control
-        tab.term.write(data, () => {
-            // Ignore stale callbacks from previous connections
-            if (currentGen !== state.connectionGen) return;
+    /**
+     * Send pause message with retry and confirmation tracking.
+     */
+    function sendPauseWithRetry(tab: Tab, state: TabConnectionState): void {
+        if (state.pauseConfirmPending) return;  // Already waiting for confirmation
 
-            // Decrease watermark - this data has been processed
-            state.watermark = Math.max(0, state.watermark - dataLength);
+        try {
+            if (tab.ws?.readyState === WebSocket.OPEN) {
+                tab.ws.send(JSON.stringify({ type: 'pause' }));
+                state.pauseSent = true;
+                state.pauseConfirmPending = true;
 
-            // Send ACK to resume server if watermark dropped below threshold
-            if (state.pauseSent && state.watermark < LOW_WATERMARK) {
+                // Retry if no confirmation in 500ms
+                state.pauseRetryTimer = setTimeout(() => {
+                    if (state.pauseConfirmPending && tab.ws?.readyState === WebSocket.OPEN) {
+                        console.warn('Retrying pause message (no ack received)');
+                        tab.ws.send(JSON.stringify({ type: 'pause' }));
+                    }
+                }, 500);
+            }
+        } catch (e) {
+            console.warn('Failed to send flow control pause:', e);
+        }
+    }
+
+    /**
+     * Start emergency watermark reset timer.
+     * If watermark doesn't decrease within timeout, reset it to prevent permanent jam.
+     */
+    function startEmergencyResetTimer(tab: Tab, state: TabConnectionState): void {
+        clearEmergencyTimer(state);
+
+        state.emergencyResetTimer = setTimeout(() => {
+            if (state.pauseSent && (Date.now() - state.lastWatermarkActivity) > EMERGENCY_RESET_TIMEOUT) {
+                console.warn('Emergency watermark reset - xterm.js callbacks stalled');
+                state.watermark = 0;
+                state.pauseSent = false;
+                state.pauseConfirmPending = false;
+                clearPauseRetryTimer(state);
+
+                // Send ACK to resume server
                 try {
                     if (tab.ws?.readyState === WebSocket.OPEN) {
                         tab.ws.send(JSON.stringify({ type: 'ack' }));
-                        state.pauseSent = false;
                     }
                 } catch (e) {
-                    console.warn('Failed to send flow control ack:', e);
-                    state.pauseSent = false;  // Reset to allow retry on next callback
+                    console.warn('Failed to send emergency ack:', e);
                 }
             }
-        });
+        }, EMERGENCY_RESET_TIMEOUT);
+    }
 
-        // Send pause to server if watermark exceeds threshold
-        if (!state.pauseSent && state.watermark > HIGH_WATERMARK) {
-            try {
-                if (tab.ws?.readyState === WebSocket.OPEN) {
-                    tab.ws.send(JSON.stringify({ type: 'pause' }));
-                    state.pauseSent = true;
+    /**
+     * Write data to terminal with watermark-based flow control.
+     *
+     * This implements the xterm.js recommended flow control pattern with enhancements:
+     * 1. RAF batching: coalesce multiple writes into single animation frame
+     * 2. Track watermark (bytes written - bytes processed)
+     * 3. When watermark exceeds HIGH_WATERMARK, send 'pause' to server with retry
+     * 4. When watermark drops below LOW_WATERMARK, send 'ack' to server
+     * 5. Emergency reset if watermark doesn't decrease within timeout
+     * 6. Hard cap on watermark to prevent unbounded growth
+     */
+    function writeWithFlowControl(tab: Tab, state: TabConnectionState, data: string): void {
+        // Add to write batch for RAF coalescing
+        state.writeBatch.push(data);
+        // Update watermark with hard cap to prevent unbounded growth
+        state.watermark = Math.min(state.watermark + data.length, MAX_WATERMARK);
+        state.lastWatermarkActivity = Date.now();
+
+        // Schedule RAF-batched write if not already scheduled
+        if (!state.writeScheduled) {
+            state.writeScheduled = true;
+            requestAnimationFrame(() => {
+                if (state.writeBatch.length === 0) {
+                    state.writeScheduled = false;
+                    return;
                 }
-            } catch (e) {
-                console.warn('Failed to send flow control pause:', e);
-            }
+
+                const currentGen = state.connectionGen;
+                const combined = state.writeBatch.join('');
+                const batchLength = combined.length;
+                state.writeBatch = [];
+                state.writeScheduled = false;
+
+                // Write batched data to xterm.js with callback for flow control
+                tab.term.write(combined, () => {
+                    // Ignore stale callbacks from previous connections
+                    if (currentGen !== state.connectionGen) return;
+
+                    // Decrease watermark - this data has been processed
+                    state.watermark = Math.max(0, state.watermark - batchLength);
+                    state.lastWatermarkActivity = Date.now();
+
+                    // Clear emergency timer since we made progress
+                    clearEmergencyTimer(state);
+
+                    // Send ACK to resume server if watermark dropped below threshold
+                    if (state.pauseSent && state.watermark < LOW_WATERMARK) {
+                        try {
+                            if (tab.ws?.readyState === WebSocket.OPEN) {
+                                tab.ws.send(JSON.stringify({ type: 'ack' }));
+                                state.pauseSent = false;
+                                state.pauseConfirmPending = false;
+                                clearPauseRetryTimer(state);
+                            }
+                        } catch (e) {
+                            console.warn('Failed to send flow control ack:', e);
+                            state.pauseSent = false;  // Reset to allow retry on next callback
+                        }
+                    }
+                });
+
+                // Send pause to server if watermark exceeds threshold
+                if (!state.pauseSent && state.watermark > HIGH_WATERMARK) {
+                    sendPauseWithRetry(tab, state);
+                    // Start emergency reset timer in case xterm.js callbacks stall
+                    startEmergencyResetTimer(tab, state);
+                }
+            });
         }
     }
 
@@ -241,6 +359,13 @@ export function createConnectionService(
             state.connectionGen++;
             state.watermark = 0;
             state.pauseSent = false;
+            state.lastWatermarkActivity = 0;
+            state.pauseConfirmPending = false;
+            state.writeBatch = [];
+            state.writeScheduled = false;
+            // Clear any pending timers
+            clearEmergencyTimer(state);
+            clearPauseRetryTimer(state);
 
             const url = buildWebSocketUrl(tab.tabId, skipBuffer);
             const ws = new WebSocket(url);
@@ -304,6 +429,14 @@ export function createConnectionService(
                                     requestAnimationFrame(() => {
                                         tab.term.scrollToBottom();
                                         tab.container.style.opacity = '';
+
+                                        // Use onRender to catch async buffer reflow
+                                        let count = 0;
+                                        const disposable = tab.term.onRender(() => {
+                                            tab.term.scrollToBottom();
+                                            if (++count >= 5) disposable.dispose();
+                                        });
+                                        setTimeout(() => disposable.dispose(), 300);
                                     });
                                 });
                             });
@@ -311,6 +444,14 @@ export function createConnectionService(
                             // No buffer to flush - show terminal immediately
                             tab.term.scrollToBottom();
                             tab.container.style.opacity = '';
+
+                            // Use onRender to catch async buffer reflow
+                            let count = 0;
+                            const disposable = tab.term.onRender(() => {
+                                tab.term.scrollToBottom();
+                                if (++count >= 5) disposable.dispose();
+                            });
+                            setTimeout(() => disposable.dispose(), 300);
                         }
                     });
                 });
@@ -355,6 +496,11 @@ export function createConnectionService(
                                 console.error('Server error:', msg.message);
                                 tab.term.write(`\r\n\x1b[31mError: ${msg.message}\x1b[0m\r\n`);
                                 eventBus.emit('connection:error', { tabId: tab.id, error: msg.message });
+                                break;
+                            case 'pause_ack':
+                                // Server confirmed pause - stop retry timer
+                                state.pauseConfirmPending = false;
+                                clearPauseRetryTimer(state);
                                 break;
                         }
                     } catch (e) {
@@ -450,6 +596,11 @@ export function createConnectionService(
 
         cleanupTabState(tabId: number): void {
             cancelPendingReconnect(tabId);
+            const state = tabStates.get(tabId);
+            if (state) {
+                clearEmergencyTimer(state);
+                clearPauseRetryTimer(state);
+            }
             tabStates.delete(tabId);
         },
 

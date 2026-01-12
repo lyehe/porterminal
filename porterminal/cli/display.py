@@ -58,6 +58,14 @@ def get_caution() -> str:
     return CAUTION_DEFAULT
 
 
+def _apply_gradient(lines: list[str], colors: list[str]) -> list[str]:
+    """Apply color gradient to text lines."""
+    return [
+        f"[{colors[min(i, len(colors) - 1)]}]{line}[/{colors[min(i, len(colors) - 1)]}]"
+        for i, line in enumerate(lines)
+    ]
+
+
 def get_qr_code(url: str) -> str:
     """Generate QR code as ASCII string.
 
@@ -112,21 +120,15 @@ def display_startup_screen(
     else:
         status = "[yellow]●[/yellow] LOCAL MODE"
 
-    # Build logo with gradient
-    logo_lines = LOGO.strip().split("\n")
-    colors = ["bold bright_cyan", "bright_cyan", "cyan", "bright_blue", "blue"]
-    logo_colored = []
-    for i, line in enumerate(logo_lines):
-        color = colors[i] if i < len(colors) else colors[-1]
-        logo_colored.append(f"[{color}]{line}[/{color}]")
-
-    # Build tagline with gradient
-    tagline_lines = TAGLINE.split("\n")
-    tagline_colors = ["bright_magenta", "magenta"]
-    tagline_colored = []
-    for i, line in enumerate(tagline_lines):
-        color = tagline_colors[i] if i < len(tagline_colors) else tagline_colors[-1]
-        tagline_colored.append(f"[{color}]{line}[/{color}]")
+    # Build logo and tagline with gradients
+    logo_colored = _apply_gradient(
+        LOGO.strip().split("\n"),
+        ["bold bright_cyan", "bright_cyan", "cyan", "bright_blue", "blue"],
+    )
+    tagline_colored = _apply_gradient(
+        TAGLINE.split("\n"),
+        ["bright_magenta", "magenta"],
+    )
 
     # Left side content
     left_lines = [

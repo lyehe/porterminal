@@ -13,6 +13,15 @@ TAB_NAME_MIN_LENGTH = 1
 TAB_NAME_MAX_LENGTH = 50
 
 
+def _validate_tab_name(name: str) -> None:
+    """Validate tab name length."""
+    if not (TAB_NAME_MIN_LENGTH <= len(name) <= TAB_NAME_MAX_LENGTH):
+        raise ValueError(
+            f"Tab name must be {TAB_NAME_MIN_LENGTH}-{TAB_NAME_MAX_LENGTH} "
+            f"characters, got {len(name)}"
+        )
+
+
 @dataclass
 class Tab:
     """Terminal tab entity.
@@ -35,11 +44,7 @@ class Tab:
     last_accessed: datetime
 
     def __post_init__(self) -> None:
-        if not (TAB_NAME_MIN_LENGTH <= len(self.name) <= TAB_NAME_MAX_LENGTH):
-            raise ValueError(
-                f"Tab name must be {TAB_NAME_MIN_LENGTH}-{TAB_NAME_MAX_LENGTH} "
-                f"characters, got {len(self.name)}"
-            )
+        _validate_tab_name(self.name)
 
     @property
     def tab_id(self) -> str:
@@ -52,11 +57,7 @@ class Tab:
 
     def rename(self, new_name: str) -> None:
         """Rename the tab with validation."""
-        if not (TAB_NAME_MIN_LENGTH <= len(new_name) <= TAB_NAME_MAX_LENGTH):
-            raise ValueError(
-                f"Tab name must be {TAB_NAME_MIN_LENGTH}-{TAB_NAME_MAX_LENGTH} "
-                f"characters, got {len(new_name)}"
-            )
+        _validate_tab_name(new_name)
         self.name = new_name
 
     def to_dict(self) -> dict:

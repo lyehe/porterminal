@@ -12,6 +12,10 @@ export interface CopyButton {
     hide(): void;
     /** Setup event handlers */
     setup(): void;
+    /** Check if copy button is currently visible */
+    isVisible(): boolean;
+    /** Set callback for when button hides */
+    setOnHide(callback: () => void): void;
 }
 
 /**
@@ -39,7 +43,17 @@ export function createCopyButton(
         }, 400);
     }
 
+    let onHideCallback: (() => void) | null = null;
+
     return {
+        isVisible(): boolean {
+            return button?.classList.contains('visible') ?? false;
+        },
+
+        setOnHide(callback: () => void): void {
+            onHideCallback = callback;
+        },
+
         show(text: string, x?: number, y?: number): void {
             if (!button || !text) return;
             pendingText = text;
@@ -68,8 +82,12 @@ export function createCopyButton(
 
         hide(): void {
             if (!button) return;
+            const wasVisible = button.classList.contains('visible');
             pendingText = '';
             button.classList.remove('visible');
+            if (wasVisible && onHideCallback) {
+                onHideCallback();
+            }
         },
 
         setup(): void {

@@ -46,6 +46,9 @@ export interface TabService {
 
     /** Get default shell ID */
     getDefaultShellId(): string;
+
+    /** Enable/disable keyboard input (prevents virtual keyboard on mobile during selection) */
+    setKeyboardEnabled(enabled: boolean): void;
 }
 
 /**
@@ -511,9 +514,22 @@ export function createTabService(
             tab.term.focus();
             requestAnimationFrame(() => {
                 tab.fitAddon.fit();
+
                 // If already visible (reconnect/switch back), scroll to bottom
+                // Use onRender callbacks to handle xterm.js async buffer reflow
                 if (tab.container.style.opacity !== '0') {
                     tab.term.scrollToBottom();
+
+                    let count = 0;
+                    const disposable = tab.term.onRender(() => {
+                        tab.term.scrollToBottom();
+                        if (++count >= 10) disposable.dispose();
+                    });
+
+                    setTimeout(() => {
+                        disposable.dispose();
+                        tab.term.scrollToBottom();
+                    }, 500);
                 }
             });
 
@@ -589,6 +605,21 @@ export function createTabService(
         getDefaultShellId(): string {
             const shellSelect = document.getElementById('shell-select') as HTMLSelectElement | null;
             return shellSelect?.value ?? 'default';
+        },
+
+        setKeyboardEnabled(enabled: boolean): void {
+            const tab = getActiveTab();
+            if (!tab) return;
+
+            const textarea = tab.term.textarea;
+            if (textarea) {
+                if (enabled) {
+                    textarea.removeAttribute('readonly');
+                } else {
+                    textarea.setAttribute('readonly', 'true');
+                    tab.term.blur();
+                }
+            }
         },
     };
 

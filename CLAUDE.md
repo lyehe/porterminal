@@ -28,15 +28,16 @@ npm run watch                   # Build with watch mode
 
 **CLI options:**
 ```bash
-ptn                    # Start server with tunnel
-ptn ~/projects/myapp   # Start in specific folder
-ptn --no-tunnel        # Local network only
-ptn -b                 # Run in background
-ptn -p                 # Enable password for this session
-ptn -dp                # Toggle default password requirement
-ptn -v                 # Verbose startup logs
-ptn --init             # Create .ptn/ptn.yaml config
-ptn -U                 # Update to latest version
+ptn                       # Start server with tunnel
+ptn ~/projects/myapp      # Start in specific folder
+ptn -n, --no-tunnel       # Local network only
+ptn -b, --background      # Run in background
+ptn -p, --password        # Enable password for this session
+ptn -dp, --default-password  # Toggle default password requirement
+ptn -v, --verbose         # Verbose startup logs
+ptn -i, --init            # Create .ptn/ptn.yaml config
+ptn -u, --update          # Update to latest version
+ptn -c, --check-update    # Check for updates
 ```
 
 **Config:** Search order: `$PORTERMINAL_CONFIG_PATH` → `./ptn.yaml` → `./.ptn/ptn.yaml` → `~/.ptn/ptn.yaml`

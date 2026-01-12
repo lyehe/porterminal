@@ -120,26 +120,39 @@ def parse_args() -> argparse.Namespace:
 
 DEFAULT_CONFIG = """\
 # ptn configuration file
-# Docs: https://github.com/lyehe/porterminal/blob/master/docs/configuration.md
+# Docs: https://github.com/lyehe/porterminal
 
-# Custom buttons (appear in third toolbar row)
 buttons:
-  - label: "git"
-    send: "git status\\r"
-  - label: "build"
-    send: "npm run build\\r"
-  # Multi-step button with delays (ms):
-  # - label: "deploy"
-  #   send:
-  #     - "npm run build"
-  #     - 100
-  #     - "\\r"
-
-# Terminal settings (optional)
-# terminal:
-#   default_shell: bash
-#   cols: 120
-#   rows: 30
+  - label: "new"
+    send:
+      - "/new"
+      - 100
+      - "\\r"
+  - label: "init"
+    send:
+      - "/init"
+      - 100
+      - "\\r"
+  - label: "resume"
+    send:
+      - "/resume"
+      - 100
+      - "\\r"
+  - label: "compact"
+    send:
+      - "/compact"
+      - 100
+      - "\\r"
+  - label: "claude"
+    send:
+      - "claude"
+      - 100
+      - "\\r"
+  - label: "codex"
+    send:
+      - "codex"
+      - 100
+      - "\\r"
 """
 
 

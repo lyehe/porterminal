@@ -20,13 +20,17 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install fish shell (Ubuntu)
+      - name: Install fish and nushell (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y fish
+        run: |
+          sudo apt-get update && sudo apt-get install -y fish
+          # Install Nushell for Issue #13 tests
+          curl -fsSL https://github.com/nushell/nushell/releases/download/0.101.0/nu-0.101.0-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          sudo mv nu-0.101.0-x86_64-unknown-linux-gnu/nu /usr/local/bin/
 
-      - name: Install fish shell (macOS)
+      - name: Install fish and nushell (macOS)
         if: matrix.os == 'macos-latest'
-        run: brew install fish
+        run: brew install fish nushell
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7

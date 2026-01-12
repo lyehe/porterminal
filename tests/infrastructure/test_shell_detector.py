@@ -396,3 +396,49 @@ class TestShellDetector:
         default_id = detector.get_default_shell_id()
 
         assert default_id == "fish"
+
+    # Issue #13: Nushell support tests
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_nushell_detected_via_shell_env(self, monkeypatch):
+        """Test that Nushell is detected when set as $SHELL (Issue #13)."""
+        import shutil
+
+        nu_path = shutil.which("nu")
+        if not nu_path:
+            pytest.skip("nushell not installed")
+
+        monkeypatch.setenv("SHELL", nu_path)
+        detector = ShellDetector()
+
+        # Should return "nu" as the shell ID
+        result = detector._get_user_shell_id()
+        assert result == "nu"
+
+        # Should be added to detected shells
+        shells = detector.detect_shells()
+        shell_ids = [s.id for s in shells]
+        assert "nu" in shell_ids
+
+        # Should be the default shell
+        default_id = detector.get_default_shell_id()
+        assert default_id == "nu"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
+    def test_nushell_shell_command_created_correctly(self, monkeypatch):
+        """Test that Nushell ShellCommand has correct properties (Issue #13)."""
+        import shutil
+
+        nu_path = shutil.which("nu")
+        if not nu_path:
+            pytest.skip("nushell not installed")
+
+        monkeypatch.setenv("SHELL", nu_path)
+        detector = ShellDetector()
+
+        shell = detector._create_shell_from_env()
+
+        assert shell is not None
+        assert shell.id == "nu"
+        assert shell.name == "Nu"
+        assert shell.command == nu_path
+        assert shell.args == ()  # No special args for nushell

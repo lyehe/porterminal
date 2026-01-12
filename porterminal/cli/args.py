@@ -109,7 +109,7 @@ def parse_args() -> argparse.Namespace:
 
     if args.init:
         _init_config()
-        sys.exit(0)
+        # Continue to launch ptn after creating config
 
     if args.default_password:
         _toggle_password_requirement()

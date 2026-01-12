@@ -72,7 +72,7 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-p, --password` | Prompt for password to protect this session |
 | `-dp, --default-password` | Toggle password requirement in config (on/off) |
 | `-v, --verbose` | Show detailed startup logs |
-| `-i, --init` | Create `.ptn/ptn.yaml` config in current directory |
+| `-i, --init` | Create `.ptn/ptn.yaml` config with auto-discovered project scripts |
 | `-u, --update` | Update to the latest version |
 | `-c, --check-update` | Check if a newer version is available |
 | `-V, --version` | Show version |
@@ -92,7 +92,15 @@ ptn ~/projects/myapp   # Start in specific folder
 
 ## Configuration
 
-Run `ptn --init` to create a starter config, or create `ptn.yaml` manually:
+Run `ptn --init` to create a starter config. It auto-discovers project scripts from `package.json`, `pyproject.toml`, or `Makefile` and adds them as buttons:
+
+```bash
+ptn -i
+# Created: .ptn/ptn.yaml
+# Discovered 3 project script(s): build, dev, test
+```
+
+Or create `ptn.yaml` manually:
 
 ```yaml
 # Terminal settings
@@ -105,14 +113,16 @@ terminal:
       args: []
 
 # Custom buttons (appear in toolbar)
+# row: 1 = default row, 2+ = additional rows
 buttons:
   - label: "claude"
     send:
       - "claude"
       - 100        # delay in ms
       - "\r"
-  - label: "tmux"
-    send: "tmux\r"
+  - label: "build"
+    send: "npm run build\r"
+    row: 2         # second button row
 
 # Update checker settings
 update:

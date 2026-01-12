@@ -61,6 +61,7 @@ class ButtonConfig(BaseModel):
 
     label: str
     send: str | list[str | int] = ""  # string or list of strings/ints (ints = wait ms)
+    row: int = Field(default=1, ge=1, le=10)  # toolbar row (1-10)
 
 
 class CloudflareConfig(BaseModel):

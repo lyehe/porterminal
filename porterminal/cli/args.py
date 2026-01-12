@@ -118,47 +118,13 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-DEFAULT_CONFIG = """\
-# ptn configuration file
-# Docs: https://github.com/lyehe/porterminal
-
-buttons:
-  - label: "new"
-    send:
-      - "/new"
-      - 100
-      - "\\r"
-  - label: "init"
-    send:
-      - "/init"
-      - 100
-      - "\\r"
-  - label: "resume"
-    send:
-      - "/resume"
-      - 100
-      - "\\r"
-  - label: "compact"
-    send:
-      - "/compact"
-      - 100
-      - "\\r"
-  - label: "claude"
-    send:
-      - "claude"
-      - 100
-      - "\\r"
-  - label: "codex"
-    send:
-      - "codex"
-      - 100
-      - "\\r"
-"""
-
-
 def _init_config() -> None:
-    """Create .ptn/ptn.yaml in current directory."""
+    """Create .ptn/ptn.yaml in current directory with auto-discovered scripts."""
     from pathlib import Path
+
+    import yaml
+
+    from porterminal.cli.script_discovery import discover_scripts
 
     config_dir = Path.cwd() / ".ptn"
     config_file = config_dir / "ptn.yaml"
@@ -167,9 +133,35 @@ def _init_config() -> None:
         print(f"Config already exists: {config_file}")
         return
 
+    # Build config with default buttons (row 1: AI coding tools)
+    config: dict = {
+        "buttons": [
+            {"label": "new", "send": ["/new", 100, "\r"]},
+            {"label": "init", "send": ["/init", 100, "\r"]},
+            {"label": "resume", "send": ["/resume", 100, "\r"]},
+            {"label": "compact", "send": ["/compact", 100, "\r"]},
+            {"label": "claude", "send": ["claude", 100, "\r"]},
+            {"label": "codex", "send": ["codex", 100, "\r"]},
+        ]
+    }
+
+    # Auto-discover project scripts and add to row 2
+    discovered = discover_scripts(Path.cwd())
+    if discovered:
+        config["buttons"].extend(discovered)
+
     config_dir.mkdir(exist_ok=True)
-    config_file.write_text(DEFAULT_CONFIG)
+
+    # Write YAML with comment header
+    header = "# ptn configuration file\n# Docs: https://github.com/lyehe/porterminal\n\n"
+    yaml_content = yaml.safe_dump(config, default_flow_style=False, sort_keys=False)
+    config_file.write_text(header + yaml_content)
+
     print(f"Created: {config_file}")
+    if discovered:
+        print(
+            f"Discovered {len(discovered)} project script(s): {', '.join(b['label'] for b in discovered)}"
+        )
 
 
 def _toggle_password_requirement() -> None:

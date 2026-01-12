@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-01-12
+
+### Added
+
+- **Auto-discover project scripts** - `ptn -i` now scans for project files and adds discovered scripts as buttons in row 2
+  - Detects `package.json` scripts (build, dev, test, lint, etc.)
+  - Detects `pyproject.toml` scripts (`[project.scripts]` and `[tool.poetry.scripts]`)
+  - Detects `Makefile` targets (build, test, clean, etc.)
+  - Only includes explicitly defined scripts, not generic commands
+- **Configurable button rows** - Buttons can now specify which toolbar row to appear in (1-10)
+  - `row: 1` (default) places button in first custom row
+  - `row: 2` places button in second custom row
+  - Rows are created dynamically as needed
+
+### Changed
+
+- `ptn -i` now launches the server after creating config (previously exited immediately)
+- Default config buttons updated to AI coding tools: `/new`, `/init`, `/resume`, `/compact`, `claude`, `codex`
+
+### Fixed
+
+- Code simplification: Extracted button creation helpers in frontend for better maintainability
+
 ## [0.4.0] - 2026-01-12
 
 This release focuses on mobile experience improvements and robust shell support.

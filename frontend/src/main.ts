@@ -49,7 +49,7 @@ import { renderToolbar } from '@/ui/Toolbar';
 import { getSavedPassword, savePassword, clearPassword } from '@/utils/storage';
 
 // Types
-import type { SwipeDirection, Tab } from '@/types';
+import type { AppConfig, ButtonSend, SwipeDirection, Tab } from '@/types';
 import type { TabService } from '@/services/TabService';
 
 /**
@@ -82,6 +82,68 @@ const CONFIG = {
     reconnectDelayMs: 1000,
     heartbeatMs: 30000,
 };
+
+/**
+ * Create a toolbar row element
+ */
+function createToolbarRow(toolbar: HTMLElement, id: string): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'toolbar-row hidden';
+    row.id = id;
+    toolbar.appendChild(row);
+    return row;
+}
+
+/**
+ * Create a custom button element with encoded send data
+ */
+function createCustomButton(btn: { label: string; send: ButtonSend }): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.className = 'tool-btn';
+    button.textContent = btn.label;
+    const send = btn.send || '';
+    const sendArray = Array.isArray(send) ? send : [send];
+    const encoded = sendArray.map(item =>
+        typeof item === 'number' ? item : item
+            .replace(/\r/g, '{CR}')
+            .replace(/\n/g, '{LF}')
+            .replace(/\x1b/g, '{ESC}')
+    );
+    button.dataset.send = JSON.stringify(encoded);
+    return button;
+}
+
+/**
+ * Render custom buttons from config into toolbar rows
+ */
+function renderCustomButtons(buttons: AppConfig['buttons']): void {
+    if (!buttons?.length) return;
+
+    const toolbar = document.getElementById('toolbar');
+    if (!toolbar) return;
+
+    // Group buttons by row number
+    const buttonsByRow = new Map<number, typeof buttons>();
+    for (const btn of buttons) {
+        const row = btn.row ?? 1;
+        if (!buttonsByRow.has(row)) {
+            buttonsByRow.set(row, []);
+        }
+        buttonsByRow.get(row)!.push(btn);
+    }
+
+    // Create/get toolbar rows and add buttons (row 1 = toolbar-row3, row 2 = toolbar-row4, etc.)
+    for (const rowNum of [...buttonsByRow.keys()].sort((a, b) => a - b)) {
+        const toolbarRowId = `toolbar-row${rowNum + 2}`;
+        const toolbarRow = document.getElementById(toolbarRowId)
+            ?? createToolbarRow(toolbar, toolbarRowId);
+
+        for (const btn of buttonsByRow.get(rowNum)!) {
+            toolbarRow.appendChild(createCustomButton(btn));
+        }
+        toolbarRow.classList.remove('hidden');
+    }
+}
 
 /**
  * Initialize the application
@@ -354,31 +416,8 @@ async function init(): Promise<void> {
         });
     }
 
-    // Render custom buttons from config (in third row)
-    // send can be string or array of strings/numbers (numbers = wait ms)
-    if (config.buttons && config.buttons.length > 0) {
-        const toolbarRow3 = document.getElementById('toolbar-row3');
-        if (toolbarRow3) {
-            for (const btn of config.buttons) {
-                const button = document.createElement('button');
-                button.className = 'tool-btn';
-                button.textContent = btn.label;
-                // Normalize to array and encode for HTML storage
-                const send = btn.send || '';
-                const sendArray = Array.isArray(send) ? send : [send];
-                const encoded = sendArray.map(item => {
-                    if (typeof item === 'number') return item;
-                    return item
-                        .replace(/\r/g, '{CR}')
-                        .replace(/\n/g, '{LF}')
-                        .replace(/\x1b/g, '{ESC}');
-                });
-                button.dataset.send = JSON.stringify(encoded);
-                toolbarRow3.appendChild(button);
-            }
-            toolbarRow3.classList.remove('hidden');
-        }
-    }
+    // Render custom buttons from config (supports multiple rows)
+    renderCustomButtons(config.buttons);
 
     // Render toolbar buttons from config
     renderToolbar();

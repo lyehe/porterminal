@@ -54,7 +54,7 @@ export type ButtonSend = string | Array<string | number>;
 export interface AppConfig {
     shells: ShellConfig[];
     default_shell: string;
-    buttons?: Array<{ label: string; send: ButtonSend }>;
+    buttons?: Array<{ label: string; send: ButtonSend; row?: number }>;
 }
 
 /** Gesture state for touch handling */

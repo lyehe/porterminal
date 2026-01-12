@@ -179,8 +179,14 @@ class TestShellDetector:
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
     def test_get_user_shell_id_returns_fish(self, monkeypatch):
-        """Test that $SHELL=/usr/bin/fish returns 'fish'."""
-        monkeypatch.setenv("SHELL", "/usr/bin/fish")
+        """Test that $SHELL pointing to fish returns 'fish'."""
+        import shutil
+
+        fish_path = shutil.which("fish")
+        if not fish_path:
+            pytest.skip("fish not installed")
+
+        monkeypatch.setenv("SHELL", fish_path)
         detector = ShellDetector()
 
         result = detector._get_user_shell_id()
@@ -189,8 +195,14 @@ class TestShellDetector:
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
     def test_get_user_shell_id_returns_zsh(self, monkeypatch):
-        """Test that $SHELL=/bin/zsh returns 'zsh'."""
-        monkeypatch.setenv("SHELL", "/bin/zsh")
+        """Test that $SHELL pointing to zsh returns 'zsh'."""
+        import shutil
+
+        zsh_path = shutil.which("zsh")
+        if not zsh_path:
+            pytest.skip("zsh not installed")
+
+        monkeypatch.setenv("SHELL", zsh_path)
         detector = ShellDetector()
 
         result = detector._get_user_shell_id()
@@ -199,8 +211,14 @@ class TestShellDetector:
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
     def test_get_user_shell_id_returns_bash(self, monkeypatch):
-        """Test that $SHELL=/bin/bash returns 'bash'."""
-        monkeypatch.setenv("SHELL", "/bin/bash")
+        """Test that $SHELL pointing to bash returns 'bash'."""
+        import shutil
+
+        bash_path = shutil.which("bash")
+        if not bash_path:
+            pytest.skip("bash not installed")
+
+        monkeypatch.setenv("SHELL", bash_path)
         detector = ShellDetector()
 
         result = detector._get_user_shell_id()
@@ -319,7 +337,13 @@ class TestShellDetector:
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
     def test_macos_default_uses_user_shell(self, monkeypatch):
         """Test that macOS default respects $SHELL."""
-        monkeypatch.setenv("SHELL", "/usr/local/bin/fish")
+        import shutil
+
+        fish_path = shutil.which("fish")
+        if not fish_path:
+            pytest.skip("fish not installed")
+
+        monkeypatch.setenv("SHELL", fish_path)
         detector = ShellDetector()
 
         result = detector._get_macos_default()
@@ -329,7 +353,13 @@ class TestShellDetector:
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
     def test_linux_default_uses_user_shell(self, monkeypatch):
         """Test that Linux default respects $SHELL."""
-        monkeypatch.setenv("SHELL", "/usr/bin/fish")
+        import shutil
+
+        fish_path = shutil.which("fish")
+        if not fish_path:
+            pytest.skip("fish not installed")
+
+        monkeypatch.setenv("SHELL", fish_path)
         detector = ShellDetector()
 
         result = detector._get_linux_default()

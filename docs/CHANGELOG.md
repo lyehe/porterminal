@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Nushell/Fish compatibility** - Added missing environment variables (`USER`, `SHELL`, `XDG_*`) that modern shells need for proper initialization ([#13](https://github.com/lyehe/porterminal/issues/13))
 - Code simplification: Extracted button creation helpers in frontend for better maintainability
 
 ## [0.4.0] - 2026-01-12

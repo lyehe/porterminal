@@ -30,6 +30,15 @@ SAFE_ENV_VARS: frozenset[str] = frozenset(
         "OS",
         "PROCESSOR_ARCHITECTURE",
         "NUMBER_OF_PROCESSORS",
+        # User identity (needed by many shells including Nushell)
+        "USER",
+        "LOGNAME",
+        "SHELL",
+        # XDG directories (needed by Nushell, Fish, and modern shells for config)
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_RUNTIME_DIR",
         # Terminal
         "TERM",
         # Locale settings for proper text rendering

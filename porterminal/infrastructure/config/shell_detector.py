@@ -158,25 +158,20 @@ class ShellDetector:
 
         try:
             result = subprocess.run(
-                [
-                    str(vswhere),
-                    "-all",
-                    "-prerelease",
-                    "-property",
-                    "installationPath",
-                ],
+                [str(vswhere), "-all", "-prerelease", "-format", "json"],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
-            vs_paths = [p.strip() for p in result.stdout.strip().split("\n") if p.strip()]
-        except (subprocess.TimeoutExpired, OSError) as e:
+            vs_installs = json.loads(result.stdout) if result.stdout.strip() else []
+        except (subprocess.TimeoutExpired, OSError, json.JSONDecodeError) as e:
             logger.warning("Failed to run vswhere: %s", e)
             return []
 
         shells = []
-        for vs_path in vs_paths:
-            vs_path = Path(vs_path)
+        for vs_info in vs_installs:
+            vs_path = Path(vs_info.get("installationPath", ""))
+            instance_id = vs_info.get("instanceId", "")
             # Extract VS version and edition from path
             # e.g., "C:\Program Files\Microsoft Visual Studio\2022\Community"
             edition = vs_path.name  # Community, Professional, Enterprise
@@ -197,18 +192,32 @@ class ShellDetector:
                     )
                 )
 
-            # Developer PowerShell
-            launch_ps = vs_path / "Common7" / "Tools" / "Launch-VsDevShell.ps1"
-            if launch_ps.exists():
+            # Developer PowerShell - find DevShell.dll (location varies by VS version)
+            devshell_dll = None
+            for dll_path in [
+                vs_path / "Common7" / "Tools" / "Microsoft.VisualStudio.DevShell.dll",
+                vs_path
+                / "Common7"
+                / "Tools"
+                / "vsdevshell"
+                / "Microsoft.VisualStudio.DevShell.dll",
+            ]:
+                if dll_path.exists():
+                    devshell_dll = dll_path
+                    break
+
+            if devshell_dll and instance_id:
                 name = f"Dev PS {year}"
                 shell_id = f"devps-{year}-{edition.lower()}"
-                # powershell.exe -NoExit -Command "& 'path\to\Launch-VsDevShell.ps1'"
+                # Use forward slashes to avoid backslash escape issues (PowerShell accepts both)
+                dll_str = str(devshell_dll).replace("\\", "/")
+                cmd = f"Import-Module '{dll_str}'; Enter-VsDevShell {instance_id} -SkipAutomaticLocation"
                 shells.append(
                     (
                         name,
                         shell_id,
                         "powershell.exe",
-                        ["-NoExit", "-Command", f"& '{launch_ps}'"],
+                        ["-NoExit", "-Command", cmd],
                     )
                 )
 

@@ -22,6 +22,7 @@ DEFAULT_SAFE_VARS: frozenset[str] = frozenset(
         "HOMEPATH",
         "LOCALAPPDATA",
         "APPDATA",
+        "PROGRAMDATA",
         "PROGRAMFILES",
         "PROGRAMFILES(X86)",
         "COMMONPROGRAMFILES",

@@ -1,85 +1,20 @@
-"""Environment variable sanitization for PTY processes."""
+"""Environment variable sanitization for PTY processes.
+
+This module re-exports the environment rules from the domain layer
+and provides the build_safe_environment() function for PTY spawning.
+"""
 
 import os
 
-# Environment variables to allowlist (safe to pass to shell)
-SAFE_ENV_VARS: frozenset[str] = frozenset(
-    {
-        # System paths
-        "PATH",
-        "PATHEXT",
-        "SYSTEMROOT",
-        "WINDIR",
-        "TEMP",
-        "TMP",
-        "COMSPEC",
-        # User directories
-        "HOME",
-        "USERPROFILE",
-        "HOMEDRIVE",
-        "HOMEPATH",
-        "LOCALAPPDATA",
-        "APPDATA",
-        "PROGRAMFILES",
-        "PROGRAMFILES(X86)",
-        "COMMONPROGRAMFILES",
-        # System info
-        "COMPUTERNAME",
-        "USERNAME",
-        "USERDOMAIN",
-        "OS",
-        "PROCESSOR_ARCHITECTURE",
-        "NUMBER_OF_PROCESSORS",
-        # User identity (needed by many shells including Nushell)
-        "USER",
-        "LOGNAME",
-        "SHELL",
-        # XDG directories (needed by Nushell, Fish, and modern shells for config)
-        "XDG_CONFIG_HOME",
-        "XDG_DATA_HOME",
-        "XDG_CACHE_HOME",
-        "XDG_RUNTIME_DIR",
-        # Terminal
-        "TERM",
-        # Locale settings for proper text rendering
-        "LANG",
-        "LC_ALL",
-        "LC_CTYPE",
-    }
+from porterminal.domain.values.environment_rules import (
+    DEFAULT_BLOCKED_VARS as BLOCKED_ENV_VARS,
+)
+from porterminal.domain.values.environment_rules import (
+    DEFAULT_SAFE_VARS as SAFE_ENV_VARS,
 )
 
-# Environment variables to explicitly block (secrets)
-BLOCKED_ENV_VARS: frozenset[str] = frozenset(
-    {
-        # AWS
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "AWS_SESSION_TOKEN",
-        # Azure
-        "AZURE_CLIENT_SECRET",
-        "AZURE_CLIENT_ID",
-        # Git/GitHub/GitLab
-        "GH_TOKEN",
-        "GITHUB_TOKEN",
-        "GITLAB_TOKEN",
-        # Package managers
-        "NPM_TOKEN",
-        # AI APIs
-        "ANTHROPIC_API_KEY",
-        "OPENAI_API_KEY",
-        "GOOGLE_API_KEY",
-        # Payment
-        "STRIPE_SECRET_KEY",
-        # Database
-        "DATABASE_URL",
-        "DB_PASSWORD",
-        # Generic secrets
-        "SECRET_KEY",
-        "API_KEY",
-        "API_SECRET",
-        "PRIVATE_KEY",
-    }
-)
+# Re-export for backward compatibility
+__all__ = ["SAFE_ENV_VARS", "BLOCKED_ENV_VARS", "build_safe_environment"]
 
 
 def build_safe_environment() -> dict[str, str]:

@@ -28,6 +28,8 @@ DEFAULT_SAFE_VARS: frozenset[str] = frozenset(
         # System info
         "COMPUTERNAME",
         "USERNAME",
+        "USER",
+        "LOGNAME",
         "USERDOMAIN",
         "OS",
         "PROCESSOR_ARCHITECTURE",

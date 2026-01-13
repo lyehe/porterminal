@@ -165,6 +165,23 @@ class TestDiscoverPythonScripts:
         # Then 2 from poetry.scripts (to reach cap of 6)
         assert labels[4:6] == ["t0", "t1"]
 
+    def test_filters_unsafe_script_names(self, tmp_path):
+        """Test that script names with unsafe characters are filtered out."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(
+            "[project.scripts]\n"
+            'safe-name = "pkg:safe"\n'
+            '"test; rm -rf /" = "pkg:bad"\n'  # Injection attempt
+            'also_safe = "pkg:ok"\n'
+        )
+
+        result = _discover_python_scripts(tmp_path)
+
+        labels = [r["label"] for r in result]
+        assert "safe-name" in labels
+        assert "also_safe" in labels
+        assert "test; rm -rf /" not in labels
+
 
 class TestDiscoverMakefileTargets:
     """Tests for Makefile target discovery."""

@@ -5,6 +5,14 @@ import re
 import tomllib
 from pathlib import Path
 
+# Pattern for safe script names (alphanumeric, hyphens, underscores only)
+_SAFE_NAME = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def _is_safe_name(name: str) -> bool:
+    """Check if script name contains only safe characters."""
+    return bool(_SAFE_NAME.match(name)) and len(name) <= 50
+
 
 def discover_scripts(cwd: Path | None = None) -> list[dict]:
     """Discover project scripts in current directory.
@@ -63,12 +71,13 @@ def _discover_python_scripts(base: Path) -> list[dict]:
         # Check [project.scripts] (PEP 621)
         project_scripts = data.get("project", {}).get("scripts", {})
         for name in list(project_scripts.keys())[:4]:
-            buttons.append({"label": name, "send": f"{name}\r", "row": 2})
+            if _is_safe_name(name):
+                buttons.append({"label": name, "send": f"{name}\r", "row": 2})
 
         # Check [tool.poetry.scripts]
         poetry_scripts = data.get("tool", {}).get("poetry", {}).get("scripts", {})
         for name in list(poetry_scripts.keys())[:4]:
-            if not any(b["label"] == name for b in buttons):
+            if _is_safe_name(name) and not any(b["label"] == name for b in buttons):
                 buttons.append({"label": name, "send": f"{name}\r", "row": 2})
 
         return buttons[:6]

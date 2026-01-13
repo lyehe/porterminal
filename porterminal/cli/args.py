@@ -126,7 +126,8 @@ def _init_config() -> None:
 
     from porterminal.cli.script_discovery import discover_scripts
 
-    config_dir = Path.cwd() / ".ptn"
+    cwd = Path.cwd()
+    config_dir = cwd / ".ptn"
     config_file = config_dir / "ptn.yaml"
 
     if config_file.exists():
@@ -146,7 +147,7 @@ def _init_config() -> None:
     }
 
     # Auto-discover project scripts and add to row 2
-    discovered = discover_scripts(Path.cwd())
+    discovered = discover_scripts(cwd)
     if discovered:
         config["buttons"].extend(discovered)
 

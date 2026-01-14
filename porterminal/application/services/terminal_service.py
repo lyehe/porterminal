@@ -39,10 +39,12 @@ class ConnectionFlowState:
 # These are responses from the terminal emulator to queries from applications.
 # If written to PTY, they get echoed back and displayed as garbage.
 #
+# Note: We only filter DA responses. CPR responses (\x1b[...R) are needed by
+# some shells like Nushell that query cursor position during startup.
+#
 # Patterns:
 #   \x1b[?...c  - Device Attributes (DA) response
-#   \x1b[...R   - Cursor Position Report (CPR) response
-TERMINAL_RESPONSE_PATTERN = re.compile(rb"\x1b\[\?[\d;]*c|\x1b\[[\d;]*R")
+TERMINAL_RESPONSE_PATTERN = re.compile(rb"\x1b\[\?[\d;]*c")
 
 # Constants
 HEARTBEAT_INTERVAL = 30  # seconds

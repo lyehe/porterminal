@@ -61,28 +61,39 @@ class ShellDetector:
     def _get_platform_candidates(self) -> list[tuple[str, str, str, list[str]]]:
         """Get shell candidates for current platform.
 
+        On Windows, discovers shells from:
+        - Windows Terminal profiles (includes WSL distros)
+        - Hardcoded common shells (PowerShell, CMD, Git Bash)
+        - Visual Studio Developer shells
+
+        Note: WSL distros are detected from Windows Terminal profiles only.
+        We don't probe inside WSL for individual shells to avoid crossing
+        environment boundaries.
+
         Returns:
             List of (name, id, command, args) tuples.
         """
         if sys.platform == "win32":
-            # Get Windows Terminal profiles first, then hardcoded defaults
             wt_profiles = self._get_windows_terminal_profiles()
             hardcoded = [
                 ("PS 7", "pwsh", "pwsh.exe", ["-NoLogo"]),
                 ("PS", "powershell", "powershell.exe", ["-NoLogo"]),
                 ("CMD", "cmd", "cmd.exe", []),
+                ("WSL", "wsl", "wsl.exe", []),
                 ("Git Bash", "gitbash", r"C:\Program Files\Git\bin\bash.exe", ["--login"]),
             ]
-            # Merge WT profiles with hardcoded (dedupe by command)
             merged = self._merge_candidates(wt_profiles, hardcoded)
-            # Add VS dev shells and WSL shells
             vs_shells = self._get_visual_studio_shells()
-            wsl_shells = self._get_wsl_shells()
-            return merged + vs_shells + wsl_shells
+            return merged + vs_shells
         return [
             ("Bash", "bash", "bash", ["--login"]),
             ("Zsh", "zsh", "zsh", ["--login"]),
             ("Fish", "fish", "fish", []),
+            ("Nu", "nu", "nu", []),
+            ("Ion", "ion", "ion", []),
+            ("Dash", "dash", "dash", []),
+            ("Ksh", "ksh", "ksh", ["--login"]),
+            ("Tcsh", "tcsh", "tcsh", []),
             ("Sh", "sh", "sh", []),
         ]
 
@@ -118,8 +129,20 @@ class ShellDetector:
         for profile in profile_list:
             name = profile.get("name", "")
             commandline = profile.get("commandline", "")
+            source = profile.get("source", "")
 
-            if not name or not commandline:
+            if not name:
+                continue
+
+            # Handle WSL distro profiles (they use source instead of commandline)
+            if source == "Windows.Terminal.Wsl" and not commandline:
+                # Use wsl.exe -d <distro> to launch the specific distro
+                shell_id = self._slugify(name)
+                short_name = self._abbreviate_name(name)
+                profiles.append((short_name, shell_id, "wsl.exe", ["-d", name]))
+                continue
+
+            if not commandline:
                 continue
 
             # Parse commandline into command and args
@@ -220,43 +243,6 @@ class ShellDetector:
                         ["-NoExit", "-Command", cmd],
                     )
                 )
-
-        return shells
-
-    def _get_wsl_shells(self) -> list[tuple[str, str, str, list[str]]]:
-        """Detect shells available inside WSL.
-
-        Probes WSL for common shells and returns entries for each found.
-
-        Returns:
-            List of (name, id, command, args) tuples for WSL shells.
-        """
-        if not shutil.which("wsl.exe"):
-            return []
-
-        # Shells to probe for in WSL (name, shell_cmd, args)
-        wsl_shells_to_probe = [
-            ("Bash", "bash", ["--login"]),
-            ("Zsh", "zsh", ["--login"]),
-            ("Fish", "fish", []),
-            ("Nu", "nu", []),
-        ]
-
-        shells = []
-        for name, shell_cmd, args in wsl_shells_to_probe:
-            try:
-                # Check if shell exists in WSL
-                result = subprocess.run(
-                    ["wsl.exe", "which", shell_cmd],
-                    capture_output=True,
-                    text=True,
-                    timeout=3,
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    # Just use the shell name - no need to differentiate WSL
-                    shells.append((name, shell_cmd, "wsl.exe", ["-e", shell_cmd] + args))
-            except (subprocess.TimeoutExpired, OSError):
-                continue
 
         return shells
 

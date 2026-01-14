@@ -442,3 +442,49 @@ class TestShellDetector:
         assert shell.name == "Nu"
         assert shell.command == nu_path
         assert shell.args == ()  # No special args for nushell
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_wsl_distro_detected_from_windows_terminal(self, monkeypatch, tmp_path):
+        """Test that WSL distros from Windows Terminal are detected."""
+        import json
+
+        # Create a mock Windows Terminal settings.json with WSL distro
+        # The path is: LOCALAPPDATA/Packages/Microsoft.WindowsTerminal.../LocalState/settings.json
+        wt_dir = tmp_path / "Packages" / "Microsoft.WindowsTerminal_8wekyb3d8bbwe" / "LocalState"
+        wt_dir.mkdir(parents=True)
+        settings_file = wt_dir / "settings.json"
+        settings_file.write_text(
+            json.dumps(
+                {
+                    "profiles": {
+                        "list": [
+                            {
+                                "name": "Ubuntu",
+                                "source": "Windows.Terminal.Wsl",
+                                "guid": "{test-guid}",
+                            },
+                            {
+                                "name": "PowerShell",
+                                "commandline": "powershell.exe",
+                            },
+                        ]
+                    }
+                }
+            )
+        )
+
+        # Mock LOCALAPPDATA to point to our temp directory
+        monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+        detector = ShellDetector()
+        profiles = detector._get_windows_terminal_profiles()
+
+        # Should find both Ubuntu (WSL) and PowerShell
+        names = [p[0] for p in profiles]
+        assert "Ubuntu" in names or any("ubuntu" in n.lower() for n in names)
+
+        # Ubuntu should use wsl.exe -d Ubuntu
+        ubuntu_profile = next((p for p in profiles if "buntu" in p[0].lower()), None)
+        assert ubuntu_profile is not None
+        assert ubuntu_profile[2] == "wsl.exe"
+        assert ubuntu_profile[3] == ["-d", "Ubuntu"]

@@ -19,7 +19,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
 
 from rich.console import Console
 
@@ -287,9 +287,15 @@ def main() -> int:
     if tunnel_process is not None:
         Thread(target=drain_process_output, args=(tunnel_process,), daemon=True).start()
 
-    # Wait for Ctrl+C or process exit
+    # Use an event for responsive Ctrl+C handling on Windows
+    shutdown_event = Event()
+
+    def signal_handler(signum: int, frame: object) -> None:
+        shutdown_event.set()
+
+    old_handler = signal.signal(signal.SIGINT, signal_handler)
     try:
-        while True:
+        while not shutdown_event.is_set():
             if server_process is not None and server_process.poll() is not None:
                 code = server_process.returncode
                 if code == 0 or code < 0:
@@ -304,9 +310,11 @@ def main() -> int:
                 else:
                     console.print(f"\n[yellow]Tunnel stopped (exit code {code})[/yellow]")
                 break
-            time.sleep(1)
+            shutdown_event.wait(0.1)
+    finally:
+        signal.signal(signal.SIGINT, old_handler)
 
-    except KeyboardInterrupt:
+    if shutdown_event.is_set():
         console.print("\n[dim]Shutting down...[/dim]")
 
     # Cleanup - terminate gracefully, then kill if needed

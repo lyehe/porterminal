@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Config from URL/file** - `ptn -i` can now fetch config templates from URLs or local files
+- **Expanded script discovery** - Improved detection of project scripts with shared helpers
+
+### Fixed
+
+- **Paste rate limit** - Increased rate limit defaults from 500 bytes to 16KB burst, fixing "rate limit exceeded" errors when pasting text
+
 ## [0.4.1] - 2026-01-12
 
 ### Added

@@ -2,9 +2,9 @@
 
 from dataclasses import dataclass
 
-# Default business rules
-DEFAULT_RATE = 100.0  # tokens per second
-DEFAULT_BURST = 500
+# Defaults: 1KB/s sustained, 16KB burst (allows reasonable paste operations)
+DEFAULT_RATE = 1000.0
+DEFAULT_BURST = 16384
 
 
 @dataclass(frozen=True, slots=True)

@@ -65,8 +65,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-i",
         "--init",
-        action="store_true",
-        help="Create .ptn/ptn.yaml config file in current directory",
+        nargs="?",
+        const=True,
+        default=False,
+        metavar="URL_OR_PATH",
+        help="Create .ptn/ptn.yaml config (optionally from URL or file path)",
     )
     parser.add_argument(
         "-p",
@@ -108,7 +111,7 @@ def parse_args() -> argparse.Namespace:
         sys.exit(0 if success else 1)
 
     if args.init:
-        _init_config()
+        _init_config(args.init if args.init is not True else None)
         # Continue to launch ptn after creating config
 
     if args.default_password:
@@ -118,9 +121,16 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def _init_config() -> None:
-    """Create .ptn/ptn.yaml in current directory with auto-discovered scripts."""
+def _init_config(source: str | None = None) -> None:
+    """Create .ptn/ptn.yaml in current directory.
+
+    Args:
+        source: Optional URL or file path to use as config source.
+                If None, auto-discovers scripts and creates default config.
+    """
     from pathlib import Path
+    from urllib.error import URLError
+    from urllib.request import urlopen
 
     import yaml
 
@@ -130,6 +140,37 @@ def _init_config() -> None:
     config_dir = cwd / ".ptn"
     config_file = config_dir / "ptn.yaml"
 
+    # If source is provided, fetch/copy it
+    if source:
+        config_dir.mkdir(exist_ok=True)
+
+        if source.startswith(("http://", "https://")):
+            # Download from URL
+            try:
+                print(f"Downloading config from {source}...")
+                with urlopen(source, timeout=10) as response:
+                    content = response.read().decode("utf-8")
+                config_file.write_text(content)
+                print(f"Created: {config_file}")
+            except (URLError, OSError, TimeoutError) as e:
+                print(f"Error downloading config: {e}")
+                return
+        else:
+            # Copy from local file
+            source_path = Path(source).expanduser().resolve()
+            if not source_path.exists():
+                print(f"Error: File not found: {source_path}")
+                return
+            try:
+                content = source_path.read_text(encoding="utf-8")
+                config_file.write_text(content)
+                print(f"Created: {config_file} (from {source_path})")
+            except OSError as e:
+                print(f"Error reading config: {e}")
+                return
+        return
+
+    # No source - use auto-discovery
     if config_file.exists():
         print(f"Config already exists: {config_file}")
         return

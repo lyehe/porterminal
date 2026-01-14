@@ -1,5 +1,7 @@
 """Tests for script discovery module."""
 
+import json
+
 from porterminal.cli.script_discovery import (
     _discover_makefile_targets,
     _discover_npm_scripts,
@@ -329,3 +331,254 @@ class TestDiscoverScripts:
 
         assert len(result) == 1
         assert result[0]["label"] == "dev"
+
+
+class TestDiscoverBunScripts:
+    """Tests for Bun detection (uses bun run instead of npm run)."""
+
+    def test_uses_bun_run_when_lockfile_exists(self, tmp_path):
+        """Test that bun run is used when bun.lockb exists."""
+        package_json = tmp_path / "package.json"
+        package_json.write_text('{"scripts": {"build": "tsc", "dev": "vite"}}')
+        # Create bun.lockb to indicate Bun project
+        (tmp_path / "bun.lockb").write_bytes(b"")
+
+        result = discover_scripts(tmp_path)
+
+        assert len(result) == 2
+        assert result[0]["send"] == "bun run build\r"
+        assert result[1]["send"] == "bun run dev\r"
+
+    def test_uses_npm_run_without_bun_lockfile(self, tmp_path):
+        """Test that npm run is used when bun.lockb doesn't exist."""
+        package_json = tmp_path / "package.json"
+        package_json.write_text('{"scripts": {"build": "tsc"}}')
+
+        result = discover_scripts(tmp_path)
+
+        assert result[0]["send"] == "npm run build\r"
+
+
+class TestDiscoverDenoTasks:
+    """Tests for Deno task discovery."""
+
+    def test_discovers_tasks_from_deno_json(self, tmp_path):
+        """Test that tasks are discovered from deno.json."""
+        deno_json = tmp_path / "deno.json"
+        deno_json.write_text('{"tasks": {"build": "deno compile", "test": "deno test"}}')
+
+        result = discover_scripts(tmp_path)
+
+        assert len(result) == 2
+        labels = [r["label"] for r in result]
+        assert "build" in labels
+        assert "test" in labels
+        assert result[0]["send"] == "deno task build\r"
+
+    def test_discovers_tasks_from_deno_jsonc(self, tmp_path):
+        """Test that tasks are discovered from deno.jsonc with comments."""
+        deno_jsonc = tmp_path / "deno.jsonc"
+        deno_jsonc.write_text("""{
+            // This is a comment
+            "tasks": {
+                "dev": "deno run --watch main.ts", /* inline comment */
+                "test": "deno test"
+            }
+        }""")
+
+        result = discover_scripts(tmp_path)
+
+        assert len(result) == 2
+        labels = [r["label"] for r in result]
+        assert "dev" in labels
+        assert "test" in labels
+
+    def test_respects_priority_order(self, tmp_path):
+        """Test that priority tasks appear first."""
+        deno_json = tmp_path / "deno.json"
+        deno_json.write_text('{"tasks": {"custom": "x", "build": "y", "test": "z"}}')
+
+        result = discover_scripts(tmp_path)
+
+        labels = [r["label"] for r in result]
+        # build and test should come before custom
+        assert labels.index("build") < labels.index("custom")
+        assert labels.index("test") < labels.index("custom")
+
+    def test_returns_empty_if_no_deno_json(self, tmp_path):
+        """Test that empty list is returned if no deno.json exists."""
+        from porterminal.cli.script_discovery import _discover_deno_tasks
+
+        result = _discover_deno_tasks(tmp_path)
+
+        assert result == []
+
+    def test_limits_to_six_buttons(self, tmp_path):
+        """Test that results are limited to 6 buttons."""
+        tasks = {f"task{i}": f"cmd{i}" for i in range(10)}
+        deno_json = tmp_path / "deno.json"
+        deno_json.write_text(f'{{"tasks": {json.dumps(tasks)}}}')
+
+        from porterminal.cli.script_discovery import _discover_deno_tasks
+
+        result = _discover_deno_tasks(tmp_path)
+
+        assert len(result) <= 6
+
+
+class TestDiscoverJustRecipes:
+    """Tests for Just recipe discovery."""
+
+    def test_discovers_recipes_from_justfile(self, tmp_path):
+        """Test that recipes are discovered from justfile."""
+        justfile = tmp_path / "justfile"
+        justfile.write_text("""
+build:
+    cargo build
+
+test:
+    cargo test
+
+run arg:
+    cargo run -- {{arg}}
+""")
+
+        result = discover_scripts(tmp_path)
+
+        labels = [r["label"] for r in result]
+        assert "build" in labels
+        assert "test" in labels
+        assert "run" in labels
+        # Check command format
+        build_btn = next(r for r in result if r["label"] == "build")
+        assert build_btn["send"] == "just build\r"
+
+    def test_discovers_from_uppercase_justfile(self, tmp_path):
+        """Test that Justfile (uppercase) is also found."""
+        justfile = tmp_path / "Justfile"
+        justfile.write_text("build:\n    echo build\n")
+
+        from porterminal.cli.script_discovery import _discover_just_recipes
+
+        result = _discover_just_recipes(tmp_path)
+
+        assert len(result) == 1
+        assert result[0]["label"] == "build"
+
+    def test_respects_priority_order(self, tmp_path):
+        """Test that priority recipes appear first."""
+        justfile = tmp_path / "justfile"
+        justfile.write_text("""
+custom:
+    echo custom
+
+build:
+    echo build
+
+test:
+    echo test
+""")
+
+        from porterminal.cli.script_discovery import _discover_just_recipes
+
+        result = _discover_just_recipes(tmp_path)
+
+        labels = [r["label"] for r in result]
+        assert labels.index("build") < labels.index("custom")
+        assert labels.index("test") < labels.index("custom")
+
+    def test_returns_empty_if_no_justfile(self, tmp_path):
+        """Test that empty list is returned if no justfile exists."""
+        from porterminal.cli.script_discovery import _discover_just_recipes
+
+        result = _discover_just_recipes(tmp_path)
+
+        assert result == []
+
+
+class TestDiscoverTaskfileTasks:
+    """Tests for Taskfile.yml task discovery."""
+
+    def test_discovers_tasks_from_taskfile(self, tmp_path):
+        """Test that tasks are discovered from Taskfile.yml."""
+        taskfile = tmp_path / "Taskfile.yml"
+        taskfile.write_text("""
+version: '3'
+
+tasks:
+  build:
+    cmds:
+      - go build
+
+  test:
+    cmds:
+      - go test ./...
+
+  lint:
+    cmds:
+      - golangci-lint run
+""")
+
+        result = discover_scripts(tmp_path)
+
+        labels = [r["label"] for r in result]
+        assert "build" in labels
+        assert "test" in labels
+        assert "lint" in labels
+        # Check command format
+        build_btn = next(r for r in result if r["label"] == "build")
+        assert build_btn["send"] == "task build\r"
+
+    def test_discovers_from_lowercase_taskfile(self, tmp_path):
+        """Test that taskfile.yml (lowercase) is also found."""
+        taskfile = tmp_path / "taskfile.yml"
+        taskfile.write_text("version: '3'\ntasks:\n  build:\n    cmd: echo build\n")
+
+        from porterminal.cli.script_discovery import _discover_taskfile_tasks
+
+        result = _discover_taskfile_tasks(tmp_path)
+
+        assert len(result) == 1
+        assert result[0]["label"] == "build"
+
+    def test_respects_priority_order(self, tmp_path):
+        """Test that priority tasks appear first."""
+        taskfile = tmp_path / "Taskfile.yml"
+        taskfile.write_text("""
+version: '3'
+tasks:
+  custom:
+    cmd: echo custom
+  build:
+    cmd: echo build
+  test:
+    cmd: echo test
+""")
+
+        from porterminal.cli.script_discovery import _discover_taskfile_tasks
+
+        result = _discover_taskfile_tasks(tmp_path)
+
+        labels = [r["label"] for r in result]
+        assert labels.index("build") < labels.index("custom")
+        assert labels.index("test") < labels.index("custom")
+
+    def test_returns_empty_if_no_taskfile(self, tmp_path):
+        """Test that empty list is returned if no Taskfile.yml exists."""
+        from porterminal.cli.script_discovery import _discover_taskfile_tasks
+
+        result = _discover_taskfile_tasks(tmp_path)
+
+        assert result == []
+
+    def test_limits_to_six_buttons(self, tmp_path):
+        """Test that results are limited to 6 buttons."""
+        tasks = "\n".join([f"  task{i}:\n    cmd: echo {i}" for i in range(10)])
+        taskfile = tmp_path / "Taskfile.yml"
+        taskfile.write_text(f"version: '3'\ntasks:\n{tasks}\n")
+
+        from porterminal.cli.script_discovery import _discover_taskfile_tasks
+
+        result = _discover_taskfile_tasks(tmp_path)
+
+        assert len(result) <= 6

@@ -89,7 +89,7 @@ class ShellDetector:
             ("Bash", "bash", "bash", ["--login"]),
             ("Zsh", "zsh", "zsh", ["--login"]),
             ("Fish", "fish", "fish", []),
-            ("Nu", "nu", "nu", []),
+            ("Nu", "nu", "nu", ["--login"]),
             ("Ion", "ion", "ion", []),
             ("Dash", "dash", "dash", []),
             ("Ksh", "ksh", "ksh", ["--login"]),

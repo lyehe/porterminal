@@ -10,10 +10,54 @@ import yaml
 # Pattern for safe script names (alphanumeric, hyphens, underscores only)
 _SAFE_NAME = re.compile(r"^[a-zA-Z0-9_-]+$")
 
+# Maximum buttons to return from each discovery function
+_MAX_BUTTONS = 6
+
 
 def _is_safe_name(name: str) -> bool:
     """Check if script name contains only safe characters."""
     return bool(_SAFE_NAME.match(name)) and len(name) <= 50
+
+
+def _find_file(base: Path, filenames: list[str]) -> Path | None:
+    """Find the first existing file from a list of candidates."""
+    for filename in filenames:
+        path = base / filename
+        if path.exists():
+            return path
+    return None
+
+
+def _build_buttons(
+    tasks: dict,
+    priority: list[str],
+    command_prefix: str,
+    *,
+    priority_only: bool = False,
+) -> list[dict]:
+    """Build button configs from tasks dict with priority ordering.
+
+    Args:
+        tasks: Dict of task names to their definitions
+        priority: List of task names to prioritize
+        command_prefix: Command prefix (e.g., "deno task", "task", "just")
+        priority_only: If True, only include tasks from priority list
+    """
+    buttons = []
+    priority_set = set(priority)
+
+    # Add priority tasks first
+    for name in priority:
+        if name in tasks and _is_safe_name(name):
+            buttons.append({"label": name, "send": f"{command_prefix} {name}\r", "row": 2})
+
+    # Add remaining tasks (unless priority_only is set)
+    if not priority_only:
+        for name in tasks:
+            if name not in priority_set and _is_safe_name(name) and len(buttons) < _MAX_BUTTONS:
+                buttons.append({"label": name, "send": f"{command_prefix} {name}\r", "row": 2})
+
+    return buttons[:_MAX_BUTTONS]
 
 
 def discover_scripts(cwd: Path | None = None) -> list[dict]:
@@ -45,6 +89,7 @@ def _discover_npm_scripts(base: Path) -> list[dict]:
     """Extract scripts from package.json.
 
     Uses 'bun run' if bun.lockb exists, otherwise 'npm run'.
+    Only includes scripts from the priority list (build, dev, start, etc.).
     """
     pkg_file = base / "package.json"
     if not pkg_file.exists():
@@ -56,22 +101,19 @@ def _discover_npm_scripts(base: Path) -> list[dict]:
 
         # Detect package manager: bun if bun.lockb exists
         runner = "bun run" if (base / "bun.lockb").exists() else "npm run"
-
-        # Common useful scripts to include (if defined)
         priority = ["build", "dev", "start", "test", "lint", "format", "watch"]
 
-        buttons = []
-        for name in priority:
-            if name in scripts:
-                buttons.append({"label": name, "send": f"{runner} {name}\r", "row": 2})
-
-        return buttons[:6]  # Limit to 6 buttons
+        return _build_buttons(scripts, priority, runner, priority_only=True)
     except Exception:
         return []
 
 
 def _discover_python_scripts(base: Path) -> list[dict]:
-    """Extract scripts from pyproject.toml."""
+    """Extract scripts from pyproject.toml.
+
+    Checks [project.scripts] (PEP 621) first, then [tool.poetry.scripts].
+    Takes up to 4 from each source, deduplicates, and caps at 6 total.
+    """
     toml_file = base / "pyproject.toml"
     if not toml_file.exists():
         return []
@@ -80,19 +122,20 @@ def _discover_python_scripts(base: Path) -> list[dict]:
         data = tomllib.loads(toml_file.read_text(encoding="utf-8"))
         buttons = []
 
-        # Check [project.scripts] (PEP 621)
+        # Check [project.scripts] (PEP 621) - take up to 4
         project_scripts = data.get("project", {}).get("scripts", {})
         for name in list(project_scripts.keys())[:4]:
             if _is_safe_name(name):
                 buttons.append({"label": name, "send": f"{name}\r", "row": 2})
 
-        # Check [tool.poetry.scripts]
+        # Check [tool.poetry.scripts] - take up to 4, skip duplicates
+        existing_labels = {b["label"] for b in buttons}
         poetry_scripts = data.get("tool", {}).get("poetry", {}).get("scripts", {})
         for name in list(poetry_scripts.keys())[:4]:
-            if _is_safe_name(name) and not any(b["label"] == name for b in buttons):
+            if _is_safe_name(name) and name not in existing_labels:
                 buttons.append({"label": name, "send": f"{name}\r", "row": 2})
 
-        return buttons[:6]
+        return buttons[:_MAX_BUTTONS]
     except Exception:
         return []
 
@@ -110,52 +153,30 @@ def _discover_makefile_targets(base: Path) -> list[dict]:
         pattern = r"^([a-zA-Z_][a-zA-Z0-9_-]*)\s*:"
         targets = re.findall(pattern, content, re.MULTILINE)
 
-        # Priority order for common targets (use set for O(1) lookup)
+        # Convert list to dict for _build_buttons compatibility
+        targets_dict = {t: True for t in targets}
         priority = ["build", "test", "run", "clean", "install", "dev", "lint", "all"]
-        priority_set = set(priority)
-        target_set = set(targets)
 
-        # Priority targets first, then remaining targets
-        ordered = [t for t in priority if t in target_set]
-        ordered.extend(t for t in targets if t not in priority_set)
-
-        return [{"label": name, "send": f"make {name}\r", "row": 2} for name in ordered[:6]]
+        return _build_buttons(targets_dict, priority, "make")
     except Exception:
         return []
 
 
 def _discover_deno_tasks(base: Path) -> list[dict]:
     """Extract tasks from deno.json or deno.jsonc."""
-    # Try both deno.json and deno.jsonc
-    for filename in ["deno.json", "deno.jsonc"]:
-        deno_file = base / filename
-        if deno_file.exists():
-            break
-    else:
+    deno_file = _find_file(base, ["deno.json", "deno.jsonc"])
+    if not deno_file:
         return []
 
     try:
         content = deno_file.read_text(encoding="utf-8")
-        # Strip comments for deno.jsonc (same approach as Windows Terminal settings)
-        if filename.endswith(".jsonc"):
+        if deno_file.suffix == ".jsonc":
             content = _strip_json_comments(content)
-        data = json.loads(content)
-        tasks = data.get("tasks", {})
 
-        # Common useful tasks to include (if defined)
+        tasks = json.loads(content).get("tasks", {})
         priority = ["build", "dev", "start", "test", "lint", "format", "check"]
 
-        buttons = []
-        for name in priority:
-            if name in tasks and _is_safe_name(name):
-                buttons.append({"label": name, "send": f"deno task {name}\r", "row": 2})
-
-        # Add remaining tasks not in priority list
-        for name in tasks:
-            if name not in priority and _is_safe_name(name) and len(buttons) < 6:
-                buttons.append({"label": name, "send": f"deno task {name}\r", "row": 2})
-
-        return buttons[:6]
+        return _build_buttons(tasks, priority, "deno task")
     except Exception:
         return []
 
@@ -210,12 +231,8 @@ def _strip_json_comments(content: str) -> str:
 
 def _discover_just_recipes(base: Path) -> list[dict]:
     """Extract recipes from justfile."""
-    # Try both justfile and Justfile
-    for filename in ["justfile", "Justfile", ".justfile"]:
-        justfile = base / filename
-        if justfile.exists():
-            break
-    else:
+    justfile = _find_file(base, ["justfile", "Justfile", ".justfile"])
+    if not justfile:
         return []
 
     try:
@@ -225,47 +242,25 @@ def _discover_just_recipes(base: Path) -> list[dict]:
         pattern = r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*(?:[^:]*)?:"
         recipes = re.findall(pattern, content, re.MULTILINE)
 
-        # Priority order for common recipes
+        # Convert list to dict for _build_buttons compatibility
+        recipes_dict = {r: True for r in recipes}
         priority = ["build", "test", "run", "dev", "check", "lint", "fmt", "clean"]
-        priority_set = set(priority)
-        recipe_set = set(recipes)
 
-        # Priority recipes first, then remaining
-        ordered = [r for r in priority if r in recipe_set]
-        ordered.extend(r for r in recipes if r not in priority_set and _is_safe_name(r))
-
-        return [{"label": name, "send": f"just {name}\r", "row": 2} for name in ordered[:6]]
+        return _build_buttons(recipes_dict, priority, "just")
     except Exception:
         return []
 
 
 def _discover_taskfile_tasks(base: Path) -> list[dict]:
     """Extract tasks from Taskfile.yml."""
-    # Try multiple filenames
-    for filename in ["Taskfile.yml", "Taskfile.yaml", "taskfile.yml", "taskfile.yaml"]:
-        taskfile = base / filename
-        if taskfile.exists():
-            break
-    else:
+    taskfile = _find_file(base, ["Taskfile.yml", "Taskfile.yaml", "taskfile.yml", "taskfile.yaml"])
+    if not taskfile:
         return []
 
     try:
-        data = yaml.safe_load(taskfile.read_text(encoding="utf-8"))
-        tasks = data.get("tasks", {})
-
-        # Priority order for common tasks
+        tasks = yaml.safe_load(taskfile.read_text(encoding="utf-8")).get("tasks", {})
         priority = ["build", "test", "run", "dev", "lint", "fmt", "clean", "default"]
 
-        buttons = []
-        for name in priority:
-            if name in tasks and _is_safe_name(name):
-                buttons.append({"label": name, "send": f"task {name}\r", "row": 2})
-
-        # Add remaining tasks not in priority list
-        for name in tasks:
-            if name not in priority and _is_safe_name(name) and len(buttons) < 6:
-                buttons.append({"label": name, "send": f"task {name}\r", "row": 2})
-
-        return buttons[:6]
+        return _build_buttons(tasks, priority, "task")
     except Exception:
         return []

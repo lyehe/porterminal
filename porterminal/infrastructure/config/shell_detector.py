@@ -90,10 +90,10 @@ class ShellDetector:
             ("Zsh", "zsh", "zsh", ["--login"]),
             ("Fish", "fish", "fish", []),
             ("Nu", "nu", "nu", ["--login"]),
-            ("Ion", "ion", "ion", []),
-            ("Dash", "dash", "dash", []),
-            ("Ksh", "ksh", "ksh", ["--login"]),
-            ("Tcsh", "tcsh", "tcsh", []),
+            ("Ion", "ion", "ion", ["-l"]),
+            ("Dash", "dash", "dash", ["-l"]),
+            ("Ksh", "ksh", "ksh", ["-l"]),
+            ("Tcsh", "tcsh", "tcsh", ["-l"]),
             ("Sh", "sh", "sh", []),
         ]
 

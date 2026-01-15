@@ -43,8 +43,10 @@ class ShellDetector:
                 )
 
         # Include user's $SHELL if not already detected (supports unknown shells)
+        # Compare by command path, not id, since user may have a different shell
+        # with the same name (e.g., custom nu install vs system nu)
         user_shell = self._create_shell_from_env()
-        if user_shell and not any(s.id == user_shell.id for s in shells):
+        if user_shell and not any(s.command == user_shell.command for s in shells):
             # Insert at beginning so user's preferred shell is first
             shells.insert(0, user_shell)
 

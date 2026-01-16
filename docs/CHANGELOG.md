@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-01-16
+
+### Added
+
+- **Compose mode** - New text input mode for mobile-friendly typing
+  - Toggle with ▤ button in the tab bar
+  - Type in a native text box with autocorrect, suggestions, and cursor positioning
+  - Press Enter (⏎) to send newline, or type text and tap Send (➤) to transmit
+  - Quick toolbar buttons (Esc, Ctrl, arrows) still send directly to terminal
+  - State persists across page reloads
+- **ResizeObserver for terminal fitting** - Terminal now properly resizes when compose mode toggles or viewport changes
+
+### Changed
+
+- Simplified viewport handling - ResizeObserver is now single source of truth for terminal refits
+- Removed redundant window resize and orientationchange handlers
+- ComposeInput component simplified (200 → 99 lines)
+
+### Fixed
+
+- Terminal no longer gets hidden under compose input area
+- Consistent UI styling across auth, disconnect, and compose components (subtle shadows, no heavy borders)
+
+## [0.4.8] - 2026-01-14
+
 ### Added
 
 - **Config from URL/file** - `ptn -i` can now fetch config templates from URLs or local files
@@ -354,7 +379,10 @@ This release focuses on mobile experience improvements and robust shell support.
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/lyehe/porterminal/compare/v0.4.8...v0.5.0
+[0.4.8]: https://github.com/lyehe/porterminal/compare/v0.4.1...v0.4.8
+[0.4.1]: https://github.com/lyehe/porterminal/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/lyehe/porterminal/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/lyehe/porterminal/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/lyehe/porterminal/compare/v0.3.2...v0.3.3

@@ -24,6 +24,7 @@ npm install                     # Install deps
 npm run dev                     # Dev server with HMR (port 5173)
 npm run build                   # TypeScript check + build to porterminal/static/
 npm run watch                   # Build with watch mode
+npx tsc --noEmit                # Type check only (no build)
 ```
 
 **CLI options:**
@@ -109,6 +110,11 @@ Tests use pytest-asyncio with `asyncio_mode = "auto"`. Shared fixtures in `tests
 - `fake_pty_factory` - Factory for creating fake PTYs with dependency injection
 - Domain fixtures: `session_id`, `user_id`, `default_dimensions`, `sample_session`, `sample_tab`
 - Repository fixtures: `session_repository`, `tab_repository`, `connection_registry`
+
+## Troubleshooting
+
+- **Connection fails?** Cloudflare tunnel sometimes blocks connections. Restart the server (`Ctrl+C`, then `ptn`) to get a fresh tunnel URL.
+- **Shell not detected?** Set your `$SHELL` environment variable or configure shells in `ptn.yaml`.
 
 ## Security Considerations
 

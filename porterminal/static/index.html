@@ -16,8 +16,8 @@
 
     <!-- Icons (PWA disabled - not useful for tunnel-based access) -->
     <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
-  <script type="module" crossorigin src="/static/assets/app-DlWNJWFE.js"></script>
-  <link rel="stylesheet" crossorigin href="/static/assets/app-xPAM7YhQ.css">
+  <script type="module" crossorigin src="/static/assets/app-y91PF3Er.js"></script>
+  <link rel="stylesheet" crossorigin href="/static/assets/app-BuC_VzCM.css">
 </head>
 <body>
     <div id="app">
@@ -28,6 +28,7 @@
             <!-- Tabs rendered by JS -->
             <div id="shell-selector">
                 <select id="shell-select"><option>...</option></select>
+                <button id="btn-compose" title="Compose Mode">▤</button>
                 <button id="btn-info" title="Help">ⓘ</button>
                 <button id="btn-shutdown" title="Shutdown">⏻</button>
             </div>
@@ -36,6 +37,12 @@
         <!-- Terminal Area -->
         <div id="terminal-container">
             <div id="terminal"></div>
+        </div>
+
+        <!-- Compose Input (hidden by default) -->
+        <div id="compose-container" class="hidden">
+            <textarea id="compose-textarea" placeholder="Type here..." rows="1"></textarea>
+            <button id="compose-send" title="Send to terminal"></button>
         </div>
 
         <!-- Bottom Toolbar - Two rows -->

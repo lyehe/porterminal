@@ -276,6 +276,7 @@ html, body {
     box-shadow: var(--glow-success);
 }
 
+#btn-compose,
 #btn-info,
 #btn-textview,
 #btn-shutdown {
@@ -297,8 +298,13 @@ html, body {
     font-weight: 500;
 }
 
+#btn-compose:active,
 #btn-info:active,
 #btn-textview:active {
+    color: var(--color-accent);
+}
+
+#btn-compose.active {
     color: var(--color-accent);
 }
 
@@ -313,6 +319,7 @@ html, body {
 /* ========== TERMINAL AREA ========== */
 #terminal-container {
     flex: 1;
+    min-height: 0; /* Allow shrinking when keyboard appears */
     overflow: hidden;
     background: var(--bg-primary);
     padding: 0 0 0 var(--content-padding);
@@ -408,6 +415,82 @@ html, body {
     right: 0;
     width: 0;
     height: 0;
+}
+
+/* ========== COMPOSE INPUT ========== */
+#compose-container {
+    display: flex;
+    align-items: center;
+    background: linear-gradient(to bottom, var(--bg-gradient-top), var(--bg-gradient-bottom));
+    border-top: 1px solid var(--border-subtle);
+    padding: 0;
+    gap: 0;
+    flex-shrink: 0;
+}
+
+#compose-textarea {
+    flex: 1;
+    min-height: var(--row-height);
+    max-height: 80px;
+    padding: 4px var(--content-padding);
+    background: transparent;
+    border: none;
+    color: var(--text-high);
+    font-family: Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    resize: none;
+    outline: none;
+    /* Enable native mobile features - override body's touch-action: none */
+    -webkit-user-select: text;
+    user-select: text;
+    touch-action: manipulation;
+    -webkit-touch-callout: default;
+}
+
+#compose-textarea::placeholder {
+    color: var(--text-disabled);
+}
+
+/* Action button - matches toolbar buttons */
+#compose-send {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--row-height);
+    padding: 0 12px;
+    background: transparent;
+    border: none;
+    border-left: 1px solid var(--border-subtle);
+    color: var(--color-success);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+
+/* Enter button state (empty textarea) */
+#compose-send::after {
+    content: '⏎';
+}
+
+#compose-send:active {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+}
+
+/* Send button state (has text) */
+#compose-send.has-text {
+    color: var(--color-accent);
+}
+
+#compose-send.has-text::after {
+    content: '➤';
+}
+
+#compose-send.has-text:active {
+    background: var(--color-accent-bg);
+    color: var(--color-accent-text);
 }
 
 /* ========== BOTTOM TOOLBAR ========== */
@@ -545,13 +628,14 @@ html, body {
 
 #disconnect-retry {
     padding: var(--content-padding) 32px;
-    background: var(--border-light);
-    border: 1px solid var(--border-medium);
-    border-radius: var(--radius-lg);
+    background: var(--bg-surface);
+    border: none;
+    border-radius: var(--radius-sm);
     color: var(--text-high);
     font-size: 14px;
     cursor: pointer;
     transition: all var(--transition-fast);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 #disconnect-retry:active {
@@ -615,16 +699,12 @@ html, body {
 #auth-password {
     padding: 10px 12px;
     background: var(--bg-surface);
-    border: 1px solid var(--border-medium);
-    border-radius: 0;
+    border: none;
+    border-radius: var(--radius-sm);
     color: var(--text-high);
     font-size: 14px;
     outline: none;
-    transition: border-color var(--transition-fast);
-}
-
-#auth-password:focus {
-    border-color: var(--color-accent);
+    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 #auth-password::placeholder {
@@ -634,9 +714,10 @@ html, body {
 #auth-submit {
     padding: var(--content-padding) 16px;
     background: var(--color-accent-bg);
-    border: 1px solid var(--color-accent);
-    border-radius: 0;
+    border: none;
+    border-radius: var(--radius-sm);
     color: var(--color-accent-text);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     font-size: 14px;
     cursor: pointer;
     transition: all var(--transition-fast);

@@ -39,3 +39,27 @@ export function clearPassword(): void {
         // Ignore errors
     }
 }
+
+// ========== Compose Mode Storage ==========
+
+const COMPOSE_MODE_KEY = 'ptn_compose_mode';
+
+export function getComposeMode(): boolean {
+    try {
+        return localStorage.getItem(COMPOSE_MODE_KEY) === 'true';
+    } catch {
+        return false;
+    }
+}
+
+export function setComposeMode(enabled: boolean): void {
+    try {
+        if (enabled) {
+            localStorage.setItem(COMPOSE_MODE_KEY, 'true');
+        } else {
+            localStorage.removeItem(COMPOSE_MODE_KEY);
+        }
+    } catch {
+        // Ignore errors
+    }
+}

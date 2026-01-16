@@ -26,6 +26,7 @@
             <!-- Tabs rendered by JS -->
             <div id="shell-selector">
                 <select id="shell-select"><option>...</option></select>
+                <button id="btn-compose" title="Compose Mode">▤</button>
                 <button id="btn-info" title="Help">ⓘ</button>
                 <button id="btn-shutdown" title="Shutdown">⏻</button>
             </div>
@@ -34,6 +35,12 @@
         <!-- Terminal Area -->
         <div id="terminal-container">
             <div id="terminal"></div>
+        </div>
+
+        <!-- Compose Input (hidden by default) -->
+        <div id="compose-container" class="hidden">
+            <textarea id="compose-textarea" placeholder="Type here..." rows="1"></textarea>
+            <button id="compose-send" title="Send to terminal"></button>
         </div>
 
         <!-- Bottom Toolbar - Two rows -->

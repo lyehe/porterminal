@@ -39,6 +39,7 @@ import { createResizeManager } from '@/terminal/ResizeManager';
 
 // UI
 import { createCopyButton } from '@/ui/CopyButton';
+import { createComposeInput } from '@/ui/ComposeInput';
 import { createDisconnectOverlay } from '@/ui/DisconnectOverlay';
 import { createAuthOverlay } from '@/ui/AuthOverlay';
 import { createConnectionStatus } from '@/ui/ConnectionStatus';
@@ -283,6 +284,16 @@ async function init(): Promise<void> {
         }
     );
 
+    // Create compose input (compose-then-send text input mode)
+    // Must be created before inputHandler so it can be referenced
+    const composeInput = createComposeInput();
+    composeInput.setup((text) => {
+        const tab = tabService.activeTab;
+        if (tab) {
+            connectionService.sendInput(tab, text);
+        }
+    });
+
     // Create input handler
     const inputHandler = createInputHandler(
         eventBus,
@@ -296,7 +307,10 @@ async function init(): Promise<void> {
                 }
             },
             focusTerminal: () => {
-                tabService.focusTerminal();
+                // Don't focus terminal if compose mode is enabled
+                if (!composeInput.isEnabled()) {
+                    tabService.focusTerminal();
+                }
             },
         }
     );
@@ -339,7 +353,10 @@ async function init(): Promise<void> {
                 copyButton.show(text, x, y);
             },
             focusTerminal: () => {
-                tabService.focusTerminal();
+                // Don't focus terminal if compose mode is enabled
+                if (!composeInput.isEnabled()) {
+                    tabService.focusTerminal();
+                }
             },
             scheduleFitAfterFontChange: () => {
                 const tab = tabService.activeTab;
@@ -476,6 +493,21 @@ async function init(): Promise<void> {
     const terminalContainer = document.getElementById('terminal-container');
     if (terminalContainer) {
         gestureRecognizer.attach(terminalContainer);
+
+        // Use ResizeObserver to detect container size changes and refit terminal
+        // This handles: compose toggle, visual viewport changes, window resize, etc.
+        let resizeTimeout: ReturnType<typeof setTimeout>;
+        const resizeObserver = new ResizeObserver(() => {
+            // Debounce to avoid excessive refits
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                const tab = tabService.activeTab;
+                if (tab) {
+                    fitWithScrollToBottom(tab);
+                }
+            }, 50);
+        });
+        resizeObserver.observe(terminalContainer);
     }
 
     // Connection events for terminal WebSockets
@@ -530,49 +562,25 @@ async function init(): Promise<void> {
         modifierManager.reset();
     });
 
-    // Handle window resize
-    let resizeDebounce: ReturnType<typeof setTimeout>;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeDebounce);
-        resizeDebounce = setTimeout(() => {
-            const tab = tabService.activeTab;
-            if (tab) {
-                fitWithScrollToBottom(tab);
-            }
-        }, 50);
-    });
-
-    // Handle orientation change
-    window.addEventListener('orientationchange', () => {
-        setTimeout(() => {
-            const tab = tabService.activeTab;
-            if (tab) {
-                fitWithScrollToBottom(tab);
-            }
-        }, 100);
-    });
-
-    // Handle visual viewport (mobile keyboard)
+    // Handle visual viewport (mobile keyboard) - adjust app size for iOS
+    // Terminal refit is handled by ResizeObserver on terminal-container
     if (window.visualViewport) {
         const app = document.getElementById('app');
-        let viewportTimeout: ReturnType<typeof setTimeout>;
-        window.visualViewport.addEventListener('resize', () => {
+        const updateAppSize = () => {
             if (app) {
                 app.style.height = `${window.visualViewport!.height}px`;
+                app.style.transform = `translateY(${window.visualViewport!.offsetTop}px)`;
             }
-            clearTimeout(viewportTimeout);
-            viewportTimeout = setTimeout(() => {
-                const tab = tabService.activeTab;
-                if (tab) {
-                    fitWithScrollToBottom(tab);
-                }
-            }, 50);
-        });
+        };
+        window.visualViewport.addEventListener('resize', updateAppSize);
+        window.visualViewport.addEventListener('scroll', updateAppSize);
     }
 
-    // Focus terminal on container click
+    // Focus terminal on container click (but not if compose mode is enabled)
     document.getElementById('terminal-container')?.addEventListener('click', () => {
-        tabService.focusTerminal();
+        if (!composeInput.isEnabled()) {
+            tabService.focusTerminal();
+        }
     });
 
     // Connect management WebSocket first

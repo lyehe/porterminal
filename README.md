@@ -90,6 +90,8 @@ ptn ~/projects/myapp   # Start in specific folder
 
 **Modifier keys** (Ctrl, Alt, Shift): Tap once for sticky (one keystroke), double-tap for lock.
 
+**Compose mode** (▤ button): Toggle a text input box for typing with autocorrect and suggestions before sending to terminal.
+
 ## Configuration
 
 Run `ptn --init` to create a starter config. It auto-discovers project scripts from `package.json`, `pyproject.toml`, or `Makefile` and adds them as buttons:

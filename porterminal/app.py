@@ -20,6 +20,7 @@ from .domain import UserId
 from .infrastructure.auth import authenticate_connection, validate_auth_message
 from .infrastructure.web import FastAPIWebSocketAdapter
 from .logging_setup import setup_logging_from_env
+from .updater import check_for_updates, get_upgrade_command
 
 logger = logging.getLogger(__name__)
 
@@ -161,13 +162,21 @@ def create_app() -> FastAPI:
 
     @app.get("/api/config")
     async def get_client_config():
-        """Get client configuration (shells, buttons, and UI defaults)."""
+        """Get client configuration (shells, buttons, UI defaults, and version info)."""
         container: Container = app.state.container
+
+        # Check for updates (uses cache, non-blocking)
+        update_available, latest_version = check_for_updates(use_cache=True)
+
         return {
             "shells": [{"id": s.id, "name": s.name} for s in container.available_shells],
             "buttons": container.buttons,
             "default_shell": container.default_shell_id,
             "compose_mode": container.compose_mode_default,
+            "version": __version__,
+            "update_available": update_available,
+            "latest_version": latest_version,
+            "upgrade_command": get_upgrade_command() if update_available else None,
         }
 
     @app.post("/api/config/reload")

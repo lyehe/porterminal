@@ -44,6 +44,7 @@ import { createDisconnectOverlay } from '@/ui/DisconnectOverlay';
 import { createAuthOverlay } from '@/ui/AuthOverlay';
 import { createConnectionStatus } from '@/ui/ConnectionStatus';
 import { createTextViewOverlay } from '@/ui/TextViewOverlay';
+import { createUpdateOverlay } from '@/ui/UpdateOverlay';
 import { renderToolbar } from '@/ui/Toolbar';
 
 // Auth storage
@@ -164,6 +165,7 @@ async function init(): Promise<void> {
     const disconnectOverlay = createDisconnectOverlay();
     const authOverlay = createAuthOverlay();
     const textViewOverlay = createTextViewOverlay();
+    const updateOverlay = createUpdateOverlay();
 
     // Auth state
     let currentPassword = getSavedPassword();
@@ -392,6 +394,9 @@ async function init(): Promise<void> {
         managementService.authenticate(password);
     });
 
+    // Setup update overlay
+    updateOverlay.setup();
+
     // Populate shell selector
     const shellSelect = document.getElementById('shell-select') as HTMLSelectElement | null;
     if (shellSelect) {
@@ -582,6 +587,16 @@ async function init(): Promise<void> {
                 await tabService.requestCreateTab();
             }
         }, 100);
+
+        // Always show version info on startup
+        setTimeout(() => {
+            updateOverlay.show({
+                currentVersion: config.version || 'unknown',
+                latestVersion: config.latest_version || null,
+                upgradeCommand: config.upgrade_command || null,
+                updateAvailable: config.update_available || false,
+            });
+        }, 500);
     } catch (e) {
         console.error('Failed to connect management WebSocket:', e);
         disconnectOverlay.show();

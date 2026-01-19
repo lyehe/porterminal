@@ -56,6 +56,11 @@ export interface AppConfig {
     default_shell: string;
     buttons?: Array<{ label: string; send: ButtonSend; row?: number }>;
     compose_mode?: boolean;  // Server default for compose mode
+    // Version and update info
+    version?: string;
+    update_available?: boolean;
+    latest_version?: string | null;
+    upgrade_command?: string | null;
 }
 
 /** Gesture state for touch handling */

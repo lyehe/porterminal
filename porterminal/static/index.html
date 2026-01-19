@@ -16,8 +16,8 @@
 
     <!-- Icons (PWA disabled - not useful for tunnel-based access) -->
     <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
-  <script type="module" crossorigin src="/static/assets/app-fFKUbTPX.js"></script>
-  <link rel="stylesheet" crossorigin href="/static/assets/app-Cwl-gc4V.css">
+  <script type="module" crossorigin src="/static/assets/app-O7wm7vgN.js"></script>
+  <link rel="stylesheet" crossorigin href="/static/assets/app-c0FC9JVs.css">
 </head>
 <body>
     <div id="app">
@@ -135,6 +135,25 @@
                 <input type="password" id="auth-password" placeholder="Enter password" autocomplete="current-password">
                 <button id="auth-submit">Connect</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Update/Version Overlay -->
+    <div id="update-overlay" class="hidden">
+        <div id="update-content">
+            <div id="update-icon">↑</div>
+            <div id="update-title">Update Available</div>
+            <div id="update-versions">
+                <span id="update-current"></span>
+                <span id="update-arrow">→</span>
+                <span id="update-latest"></span>
+            </div>
+            <div id="update-instructions">
+                <div id="update-label">Run this command to update:</div>
+                <code id="update-command"></code>
+                <button id="update-copy" title="Copy to clipboard">Copy</button>
+            </div>
+            <div id="update-hint">Tap anywhere to dismiss</div>
         </div>
     </div>
 

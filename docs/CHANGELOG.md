@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-01-18
+
+### Changed
+
+- **Compose mode enhancements**
+  - Rainbow animated button (CMY color cycling) - slow when off, fast neon glow when active
+  - Updated placeholder with emoji icons for type/voice input
+  - Send button now sends text followed by Enter (with delay for reliability)
+- **Help panel redesigned** - Compact layout with close button only, no header
+
 ## [0.5.0] - 2026-01-16
 
 ### Added

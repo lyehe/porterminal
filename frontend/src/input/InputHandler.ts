@@ -3,7 +3,6 @@
  * Single Responsibility: Input event handling and dispatch
  */
 
-import type { EventBus } from '@/core/events';
 import type { KeyMapper } from './KeyMapper';
 import type { ModifierManager } from './ModifierManager';
 
@@ -19,12 +18,10 @@ export interface InputHandler {
  * Create an input handler instance
  */
 export function createInputHandler(
-    eventBus: EventBus,
     keyMapper: KeyMapper,
     modifierManager: ModifierManager,
     callbacks: {
         sendInput: (data: string) => void;
-        focusTerminal: () => void;
     }
 ): InputHandler {
     return {
@@ -32,7 +29,8 @@ export function createInputHandler(
             const sequence = keyMapper.getSequence(key, modifierManager.state);
             if (sequence) {
                 callbacks.sendInput(sequence);
-                callbacks.focusTerminal();
+                // Don't call focusTerminal() - soft keyboard buttons should
+                // respect the current native keyboard state (iOS fix)
             }
 
             // Consume sticky modifiers after key press
@@ -41,7 +39,6 @@ export function createInputHandler(
 
         sendInput(data: string): void {
             callbacks.sendInput(data);
-            eventBus.emit('input:send', { data });
         },
     };
 }

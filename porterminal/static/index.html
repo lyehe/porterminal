@@ -16,8 +16,8 @@
 
     <!-- Icons (PWA disabled - not useful for tunnel-based access) -->
     <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
-  <script type="module" crossorigin src="/static/assets/app-y91PF3Er.js"></script>
-  <link rel="stylesheet" crossorigin href="/static/assets/app-BuC_VzCM.css">
+  <script type="module" crossorigin src="/static/assets/app-fFKUbTPX.js"></script>
+  <link rel="stylesheet" crossorigin href="/static/assets/app-Cwl-gc4V.css">
 </head>
 <body>
     <div id="app">
@@ -41,8 +41,11 @@
 
         <!-- Compose Input (hidden by default) -->
         <div id="compose-container" class="hidden">
-            <textarea id="compose-textarea" placeholder="Type here..." rows="1"></textarea>
-            <button id="compose-send" title="Send to terminal"></button>
+            <div id="compose-wrapper">
+                <textarea id="compose-textarea" rows="1"></textarea>
+                <span id="compose-placeholder" class="rainbow-text">Type or dictate here, edit before send</span>
+            </div>
+            <button id="compose-send" title="Send to terminal">➤</button>
         </div>
 
         <!-- Bottom Toolbar - Two rows -->
@@ -82,26 +85,14 @@
     <!-- Help Popup -->
     <div id="help-overlay" class="hidden">
         <div id="help-content">
-            <div id="help-header">
-                <span>Touch Controls</span>
-                <button id="help-close">×</button>
-            </div>
+            <button id="help-close">×</button>
             <div id="help-body">
                 <div class="help-section">
-                    <div class="help-title">Swipe</div>
-                    <div class="help-item"><span class="help-key">←</span> ↑ Last command</div>
-                    <div class="help-item"><span class="help-key">→</span> ↓ Next command</div>
-                </div>
-                <div class="help-section">
-                    <div class="help-title">Selection</div>
+                    <div class="help-title">Gestures</div>
+                    <div class="help-item"><span class="help-key">Swipe ← / →</span> History up/down</div>
                     <div class="help-item"><span class="help-key">Long press</span> Start selection</div>
-                    <div class="help-item"><span class="help-key">Drag</span> Extend selection</div>
                     <div class="help-item"><span class="help-key">Double tap</span> Select word</div>
-                    <div class="help-item"><span class="help-key">Tap</span> Clear selection</div>
-                </div>
-                <div class="help-section">
-                    <div class="help-title">Zoom</div>
-                    <div class="help-item"><span class="help-key">Pinch</span> Change font size</div>
+                    <div class="help-item"><span class="help-key">Pinch</span> Zoom</div>
                 </div>
                 <div class="help-section">
                     <div class="help-title">Modifiers (Ctl, Alt, Sft)</div>
@@ -109,12 +100,14 @@
                     <div class="help-item"><span class="help-key">Double tap</span> Lock on/off</div>
                 </div>
                 <div class="help-section">
-                    <div class="help-title">Tabs</div>
-                    <div class="help-item"><span class="help-key">Hold ×</span> Close tab</div>
+                    <div class="help-title rainbow-text">Compose Mode (▤)</div>
+                    <div class="help-item">Type freely, then send to terminal</div>
+                    <div class="help-item"><span class="help-key">➤</span> Send text (or Enter if empty)</div>
                 </div>
                 <div class="help-section">
-                    <div class="help-title">TXT Button</div>
-                    <div class="help-item">Plain text view for easy scrolling, selection and review</div>
+                    <div class="help-title">Other</div>
+                    <div class="help-item"><span class="help-key">TXT</span> Plain text view</div>
+                    <div class="help-item"><span class="help-key">Hold ×</span> Close tab</div>
                 </div>
             </div>
         </div>

@@ -100,6 +100,27 @@
     -webkit-touch-callout: none;
 }
 
+/* Shared rainbow gradient text animation */
+.rainbow-text {
+    background: linear-gradient(
+        90deg,
+        #00ffff 0%,
+        #ff00ff 33%,
+        #ffff00 66%,
+        #00ffff 100%
+    );
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: color-sweep 0.5s linear infinite;
+}
+
+@keyframes color-sweep {
+    0% { background-position: 100% 0; }
+    100% { background-position: 0% 0; }
+}
+
 html, body {
     margin: 0;
     padding: 0;
@@ -304,8 +325,33 @@ html, body {
     color: var(--color-accent);
 }
 
+#btn-compose {
+    animation: cmy-slow 6s linear infinite;
+}
+
 #btn-compose.active {
-    color: var(--color-accent);
+    animation: neon-fast 0.5s linear infinite;
+}
+
+@keyframes cmy-slow {
+    0%, 100% { color: #00ffff; }
+    33% { color: #ff00ff; }
+    66% { color: #ffff00; }
+}
+
+@keyframes neon-fast {
+    0%, 100% {
+        color: #00ffff;
+        text-shadow: 0 0 4px #00ffff, 0 0 8px #00ffff, 0 0 16px #00ffff;
+    }
+    33% {
+        color: #ff00ff;
+        text-shadow: 0 0 4px #ff00ff, 0 0 8px #ff00ff, 0 0 16px #ff00ff;
+    }
+    66% {
+        color: #ffff00;
+        text-shadow: 0 0 4px #ffff00, 0 0 8px #ffff00, 0 0 16px #ffff00;
+    }
 }
 
 #btn-shutdown {
@@ -428,11 +474,17 @@ html, body {
     flex-shrink: 0;
 }
 
+#compose-wrapper {
+    position: relative;
+    flex: 1;
+    display: flex;
+}
+
 #compose-textarea {
     flex: 1;
     min-height: var(--row-height);
     max-height: 80px;
-    padding: 4px var(--content-padding);
+    padding: 7px var(--content-padding);
     background: transparent;
     border: none;
     color: var(--text-high);
@@ -448,11 +500,21 @@ html, body {
     -webkit-touch-callout: default;
 }
 
-#compose-textarea::placeholder {
-    color: var(--text-disabled);
+#compose-placeholder {
+    position: absolute;
+    left: var(--content-padding);
+    top: 7px;
+    font-family: Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    pointer-events: none;
 }
 
-/* Action button - matches toolbar buttons */
+#compose-placeholder.hidden {
+    display: none;
+}
+
+/* Send button */
 #compose-send {
     display: flex;
     align-items: center;
@@ -469,28 +531,19 @@ html, body {
     flex-shrink: 0;
 }
 
-/* Enter button state (empty textarea) */
-#compose-send::after {
-    content: '⏎';
-}
-
 #compose-send:active {
     background: var(--color-success-bg);
     color: var(--color-success-text);
 }
 
-/* Send button state (has text) */
 #compose-send.has-text {
-    color: var(--color-accent);
-}
-
-#compose-send.has-text::after {
-    content: '➤';
+    animation: neon-fast 0.5s linear infinite;
 }
 
 #compose-send.has-text:active {
     background: var(--color-accent-bg);
     color: var(--color-accent-text);
+    animation: none;
 }
 
 /* ========== BOTTOM TOOLBAR ========== */
@@ -806,6 +859,7 @@ html, body {
 }
 
 #help-content {
+    position: relative;
     background: var(--bg-elevated);
     border: 1px solid var(--border-light);
     border-radius: var(--radius-xl);
@@ -826,18 +880,10 @@ html, body {
     }
 }
 
-#help-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--content-padding) 16px;
-    border-bottom: 1px solid var(--border-subtle);
-    color: var(--text-high);
-    font-size: 14px;
-    font-weight: 500;
-}
-
 #help-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
     background: transparent;
     border: none;
     color: var(--text-muted);
@@ -845,6 +891,7 @@ html, body {
     cursor: pointer;
     padding: 4px 8px;
     line-height: 1;
+    z-index: 1;
 }
 
 #help-close:active {

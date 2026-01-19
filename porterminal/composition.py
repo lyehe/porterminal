@@ -109,6 +109,7 @@ def create_container(
     config_path: Path | str | None = None,
     cwd: str | None = None,
     password_hash: bytes | None = None,
+    compose_mode_override: bool | None = None,
 ) -> Container:
     """Create the dependency container with all wired dependencies.
 
@@ -119,6 +120,7 @@ def create_container(
         config_path: Path to config file, or None to search standard locations.
         cwd: Working directory for PTY sessions.
         password_hash: Bcrypt hash of password for authentication (None = no auth).
+        compose_mode_override: CLI override for compose mode (None = use config).
 
     Returns:
         Fully wired dependency container.
@@ -140,6 +142,7 @@ def create_container(
     server_data = config_data.get("server", {})
     terminal_data = config_data.get("terminal", {})
     security_data = config_data.get("security", {})
+    ui_data = config_data.get("ui", {})
 
     server_host = server_data.get("host", "127.0.0.1")
     server_port = server_data.get("port", 8000)
@@ -148,6 +151,13 @@ def create_container(
     default_shell_id = terminal_data.get("default_shell") or detector.get_default_shell_id()
     buttons = config_data.get("buttons", [])
     max_auth_attempts = security_data.get("max_auth_attempts", 5)
+
+    # UI defaults: CLI override > config file > default (False)
+    compose_mode_default = (
+        compose_mode_override
+        if compose_mode_override is not None
+        else ui_data.get("compose_mode", False)
+    )
 
     # Use configured shells if provided, otherwise use detected
     configured_shells = terminal_data.get("shells", [])
@@ -214,4 +224,5 @@ def create_container(
         cwd=cwd,
         password_hash=password_hash,
         max_auth_attempts=max_auth_attempts,
+        compose_mode_default=compose_mode_default,
     )

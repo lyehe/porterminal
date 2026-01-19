@@ -55,6 +55,7 @@ export interface AppConfig {
     shells: ShellConfig[];
     default_shell: string;
     buttons?: Array<{ label: string; send: ButtonSend; row?: number }>;
+    compose_mode?: boolean;  // Server default for compose mode
 }
 
 /** Gesture state for touch handling */

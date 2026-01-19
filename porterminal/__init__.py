@@ -174,6 +174,10 @@ def main() -> int:
             console.print("\n[dim]Cancelled[/dim]")
             return 0
 
+    # Handle compose mode (CLI flag overrides config)
+    if args.compose:
+        os.environ["PORTERMINAL_COMPOSE_MODE"] = "true"
+
     # Handle background mode
     if args.background:
         return _run_in_background(args)

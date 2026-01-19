@@ -10,7 +10,8 @@ Porterminal is a web-based terminal accessible from mobile devices via Cloudflar
 
 ```bash
 # Backend
-uv sync                         # Install dependencies
+uv sync                         # Sync dependencies only
+uv pip install -e .             # Rebuild package (regenerates version)
 uv run ptn                      # Run server (opens tunnel + QR code)
 uv run ptn --no-tunnel          # Run without cloudflare tunnel
 uv run pytest                   # Run all tests
@@ -27,19 +28,7 @@ npm run watch                   # Build with watch mode
 npx tsc --noEmit                # Type check only (no build)
 ```
 
-**CLI options:**
-```bash
-ptn                       # Start server with tunnel
-ptn ~/projects/myapp      # Start in specific folder
-ptn -n, --no-tunnel       # Local network only
-ptn -b, --background      # Run in background
-ptn -p, --password        # Enable password for this session
-ptn -dp, --default-password  # Toggle default password requirement
-ptn -v, --verbose         # Verbose startup logs
-ptn -i, --init            # Create .ptn/ptn.yaml config
-ptn -u, --update          # Update to latest version
-ptn -c, --check-update    # Check for updates
-```
+**CLI options:** `ptn -n` (no tunnel), `ptn -b` (background), `ptn -p` (password), `ptn -v` (verbose), `ptn -i` (init config), `ptn -u` (update)
 
 **Config:** Search order: `$PORTERMINAL_CONFIG_PATH` → `./ptn.yaml` → `./.ptn/ptn.yaml` → `~/.ptn/ptn.yaml`
 
@@ -115,6 +104,7 @@ Tests use pytest-asyncio with `asyncio_mode = "auto"`. Shared fixtures in `tests
 
 - **Connection fails?** Cloudflare tunnel sometimes blocks connections. Restart the server (`Ctrl+C`, then `ptn`) to get a fresh tunnel URL.
 - **Shell not detected?** Set your `$SHELL` environment variable or configure shells in `ptn.yaml`.
+- **Wrong version displayed?** The version is derived from git tags via hatch-vcs. The generated `porterminal/_version.py` can become stale. Fix with: `rm porterminal/_version.py && uv pip install -e .`
 
 ## Security Considerations
 

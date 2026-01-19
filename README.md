@@ -90,7 +90,7 @@ ptn ~/projects/myapp   # Start in specific folder
 
 **Modifier keys** (Ctrl, Alt, Shift): Tap once for sticky (one keystroke), double-tap for lock.
 
-**Compose mode** (▤ button): Toggle a text input box for typing with autocorrect and suggestions before sending to terminal.
+**Compose mode** (▤ button): Toggle a text input field where you can type or dictate, edit your text with full mobile editing features (autocorrect, suggestions, cursor positioning), then send to terminal. Useful for longer commands or voice input.
 
 ## Configuration
 

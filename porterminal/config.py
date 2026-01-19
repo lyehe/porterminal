@@ -85,6 +85,12 @@ class SecurityConfig(BaseModel):
     max_auth_attempts: int = Field(default=5, ge=1, le=100)
 
 
+class UIConfig(BaseModel):
+    """UI configuration."""
+
+    compose_mode: bool = False  # Enable compose mode by default
+
+
 class Config(BaseModel):
     """Application configuration."""
 
@@ -94,6 +100,7 @@ class Config(BaseModel):
     cloudflare: CloudflareConfig = Field(default_factory=CloudflareConfig)
     update: UpdateConfig = Field(default_factory=UpdateConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
+    ui: UIConfig = Field(default_factory=UIConfig)
 
 
 def find_config_file(cwd: Path | None = None) -> Path | None:

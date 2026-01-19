@@ -156,6 +156,9 @@ async function init(): Promise<void> {
     // Create services
     const configService = createConfigService();
 
+    // Load configuration early so it's available for component initialization
+    const config = await configService.load();
+
     // Create UI components
     const connectionStatus = createConnectionStatus();
     const disconnectOverlay = createDisconnectOverlay();
@@ -284,35 +287,30 @@ async function init(): Promise<void> {
         }
     );
 
-    // Create compose input (compose-then-send text input mode)
-    // Must be created before inputHandler so it can be referenced
-    const composeInput = createComposeInput();
-    composeInput.setup((text) => {
+    // Helper to send input to active tab
+    const sendToActiveTab = (data: string): void => {
         const tab = tabService.activeTab;
         if (tab) {
-            connectionService.sendInput(tab, text);
+            connectionService.sendInput(tab, data);
         }
-    });
+    };
+
+    // Create compose input (compose-then-send text input mode)
+    const composeInput = createComposeInput({ serverDefault: config.compose_mode });
+    composeInput.setup(sendToActiveTab);
+
+    // Helper to focus terminal only when compose mode is disabled
+    const focusTerminalIfNotComposing = (): void => {
+        if (!composeInput.isEnabled()) {
+            tabService.focusTerminal();
+        }
+    };
 
     // Create input handler
     const inputHandler = createInputHandler(
-        eventBus,
         keyMapper,
         modifierManager,
-        {
-            sendInput: (data) => {
-                const tab = tabService.activeTab;
-                if (tab) {
-                    connectionService.sendInput(tab, data);
-                }
-            },
-            focusTerminal: () => {
-                // Don't focus terminal if compose mode is enabled
-                if (!composeInput.isEnabled()) {
-                    tabService.focusTerminal();
-                }
-            },
-        }
+        { sendInput: sendToActiveTab }
     );
 
     // Create copy button
@@ -352,12 +350,7 @@ async function init(): Promise<void> {
             showCopyButton: (text, x, y) => {
                 copyButton.show(text, x, y);
             },
-            focusTerminal: () => {
-                // Don't focus terminal if compose mode is enabled
-                if (!composeInput.isEnabled()) {
-                    tabService.focusTerminal();
-                }
-            },
+            focusTerminal: focusTerminalIfNotComposing,
             scheduleFitAfterFontChange: () => {
                 const tab = tabService.activeTab;
                 if (tab) {
@@ -398,9 +391,6 @@ async function init(): Promise<void> {
         currentPassword = password;
         managementService.authenticate(password);
     });
-
-    // Load configuration
-    const config = await configService.load();
 
     // Populate shell selector
     const shellSelect = document.getElementById('shell-select') as HTMLSelectElement | null;
@@ -467,7 +457,7 @@ async function init(): Promise<void> {
     });
 
     // Setup tool buttons
-    setupToolButtons(inputHandler, tabService.focusTerminal.bind(tabService));
+    setupToolButtons(inputHandler);
 
     // Setup shutdown button
     setupShutdownButton(disconnectOverlay);
@@ -576,12 +566,8 @@ async function init(): Promise<void> {
         window.visualViewport.addEventListener('scroll', updateAppSize);
     }
 
-    // Focus terminal on container click (but not if compose mode is enabled)
-    document.getElementById('terminal-container')?.addEventListener('click', () => {
-        if (!composeInput.isEnabled()) {
-            tabService.focusTerminal();
-        }
-    });
+    // Focus terminal on container click
+    document.getElementById('terminal-container')?.addEventListener('click', focusTerminalIfNotComposing);
 
     // Connect management WebSocket first
     // Server will send tab_state_sync with existing tabs
@@ -772,8 +758,7 @@ function setupPasteButton(doPaste: () => Promise<void>): void {
 }
 
 function setupToolButtons(
-    inputHandler: ReturnType<typeof createInputHandler>,
-    focusTerminal: () => void
+    inputHandler: ReturnType<typeof createInputHandler>
 ): void {
     let touchUsed = false;
 
@@ -807,7 +792,8 @@ function setupToolButtons(
                         inputHandler.sendInput(decoded);
                     }
                 }
-                focusTerminal();
+                // Don't call focusTerminal() - soft keyboard buttons should
+                // respect the current native keyboard state (iOS fix)
             }
         };
 

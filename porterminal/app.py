@@ -61,7 +61,17 @@ async def lifespan(app: FastAPI):
     if hash_str := os.environ.get("PORTERMINAL_PASSWORD_HASH"):
         password_hash = hash_str.encode()
 
-    container = create_container(config_path=None, cwd=cwd, password_hash=password_hash)
+    # Get compose mode override from environment if set (CLI passes this)
+    compose_mode_override = None
+    if compose_str := os.environ.get("PORTERMINAL_COMPOSE_MODE"):
+        compose_mode_override = compose_str.lower() == "true"
+
+    container = create_container(
+        config_path=None,
+        cwd=cwd,
+        password_hash=password_hash,
+        compose_mode_override=compose_mode_override,
+    )
     app.state.container = container
 
     # Wire up cascade: when session is destroyed, close associated tabs and broadcast
@@ -151,12 +161,13 @@ def create_app() -> FastAPI:
 
     @app.get("/api/config")
     async def get_client_config():
-        """Get client configuration (shells and buttons)."""
+        """Get client configuration (shells, buttons, and UI defaults)."""
         container: Container = app.state.container
         return {
             "shells": [{"id": s.id, "name": s.name} for s in container.available_shells],
             "buttons": container.buttons,
             "default_shell": container.default_shell_id,
+            "compose_mode": container.compose_mode_default,
         }
 
     @app.post("/api/config/reload")

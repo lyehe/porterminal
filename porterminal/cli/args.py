@@ -83,6 +83,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Toggle password requirement in config (on/off)",
     )
+    parser.add_argument(
+        "-C",
+        "--compose",
+        action="store_true",
+        help="Enable compose mode by default (text input before sending)",
+    )
     # Internal argument for background mode communication
     parser.add_argument(
         "--_url-file",

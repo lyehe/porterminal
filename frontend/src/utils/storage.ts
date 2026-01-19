@@ -44,21 +44,36 @@ export function clearPassword(): void {
 
 const COMPOSE_MODE_KEY = 'ptn_compose_mode';
 
-export function getComposeMode(): boolean {
+/**
+ * Check if user has explicitly set a compose mode preference.
+ * Returns true if user has toggled compose mode at least once.
+ */
+export function hasComposeModePreference(): boolean {
     try {
-        return localStorage.getItem(COMPOSE_MODE_KEY) === 'true';
+        return localStorage.getItem(COMPOSE_MODE_KEY) !== null;
     } catch {
         return false;
     }
 }
 
+/**
+ * Get compose mode from localStorage.
+ * Returns null if no preference has been set (use server default).
+ */
+export function getComposeMode(): boolean | null {
+    try {
+        const value = localStorage.getItem(COMPOSE_MODE_KEY);
+        if (value === null) return null;
+        return value === 'true';
+    } catch {
+        return null;
+    }
+}
+
 export function setComposeMode(enabled: boolean): void {
     try {
-        if (enabled) {
-            localStorage.setItem(COMPOSE_MODE_KEY, 'true');
-        } else {
-            localStorage.removeItem(COMPOSE_MODE_KEY);
-        }
+        // Always store the explicit value so user preference takes precedence
+        localStorage.setItem(COMPOSE_MODE_KEY, enabled ? 'true' : 'false');
     } catch {
         // Ignore errors
     }

@@ -56,3 +56,6 @@ class Container:
     # Security
     password_hash: bytes | None = None
     max_auth_attempts: int = 5
+
+    # UI defaults
+    compose_mode_default: bool = False

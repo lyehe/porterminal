@@ -6,9 +6,13 @@
 
 import { getComposeMode, setComposeMode } from '@/utils/storage';
 
+export interface ComposeInputOptions {
+    /** Server default for compose mode (used when user has no preference) */
+    serverDefault?: boolean;
+}
+
 export interface ComposeInput {
     isEnabled(): boolean;
-    isFocused(): boolean;
     setup(onSend: (text: string) => void): void;
 }
 
@@ -20,13 +24,16 @@ function onTap(el: HTMLElement, handler: () => void): void {
     el.addEventListener('click', () => { if (!touchUsed) handler(); touchUsed = false; });
 }
 
-export function createComposeInput(): ComposeInput {
+export function createComposeInput(options: ComposeInputOptions = {}): ComposeInput {
     const container = document.getElementById('compose-container');
     const textarea = document.getElementById('compose-textarea') as HTMLTextAreaElement | null;
-    const actionBtn = document.getElementById('compose-send');
+    const placeholder = document.getElementById('compose-placeholder');
+    const sendBtn = document.getElementById('compose-send');
     const toggleBtn = document.getElementById('btn-compose');
 
-    let enabled = getComposeMode();
+    // Priority: localStorage preference > server default > false
+    const localPref = getComposeMode();
+    let enabled = localPref !== null ? localPref : (options.serverDefault ?? false);
     let onSendCallback: ((text: string) => void) | null = null;
 
     function updateUI(): void {
@@ -35,22 +42,34 @@ export function createComposeInput(): ComposeInput {
         toggleBtn.classList.toggle('active', enabled);
     }
 
-    function updateButtonState(): void {
-        if (!actionBtn || !textarea) return;
-        actionBtn.classList.toggle('has-text', textarea.value.length > 0);
+    function updatePlaceholder(): void {
+        if (!placeholder || !textarea) return;
+        // Hide placeholder when focused or has text
+        const shouldHide = document.activeElement === textarea || textarea.value.length > 0;
+        placeholder.classList.toggle('hidden', shouldHide);
     }
 
-    function handleAction(): void {
+    function updateButtonState(): void {
+        if (!sendBtn || !textarea) return;
+        sendBtn.classList.toggle('has-text', textarea.value.length > 0);
+        updatePlaceholder();
+    }
+
+    function handleSend(): void {
         if (!textarea || !onSendCallback) return;
         const text = textarea.value;
+        const send = onSendCallback;
         if (text) {
-            onSendCallback(text);
-            textarea.value = '';
-            textarea.style.height = '';
-            updateButtonState();
+            // Send text first, then Enter after short delay
+            send(text);
+            setTimeout(() => send('\r'), 50);
         } else {
-            onSendCallback('\r');
+            // Just send Enter if empty
+            send('\r');
         }
+        textarea.value = '';
+        textarea.style.height = '';
+        updateButtonState();
     }
 
     function setEnabled(value: boolean): void {
@@ -61,7 +80,6 @@ export function createComposeInput(): ComposeInput {
 
     return {
         isEnabled: () => enabled,
-        isFocused: () => document.activeElement === textarea,
 
         setup(onSend): void {
             onSendCallback = onSend;
@@ -82,18 +100,22 @@ export function createComposeInput(): ComposeInput {
                 textarea.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        handleAction();
+                        handleSend();
                     }
                 });
 
                 // Stop propagation to prevent terminal focus stealing
-                textarea.addEventListener('focus', (e) => e.stopPropagation());
+                textarea.addEventListener('focus', (e) => {
+                    e.stopPropagation();
+                    updatePlaceholder();
+                });
+                textarea.addEventListener('blur', () => updatePlaceholder());
                 textarea.addEventListener('click', (e) => e.stopPropagation());
                 textarea.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
             }
 
             if (toggleBtn) onTap(toggleBtn, () => setEnabled(!enabled));
-            if (actionBtn) onTap(actionBtn, handleAction);
+            if (sendBtn) onTap(sendBtn, handleSend);
         },
     };
 }

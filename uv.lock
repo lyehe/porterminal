@@ -301,7 +301,7 @@ wheels = [
 
 [[package]]
 name = "ptn"
-version = "0.5.1.dev0+gf6f7e26f7.d20260119"
+version = "0.5.2"
 source = { editable = "." }
 dependencies = [
     { name = "bcrypt" },

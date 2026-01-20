@@ -23,7 +23,8 @@ def _detect_install_method() -> str:
     executable = sys.executable
     file_path = str(Path(__file__).resolve())
 
-    uv_patterns = ["/uv/tools/", "\\uv\\tools\\"]
+    # uv tool install / uvx (both use uv's tool infrastructure)
+    uv_patterns = ["/uv/tools/", "\\uv\\tools\\", "/uv/", "\\uv\\"]
     if any(p in executable or p in file_path for p in uv_patterns):
         return "uv"
 

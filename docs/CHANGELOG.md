@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-01-20
+
+### Fixed
+
+- **Compose placeholder** - Placeholder now correctly shows when textarea loses focus
+- **Update detection** - Better uvx detection for showing correct upgrade command
+
 ## [0.5.2] - 2026-01-19
 
 ### Added

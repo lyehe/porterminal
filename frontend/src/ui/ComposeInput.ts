@@ -109,7 +109,12 @@ export function createComposeInput(options: ComposeInputOptions = {}): ComposeIn
                     e.stopPropagation();
                     updatePlaceholder();
                 });
-                textarea.addEventListener('blur', () => updatePlaceholder());
+                textarea.addEventListener('blur', () => {
+                    // On blur, show placeholder if empty (don't check activeElement - we know it's not focused)
+                    if (placeholder && textarea.value.length === 0) {
+                        placeholder.classList.remove('hidden');
+                    }
+                });
                 textarea.addEventListener('click', (e) => e.stopPropagation());
                 textarea.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
             }

@@ -71,6 +71,11 @@ class TestDetectInstallMethod:
         monkeypatch.setattr("sys.executable", "C:\\Users\\user\\uv\\tools\\ptn\\python.exe")
         assert _detect_install_method() == "uv"
 
+    def test_detect_uv_cache(self, monkeypatch):
+        """Test detection of uv tool run / uvx (uses cache path)."""
+        monkeypatch.setattr("sys.executable", "/home/user/.cache/uv/ptn/bin/python")
+        assert _detect_install_method() == "uv"
+
     def test_detect_pipx_install(self, monkeypatch):
         """Test detection of pipx installation."""
         monkeypatch.setattr("sys.executable", "/home/user/.local/pipx/venvs/ptn/bin/python")

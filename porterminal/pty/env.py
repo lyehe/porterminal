@@ -5,6 +5,7 @@ and provides the build_safe_environment() function for PTY spawning.
 """
 
 import os
+import sys
 
 from porterminal.domain.values.environment_rules import (
     DEFAULT_BLOCKED_VARS as BLOCKED_ENV_VARS,
@@ -23,6 +24,11 @@ def build_safe_environment() -> dict[str, str]:
     Uses allowlist approach - only SAFE_ENV_VARS are copied,
     so BLOCKED_ENV_VARS can never be included.
 
+    On macOS, ensures XDG_CONFIG_HOME is set so shells like Nushell
+    can find their config (Nushell's default macOS path is
+    ~/Library/Application Support/nushell, but XDG paths are more reliable
+    in PTY contexts where system APIs may not work as expected).
+
     Returns:
         Dictionary of safe environment variables.
     """
@@ -31,5 +37,13 @@ def build_safe_environment() -> dict[str, str]:
     # Set custom variables for audit trail
     safe_env["TERM"] = "xterm-256color"
     safe_env["TERM_SESSION_TYPE"] = "remote-web"
+
+    # macOS: Ensure XDG_CONFIG_HOME is set for shells like Nushell
+    # Nushell on macOS defaults to ~/Library/Application Support/nushell
+    # but uses XDG_CONFIG_HOME if set. Setting this ensures config is found
+    # even when macOS system APIs (NSHomeDirectory) behave differently in PTY.
+    if sys.platform == "darwin" and "XDG_CONFIG_HOME" not in safe_env:
+        home = safe_env.get("HOME", os.path.expanduser("~"))
+        safe_env["XDG_CONFIG_HOME"] = os.path.join(home, ".config")
 
     return safe_env

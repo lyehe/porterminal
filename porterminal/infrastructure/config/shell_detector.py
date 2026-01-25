@@ -81,6 +81,7 @@ class ShellDetector:
                 ("PS 7", "pwsh", "pwsh.exe", ["-NoLogo"]),
                 ("PS", "powershell", "powershell.exe", ["-NoLogo"]),
                 ("CMD", "cmd", "cmd.exe", []),
+                ("Nu", "nu", "nu.exe", []),
                 ("WSL", "wsl", "wsl.exe", []),
                 ("Git Bash", "gitbash", r"C:\Program Files\Git\bin\bash.exe", ["--login"]),
             ]

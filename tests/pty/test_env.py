@@ -92,6 +92,71 @@ class TestBuildSafeEnvironment:
         assert env.get("XDG_DATA_HOME") == "/home/user/.local/share"
 
 
+class TestMacOSEnvironment:
+    """Tests for macOS-specific environment handling."""
+
+    def test_tmpdir_in_allowlist(self):
+        """Test that TMPDIR (macOS temp dir) is in the allowlist."""
+        assert "TMPDIR" in SAFE_ENV_VARS
+
+    @pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only test")
+    def test_macos_sets_xdg_config_home_if_missing(self, monkeypatch):
+        """Test that XDG_CONFIG_HOME is set on macOS if not present."""
+        monkeypatch.setenv("HOME", "/Users/testuser")
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        env = build_safe_environment()
+
+        assert env.get("XDG_CONFIG_HOME") == "/Users/testuser/.config"
+
+    @pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only test")
+    def test_macos_preserves_existing_xdg_config_home(self, monkeypatch):
+        """Test that existing XDG_CONFIG_HOME is preserved on macOS."""
+        monkeypatch.setenv("HOME", "/Users/testuser")
+        monkeypatch.setenv("XDG_CONFIG_HOME", "/custom/config/path")
+
+        env = build_safe_environment()
+
+        assert env.get("XDG_CONFIG_HOME") == "/custom/config/path"
+
+    @pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only test")
+    def test_macos_sets_xdg_config_home_without_home_var(self, monkeypatch):
+        """Test that XDG_CONFIG_HOME is set even if HOME is missing on macOS."""
+        # Remove HOME from environment entirely
+        monkeypatch.delenv("HOME", raising=False)
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        env = build_safe_environment()
+
+        # Should still set XDG_CONFIG_HOME using os.path.expanduser fallback
+        assert "XDG_CONFIG_HOME" in env
+        # Value should end with /.config and not be literal "~/.config"
+        assert env["XDG_CONFIG_HOME"].endswith("/.config")
+        assert not env["XDG_CONFIG_HOME"].startswith("~")
+
+    @pytest.mark.skipif(sys.platform == "darwin", reason="Non-macOS test")
+    def test_non_macos_does_not_auto_set_xdg_config_home(self, monkeypatch):
+        """Test that XDG_CONFIG_HOME is NOT auto-set on non-macOS."""
+        monkeypatch.setenv("HOME", "/home/testuser")
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        env = build_safe_environment()
+
+        # On non-macOS, XDG_CONFIG_HOME should not be auto-set
+        assert "XDG_CONFIG_HOME" not in env
+
+    @pytest.mark.skipif(sys.platform == "darwin", reason="Non-macOS test")
+    def test_non_macos_preserves_existing_xdg_config_home(self, monkeypatch):
+        """Test that existing XDG_CONFIG_HOME IS preserved on non-macOS."""
+        monkeypatch.setenv("HOME", "/home/testuser")
+        monkeypatch.setenv("XDG_CONFIG_HOME", "/custom/config")
+
+        env = build_safe_environment()
+
+        # Should preserve existing value (pass-through, not auto-set)
+        assert env.get("XDG_CONFIG_HOME") == "/custom/config"
+
+
 class TestNushellEnvironment:
     """Tests specifically for Nushell compatibility (Issue #13)."""
 

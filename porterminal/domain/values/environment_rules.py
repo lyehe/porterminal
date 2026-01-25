@@ -14,6 +14,7 @@ DEFAULT_SAFE_VARS: frozenset[str] = frozenset(
         "WINDIR",
         "TEMP",
         "TMP",
+        "TMPDIR",  # macOS uses TMPDIR instead of TEMP/TMP
         "COMSPEC",
         # User directories
         "HOME",

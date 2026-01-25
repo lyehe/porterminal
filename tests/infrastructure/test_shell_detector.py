@@ -444,6 +444,18 @@ class TestShellDetector:
         assert shell.args == ()  # No special args for nushell
 
     @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
+    def test_nushell_in_windows_candidates(self):
+        """Test that Nushell is included in Windows shell candidates."""
+        detector = ShellDetector()
+        candidates = detector._get_platform_candidates()
+
+        # Check that Nu is in the candidates list
+        nu_candidates = [c for c in candidates if c[1] == "nu"]
+        assert len(nu_candidates) >= 1, "Nu should be in Windows candidates"
+        assert nu_candidates[0][2] == "nu.exe"
+        assert nu_candidates[0][3] == []
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
     def test_wsl_distro_detected_from_windows_terminal(self, monkeypatch, tmp_path):
         """Test that WSL distros from Windows Terminal are detected."""
         import json

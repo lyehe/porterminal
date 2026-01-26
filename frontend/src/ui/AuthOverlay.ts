@@ -26,8 +26,8 @@ export interface AuthOverlay {
 export function createAuthOverlay(): AuthOverlay {
     const overlay = document.getElementById('auth-overlay');
     const errorElement = document.getElementById('auth-error');
+    const authForm = document.getElementById('auth-form') as HTMLFormElement | null;
     const passwordInput = document.getElementById('auth-password') as HTMLInputElement | null;
-    const submitButton = document.getElementById('auth-submit');
 
     return {
         show(): void {
@@ -69,19 +69,12 @@ export function createAuthOverlay(): AuthOverlay {
         },
 
         setup(onSubmit: (password: string) => void): void {
-            const handleSubmit = () => {
+            // Handle form submission (enables browser password saving)
+            authForm?.addEventListener('submit', (e) => {
+                e.preventDefault();
                 const password = passwordInput?.value ?? '';
                 if (password.trim()) {
                     onSubmit(password);
-                }
-            };
-
-            submitButton?.addEventListener('click', handleSubmit);
-
-            passwordInput?.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleSubmit();
                 }
             });
         },

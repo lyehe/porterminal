@@ -70,7 +70,8 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-n, --no-tunnel` | Local network only (no Cloudflare tunnel) |
 | `-b, --background` | Run in background and return immediately |
 | `-p, --password` | Prompt for password to protect this session |
-| `-dp, --default-password` | Toggle password requirement in config (on/off) |
+| `-sp, --save-password` | Save or clear password in config |
+| `-tp, --toggle-password` | Set password requirement (on/off/true/false) or toggle |
 | `-v, --verbose` | Show detailed startup logs |
 | `-i, --init` | Create `.ptn/ptn.yaml` config with auto-discovered project scripts |
 | `-u, --update` | Update to the latest version |
@@ -133,7 +134,8 @@ update:
 
 # Security settings
 security:
-  require_password: true    # Always prompt for password at startup
+  require_password: true    # Always require password at startup
+  password_hash: ""         # Saved password hash (use ptn -sp to set)
   max_auth_attempts: 5      # Max failed attempts before disconnect
 ```
 
@@ -141,13 +143,28 @@ Config is searched in order: `$PORTERMINAL_CONFIG_PATH`, `./ptn.yaml`, `./.ptn/p
 
 ## Security
 
-Use password if your screen can be exposed to others:
+Protect your terminal with a password:
+
 ```bash
-ptn -p                 # Prompt for password this session
-ptn -dp                # Enable password by default (toggle)
+# One-time password (prompt each session)
+ptn -p
+
+# Save password to config (no prompt needed)
+ptn -sp
+# Password: ****
+# Confirm password: ****
+
+# Clear saved password (enter empty password)
+ptn -sp
+# Password: [press Enter]
+
+# Set or toggle password requirement
+ptn -tp on       # Enable
+ptn -tp off      # Disable
+ptn -tp          # Toggle
 ```
 
-Password is per-session (never saved to disk). See [docs/security.md](docs/security.md) for details.
+See [docs/security.md](docs/security.md) for details.
 
 ## Troubleshooting
 

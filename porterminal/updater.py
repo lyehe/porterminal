@@ -19,20 +19,22 @@ CACHE_FILE = CACHE_DIR / "update_check.json"
 
 
 def _detect_install_method() -> str:
-    """Detect how ptn was installed: uv, pipx, or pip."""
-    executable = sys.executable
-    file_path = str(Path(__file__).resolve())
+    """Detect how ptn was installed: uvx, uv, pipx, or pip."""
+    # Normalize paths to forward slashes for consistent matching
+    executable = sys.executable.replace("\\", "/")
+    file_path = str(Path(__file__).resolve()).replace("\\", "/")
+    paths = executable + file_path
 
-    # uv tool install / uvx (both use uv's tool infrastructure)
-    uv_patterns = ["/uv/tools/", "\\uv\\tools\\", "/uv/", "\\uv\\"]
-    if any(p in executable or p in file_path for p in uv_patterns):
+    # Check patterns in order of specificity
+    if "/uv/cache/" in paths or "/.cache/uv/" in paths:
+        return "uvx"
+    if "/uv/tools/" in paths or "/uv/" in paths:
         return "uv"
-
-    pipx_patterns = ["/pipx/venvs/", "\\pipx\\venvs\\"]
-    if any(p in executable or p in file_path for p in pipx_patterns):
+    if "/pipx/venvs/" in paths:
         return "pipx"
-
-    return "pip"
+    if "/site-packages/" in file_path:
+        return "pip"
+    return "uvx"
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
@@ -134,11 +136,12 @@ def get_upgrade_command() -> str:
     """Get appropriate upgrade command for the installation method."""
     method = _detect_install_method()
     commands = {
+        "uvx": f"uvx --refresh {PACKAGE_NAME}",
         "uv": f"uv tool upgrade {PACKAGE_NAME}",
         "pipx": f"pipx upgrade {PACKAGE_NAME}",
         "pip": f"pip install -U {PACKAGE_NAME}",
     }
-    return commands.get(method, commands["pip"])
+    return commands[method]
 
 
 def update_package() -> bool:
@@ -166,7 +169,12 @@ def update_package() -> bool:
     method = _detect_install_method()
 
     # Build command
-    if method == "uv" and shutil.which("uv"):
+    if method == "uvx" and shutil.which("uvx"):
+        # uvx is ephemeral - just tell user to run again with --refresh
+        print("You're using uvx (ephemeral mode). Just run:")
+        print(f"  uvx --refresh {PACKAGE_NAME}")
+        return False
+    elif method == "uv" and shutil.which("uv"):
         cmd = ["uv", "tool", "upgrade", PACKAGE_NAME]
     elif method == "pipx" and shutil.which("pipx"):
         cmd = ["pipx", "upgrade", PACKAGE_NAME]

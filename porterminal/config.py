@@ -82,6 +82,7 @@ class SecurityConfig(BaseModel):
     """Security configuration."""
 
     require_password: bool = False  # Prompt for password at startup
+    password_hash: str = ""  # Saved bcrypt password hash (use -sp to set)
     max_auth_attempts: int = Field(default=5, ge=1, le=100)
 
 

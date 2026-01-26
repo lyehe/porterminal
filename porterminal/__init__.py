@@ -156,23 +156,31 @@ def main() -> int:
     config = get_config()
 
     # Handle password mode (CLI flag or config setting)
+    # -p flag always prompts; require_password uses saved hash if available
     if args.password or config.security.require_password:
-        import getpass
+        if not args.password and config.security.password_hash:
+            # Config requires password and has saved hash - use it
+            os.environ["PORTERMINAL_PASSWORD_HASH"] = config.security.password_hash
+            console.print("[green]Password protection enabled (saved)[/green]")
+        else:
+            # -p flag or no saved hash - prompt for password
+            import getpass
 
-        try:
-            password = getpass.getpass("Enter password: ")
+            import bcrypt
+
+            try:
+                password = getpass.getpass("Enter password: ")
+            except KeyboardInterrupt:
+                console.print("\n[dim]Cancelled[/dim]")
+                return 0
+
             if not password:
                 console.print("[red]Error:[/red] Password cannot be empty")
                 return 1
 
-            import bcrypt
-
             password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
             os.environ["PORTERMINAL_PASSWORD_HASH"] = password_hash.decode()
             console.print("[green]Password protection enabled[/green]")
-        except KeyboardInterrupt:
-            console.print("\n[dim]Cancelled[/dim]")
-            return 0
 
     # Handle compose mode (CLI flag overrides config)
     if args.compose:

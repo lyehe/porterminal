@@ -71,10 +71,15 @@ class TestDetectInstallMethod:
         monkeypatch.setattr("sys.executable", "C:\\Users\\user\\uv\\tools\\ptn\\python.exe")
         assert _detect_install_method() == "uv"
 
-    def test_detect_uv_cache(self, monkeypatch):
-        """Test detection of uv tool run / uvx (uses cache path)."""
+    def test_detect_uvx_cache(self, monkeypatch):
+        """Test detection of uvx (ephemeral, uses cache path)."""
         monkeypatch.setattr("sys.executable", "/home/user/.cache/uv/ptn/bin/python")
-        assert _detect_install_method() == "uv"
+        assert _detect_install_method() == "uvx"
+
+    def test_detect_uvx_cache_windows(self, monkeypatch):
+        """Test detection of uvx on Windows (uses cache path)."""
+        monkeypatch.setattr("sys.executable", "C:\\Users\\user\\uv\\cache\\ptn\\python.exe")
+        assert _detect_install_method() == "uvx"
 
     def test_detect_pipx_install(self, monkeypatch):
         """Test detection of pipx installation."""
@@ -86,7 +91,18 @@ class TestDetectInstallMethod:
         monkeypatch.setattr("sys.executable", "C:\\Users\\user\\pipx\\venvs\\ptn\\python.exe")
         assert _detect_install_method() == "pipx"
 
-    def test_detect_pip_fallback(self, monkeypatch):
-        """Test fallback to pip for regular installations."""
+    def test_detect_pip_site_packages(self, monkeypatch):
+        """Test detection of pip installation via site-packages."""
         monkeypatch.setattr("sys.executable", "/usr/bin/python3")
+        # Mock __file__ to be in site-packages
+        import porterminal.updater
+
+        monkeypatch.setattr(
+            porterminal.updater, "__file__", "/usr/lib/python3/site-packages/ptn/updater.py"
+        )
         assert _detect_install_method() == "pip"
+
+    def test_detect_uvx_fallback(self, monkeypatch):
+        """Test fallback to uvx for unknown installations (recommended method)."""
+        monkeypatch.setattr("sys.executable", "/usr/bin/python3")
+        assert _detect_install_method() == "uvx"

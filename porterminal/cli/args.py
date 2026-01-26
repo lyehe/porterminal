@@ -1,7 +1,10 @@
 """Command line argument parsing."""
 
+from __future__ import annotations
+
 import argparse
 import sys
+from pathlib import Path
 
 from porterminal import __version__
 
@@ -78,10 +81,19 @@ def parse_args() -> argparse.Namespace:
         help="Prompt for password to protect terminal access",
     )
     parser.add_argument(
-        "-dp",
-        "--default-password",
+        "-tp",
+        "--toggle-password",
+        nargs="?",
+        const="toggle",
+        default=None,
+        metavar="on|off",
+        help="Set password requirement (on/off/true/false) or toggle if no value",
+    )
+    parser.add_argument(
+        "-sp",
+        "--save-password",
         action="store_true",
-        help="Toggle password requirement in config (on/off)",
+        help="Save or clear password in config (enter empty to clear)",
     )
     parser.add_argument(
         "-C",
@@ -120,8 +132,12 @@ def parse_args() -> argparse.Namespace:
         _init_config(args.init if args.init is not True else None)
         # Continue to launch ptn after creating config
 
-    if args.default_password:
-        _toggle_password_requirement()
+    if args.toggle_password is not None:
+        _toggle_password_requirement(args.toggle_password)
+        sys.exit(0)
+
+    if args.save_password:
+        _save_password_to_config()
         sys.exit(0)
 
     return args
@@ -134,7 +150,6 @@ def _init_config(source: str | None = None) -> None:
         source: Optional URL or file path to use as config source.
                 If None, auto-discovers scripts and creates default config.
     """
-    from pathlib import Path
     from urllib.error import URLError
     from urllib.request import urlopen
 
@@ -212,38 +227,109 @@ def _init_config(source: str | None = None) -> None:
         )
 
 
-def _toggle_password_requirement() -> None:
-    """Toggle security.require_password in config file."""
-    from pathlib import Path
+def _get_or_create_config() -> tuple[Path, dict]:
+    """Get config path and data, creating directory if needed.
 
+    Returns:
+        Tuple of (config_path, config_data).
+    """
     import yaml
 
     from porterminal.config import find_config_file
 
-    # Find existing config or use default location
     config_path = find_config_file()
     if config_path is None:
         config_dir = Path.cwd() / ".ptn"
         config_path = config_dir / "ptn.yaml"
         config_dir.mkdir(exist_ok=True)
 
-    # Read existing config or create empty
     if config_path.exists():
         with open(config_path, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
     else:
         data = {}
 
-    # Toggle the value
-    if "security" not in data:
-        data["security"] = {}
-    current = data["security"].get("require_password", False)
-    data["security"]["require_password"] = not current
+    return config_path, data
 
-    # Write back
+
+def _save_config(config_path: Path, data: dict) -> None:
+    """Save config data to file."""
+    import yaml
+
     with open(config_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
 
-    new_value = data["security"]["require_password"]
+
+def _toggle_password_requirement(value: str) -> None:
+    """Set or toggle security.require_password in config file.
+
+    Args:
+        value: "on", "off", "true", "false", or "toggle"
+    """
+    value_lower = value.lower()
+    if value_lower in ("on", "true", "1"):
+        new_value = True
+    elif value_lower in ("off", "false", "0"):
+        new_value = False
+    elif value_lower == "toggle":
+        new_value = None
+    else:
+        print(f"Error: Invalid value '{value}'. Use on/off/true/false")
+        return
+
+    config_path, data = _get_or_create_config()
+
+    if "security" not in data:
+        data["security"] = {}
+
+    if new_value is None:
+        new_value = not data["security"].get("require_password", False)
+
+    data["security"]["require_password"] = new_value
+    _save_config(config_path, data)
+
     status = "enabled" if new_value else "disabled"
     print(f"Password requirement {status} in {config_path}")
+
+
+def _save_password_to_config() -> None:
+    """Save or clear password hash in config file."""
+    import getpass
+
+    config_path, data = _get_or_create_config()
+
+    if "security" not in data:
+        data["security"] = {}
+
+    has_password = data["security"].get("password_hash", "")
+
+    try:
+        if has_password:
+            print("Password is currently set.")
+            print("Enter new password or press Enter to clear:")
+        password = getpass.getpass("Password: ")
+
+        if not password:
+            data["security"]["password_hash"] = ""
+            data["security"]["require_password"] = False
+            _save_config(config_path, data)
+            print(f"Password cleared in {config_path}")
+            print("Password protection disabled (require_password: false)")
+            return
+
+        confirm = getpass.getpass("Confirm password: ")
+        if password != confirm:
+            print("Error: Passwords do not match")
+            return
+    except KeyboardInterrupt:
+        print("\nCancelled")
+        return
+
+    import bcrypt
+
+    data["security"]["password_hash"] = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    data["security"]["require_password"] = True
+    _save_config(config_path, data)
+
+    print(f"Password saved to {config_path}")
+    print("Password protection enabled (require_password: true)")

@@ -16,7 +16,7 @@
 
     <!-- Icons (PWA disabled - not useful for tunnel-based access) -->
     <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
-  <script type="module" crossorigin src="/static/assets/app-rg0hTwtO.js"></script>
+  <script type="module" crossorigin src="/static/assets/app-RC9DiiWV.js"></script>
   <link rel="stylesheet" crossorigin href="/static/assets/app-c0FC9JVs.css">
 </head>
 <body>
@@ -130,11 +130,13 @@
     <div id="auth-overlay" class="hidden">
         <div id="auth-content">
             <div id="auth-header">Authentication Required</div>
-            <div id="auth-body">
+            <form id="auth-form" autocomplete="on">
                 <div id="auth-error" class="hidden"></div>
-                <input type="password" id="auth-password" placeholder="Enter password" autocomplete="current-password">
-                <button id="auth-submit">Connect</button>
-            </div>
+                <!-- Hidden username for browser password manager -->
+                <input type="text" name="username" autocomplete="username" value="porterminal" style="display:none" aria-hidden="true">
+                <input type="password" id="auth-password" name="password" placeholder="Enter password" autocomplete="current-password">
+                <button type="submit" id="auth-submit">Connect</button>
+            </form>
         </div>
     </div>
 

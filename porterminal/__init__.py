@@ -226,10 +226,14 @@ def main() -> int:
             console.print("[yellow]Please restart your terminal and run again.[/yellow]")
             return 0  # Exit gracefully, not an error
 
+    # Check if password protection requires a fresh server
+    password_enabled = os.environ.get("PORTERMINAL_PASSWORD_HASH") is not None
+
     # Show startup status
     with console.status("[cyan]Starting...[/cyan]", spinner="dots") as status:
         # Start or reuse server
-        if wait_for_server(check_host, port, timeout=1):
+        # Don't reuse if password is enabled (existing server may have different/no password)
+        if not password_enabled and wait_for_server(check_host, port, timeout=1):
             if verbose:
                 console.print(f"[dim]Reusing server on {bind_host}:{port}[/dim]")
             server_process = None

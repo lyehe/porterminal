@@ -35,4 +35,5 @@ buttons:
   - 100
   - "\r"
 security:
-  require_password: false
+  require_password: true
+  password_hash: $2b$12$a204pVyBb7lmgpNznDEnQu/HW7XODZ7Y3cZDD8sxFSDaW39rfFhZS

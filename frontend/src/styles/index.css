@@ -714,7 +714,7 @@ html, body {
 #auth-content {
     background: var(--bg-elevated);
     border: 1px solid var(--border-light);
-    border-radius: 0;
+    border-radius: var(--radius-xl);
     max-width: 320px;
     width: 100%;
     box-shadow: var(--shadow-elevated);
@@ -732,7 +732,7 @@ html, body {
     font-weight: 500;
 }
 
-#auth-body {
+#auth-form {
     padding: var(--content-padding) 16px;
     display: flex;
     flex-direction: column;
@@ -743,7 +743,7 @@ html, body {
     padding: 8px 12px;
     background: var(--color-danger-bg);
     border: 1px solid var(--color-danger-border);
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     color: var(--color-danger-text);
     font-size: 12px;
     text-align: center;
@@ -1058,7 +1058,7 @@ html, body {
     position: relative;
     background: var(--bg-elevated);
     border: 1px solid var(--border-light);
-    border-radius: 0;
+    border-radius: var(--radius-xl);
     max-width: 340px;
     width: 100%;
     padding: 24px 20px;

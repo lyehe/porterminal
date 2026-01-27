@@ -74,7 +74,8 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-tp, --toggle-password` | Set password requirement (on/off/true/false) or toggle |
 | `-v, --verbose` | Show detailed startup logs |
 | `-i, --init` | Create `.ptn/ptn.yaml` config (`-i ""` for auto-discovery, or `-i URL/PATH`) |
-| `-c, --check-update` | Check if a newer version is available |
+| `-c, --compose` | Enable compose mode by default |
+| `-u, --check-update` | Check if a newer version is available |
 | `-V, --version` | Show version |
 
 ## Mobile Gestures

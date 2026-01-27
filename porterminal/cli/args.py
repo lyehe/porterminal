@@ -36,7 +36,7 @@ class Args:
     verbose: Annotated[bool, tyro.conf.arg(aliases=["-v"])] = False
     """Show detailed startup logs."""
 
-    check_update: Annotated[bool, tyro.conf.arg(aliases=["-c"])] = False
+    check_update: Annotated[bool, tyro.conf.arg(aliases=["-u"])] = False
     """Check if a newer version is available."""
 
     background: Annotated[bool, tyro.conf.arg(aliases=["-b"])] = False
@@ -60,7 +60,7 @@ class Args:
     save_password: Annotated[bool, tyro.conf.arg(aliases=["-sp"])] = False
     """Save or clear password in config."""
 
-    compose: Annotated[bool, tyro.conf.arg(aliases=["-C"])] = False
+    compose: Annotated[bool, tyro.conf.arg(aliases=["-c"])] = False
     """Enable compose mode by default."""
 
     # Internal argument for background mode communication (hidden from help)

@@ -45,13 +45,14 @@ import { createAuthOverlay } from '@/ui/AuthOverlay';
 import { createConnectionStatus } from '@/ui/ConnectionStatus';
 import { createTextViewOverlay } from '@/ui/TextViewOverlay';
 import { createUpdateOverlay } from '@/ui/UpdateOverlay';
+import { createSettingsOverlay } from '@/ui/SettingsOverlay';
 import { renderToolbar } from '@/ui/Toolbar';
 
-// Auth storage
-import { getSavedPassword, savePassword, clearPassword } from '@/utils/storage';
+// Storage
+import { getSavedPassword, savePassword, clearPassword, getDisabledButtons } from '@/utils/storage';
 
 // Types
-import type { AppConfig, ButtonSend, SwipeDirection, Tab } from '@/types';
+import type { AppConfig, ButtonConfig, ButtonSend, SwipeDirection, Tab } from '@/types';
 import type { TabService } from '@/services/TabService';
 
 /**
@@ -148,6 +149,26 @@ function renderCustomButtons(buttons: AppConfig['buttons']): void {
 }
 
 /**
+ * Re-render toolbar buttons after add/remove
+ */
+function rerenderToolbarButtons(
+    buttons: ButtonConfig[],
+    inputHandler: ReturnType<typeof createInputHandler>
+): void {
+    const toolbar = document.getElementById('toolbar');
+    if (!toolbar) return;
+
+    // Remove existing custom button rows (row3+)
+    toolbar.querySelectorAll('[id^="toolbar-row"]:not(#toolbar-row1):not(#toolbar-row2)')
+        .forEach(row => row.remove());
+
+    // Render new buttons
+    renderCustomButtons(buttons);
+    applyButtonVisibility();
+    setupToolButtons(inputHandler);
+}
+
+/**
  * Initialize the application
  */
 async function init(): Promise<void> {
@@ -166,6 +187,7 @@ async function init(): Promise<void> {
     const authOverlay = createAuthOverlay();
     const textViewOverlay = createTextViewOverlay();
     const updateOverlay = createUpdateOverlay();
+    const settingsOverlay = createSettingsOverlay();
 
     // Auth state
     let currentPassword = getSavedPassword();
@@ -298,7 +320,13 @@ async function init(): Promise<void> {
     };
 
     // Create compose input (compose-then-send text input mode)
-    const composeInput = createComposeInput({ serverDefault: config.compose_mode });
+    const composeInput = createComposeInput({
+        serverDefault: config.compose_mode,
+        onToggle: (enabled) => {
+            // Sync settings overlay when compose button is toggled
+            settingsOverlay.syncComposeMode(enabled);
+        },
+    });
     composeInput.setup(sendToActiveTab);
 
     // Helper to focus terminal only when compose mode is disabled
@@ -431,6 +459,9 @@ async function init(): Promise<void> {
     // Render custom buttons from config (supports multiple rows)
     renderCustomButtons(config.buttons);
 
+    // Apply button visibility from localStorage (hide disabled buttons)
+    applyButtonVisibility();
+
     // Render toolbar buttons from config
     renderToolbar();
 
@@ -469,6 +500,24 @@ async function init(): Promise<void> {
 
     // Setup help button
     setupHelpButton();
+
+    // Mutable config reference for button updates
+    let currentConfig = config;
+
+    // Setup settings overlay
+    settingsOverlay.setup(configService, {
+        onComposeModeChange: (enabled) => {
+            composeInput.setEnabled(enabled);
+        },
+        onButtonVisibilityChange: () => {
+            applyButtonVisibility();
+        },
+        onButtonsChanged: (buttons) => {
+            currentConfig = { ...currentConfig, buttons };
+            rerenderToolbarButtons(buttons, inputHandler);
+        },
+    });
+    setupSettingsButton(settingsOverlay, () => currentConfig);
 
     // Setup text view button
     textViewOverlay.setup();
@@ -884,6 +933,32 @@ function setupHelpButton(): void {
     closeBtn?.addEventListener('click', hide);
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) hide();
+    });
+}
+
+function setupSettingsButton(
+    settingsOverlay: ReturnType<typeof createSettingsOverlay>,
+    getConfig: () => AppConfig
+): void {
+    const btn = document.getElementById('btn-settings');
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+        settingsOverlay.show(getConfig());
+    });
+}
+
+/**
+ * Apply button visibility from localStorage
+ * Hides buttons whose labels are in the disabled list
+ */
+function applyButtonVisibility(): void {
+    const disabledButtons = getDisabledButtons();
+    // Find all custom buttons (they have data-send attribute)
+    document.querySelectorAll('.tool-btn[data-send]').forEach(btn => {
+        const el = btn as HTMLElement;
+        const label = el.textContent?.trim() || '';
+        el.style.display = disabledButtons.includes(label) ? 'none' : '';
     });
 }
 

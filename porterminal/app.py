@@ -168,6 +168,9 @@ def create_app() -> FastAPI:
         # Check for updates (uses cache, non-blocking)
         update_available, latest_version = check_for_updates(use_cache=True)
 
+        # Get settings from config file (for notify_on_startup)
+        settings = await container.config_service.get_settings()
+
         return {
             "shells": [{"id": s.id, "name": s.name} for s in container.available_shells],
             "buttons": container.buttons,
@@ -177,6 +180,8 @@ def create_app() -> FastAPI:
             "update_available": update_available,
             "latest_version": latest_version,
             "upgrade_command": get_upgrade_command() if update_available else None,
+            "password_protected": container.password_hash is not None,
+            "notify_on_startup": settings.get("notify_on_startup", True),
         }
 
     @app.post("/api/config/reload")
@@ -189,6 +194,161 @@ def create_app() -> FastAPI:
             {"status": "info", "message": "Config reload requires server restart"},
             status_code=501,
         )
+
+    @app.get("/api/settings")
+    async def get_settings():
+        """Get current settings from config file."""
+        container: Container = app.state.container
+        settings = await container.config_service.get_settings()
+        return settings
+
+    @app.post("/api/settings")
+    async def update_settings(request: Request):
+        """Update settings in config file.
+
+        Accepts JSON body with settings to update:
+        - compose_mode: bool
+        - notify_on_startup: bool
+
+        Returns the updated settings and whether a restart is required.
+        """
+        container: Container = app.state.container
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse(
+                {"error": "Invalid JSON body"},
+                status_code=400,
+            )
+
+        # Validate that only allowed keys are present
+        allowed_keys = {"compose_mode", "notify_on_startup"}
+        invalid_keys = set(body.keys()) - allowed_keys
+        if invalid_keys:
+            return JSONResponse(
+                {"error": f"Invalid settings keys: {invalid_keys}"},
+                status_code=400,
+            )
+
+        settings, requires_restart = await container.config_service.update_settings(body)
+        return {
+            "settings": settings,
+            "requires_restart": requires_restart,
+        }
+
+    @app.post("/api/buttons")
+    async def add_button(request: Request):
+        """Add a new button. Body: {label, send, row?}"""
+        container: Container = app.state.container
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+        label = body.get("label")
+        send = body.get("send")
+        row = body.get("row", 1)
+
+        if not label or not send:
+            return JSONResponse({"error": "label and send required"}, status_code=400)
+
+        try:
+            buttons = await container.config_service.add_button(label, send, row)
+            return {"buttons": buttons}
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    @app.delete("/api/buttons/{label:path}")
+    async def remove_button(label: str):
+        """Remove a button by label."""
+        container: Container = app.state.container
+        try:
+            buttons = await container.config_service.remove_button(label)
+            return {"buttons": buttons}
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=404)
+
+    @app.get("/api/password")
+    async def get_password_status():
+        """Get password status.
+
+        Returns:
+        - password_saved: Whether a password is saved in config
+        - require_password: Whether password is required at startup
+        - currently_protected: Whether current session has password protection
+        """
+        container: Container = app.state.container
+        status = await container.config_service.get_password_status()
+        status["currently_protected"] = container.password_hash is not None
+        return status
+
+    @app.post("/api/password")
+    async def set_password(request: Request):
+        """Set or change password.
+
+        Body: {password: string}
+
+        Note: Requires server restart to take effect.
+        """
+        container: Container = app.state.container
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+        password = body.get("password")
+        if not password or not isinstance(password, str):
+            return JSONResponse({"error": "password required"}, status_code=400)
+
+        if len(password) < 1:
+            return JSONResponse({"error": "password cannot be empty"}, status_code=400)
+
+        settings = await container.config_service.set_password(password)
+        return {
+            "settings": settings,
+            "requires_restart": True,
+            "message": "Password saved. Restart server for changes to take effect.",
+        }
+
+    @app.delete("/api/password")
+    async def clear_password():
+        """Clear password and disable password requirement.
+
+        Note: Requires server restart to take effect.
+        """
+        container: Container = app.state.container
+        settings = await container.config_service.clear_password()
+        return {
+            "settings": settings,
+            "requires_restart": True,
+            "message": "Password cleared. Restart server for changes to take effect.",
+        }
+
+    @app.post("/api/password/require")
+    async def set_require_password(request: Request):
+        """Set whether password is required at startup.
+
+        Body: {require: boolean}
+
+        Note: Requires server restart to take effect.
+        """
+        container: Container = app.state.container
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+        require = body.get("require")
+        if require is None or not isinstance(require, bool):
+            return JSONResponse({"error": "require (boolean) required"}, status_code=400)
+
+        settings = await container.config_service.set_require_password(require)
+        return {
+            "settings": settings,
+            "requires_restart": True,
+            "message": f"Password requirement {'enabled' if require else 'disabled'}. "
+            "Restart server for changes to take effect.",
+        }
 
     @app.post("/api/shutdown")
     async def shutdown_server(request: Request):

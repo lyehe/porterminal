@@ -1,116 +1,87 @@
-"""Command line argument parsing."""
+"""Command line argument parsing using tyro."""
 
 from __future__ import annotations
 
-import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated
+
+import tyro
 
 from porterminal import __version__
 
 
-def parse_args() -> argparse.Namespace:
+@dataclass
+class Args:
+    """Porterminal - Web terminal via Cloudflare Tunnel."""
+
+    path: Annotated[
+        str | None,
+        tyro.conf.Positional,
+        tyro.conf.arg(metavar="PATH"),
+    ] = None
+    """Starting directory for the shell."""
+
+    no_tunnel: Annotated[bool, tyro.conf.arg(aliases=["-n"])] = False
+    """Start server only, without Cloudflare tunnel."""
+
+    verbose: Annotated[bool, tyro.conf.arg(aliases=["-v"])] = False
+    """Show detailed startup logs."""
+
+    check_update: Annotated[bool, tyro.conf.arg(aliases=["-c"])] = False
+    """Check if a newer version is available."""
+
+    background: Annotated[bool, tyro.conf.arg(aliases=["-b"])] = False
+    """Run in background and return immediately."""
+
+    init: Annotated[
+        str | None,
+        tyro.conf.arg(aliases=["-i"], metavar="URL_OR_PATH"),
+    ] = None
+    """Create .ptn/ptn.yaml config. Use "" for auto-discovery or provide URL/path."""
+
+    password: Annotated[bool, tyro.conf.arg(aliases=["-p"])] = False
+    """Prompt for password to protect terminal access."""
+
+    toggle_password: Annotated[
+        str | None,
+        tyro.conf.arg(aliases=["-tp"], metavar="on|off"),
+    ] = None
+    """Set password requirement (on/off) or 'toggle'."""
+
+    save_password: Annotated[bool, tyro.conf.arg(aliases=["-sp"])] = False
+    """Save or clear password in config."""
+
+    compose: Annotated[bool, tyro.conf.arg(aliases=["-C"])] = False
+    """Enable compose mode by default."""
+
+    # Internal argument for background mode communication (hidden from help)
+    url_file: Annotated[
+        str | None,
+        tyro.conf.arg(name="_url-file"),
+        tyro.conf.Suppress,
+    ] = None
+
+
+def parse_args() -> Args:
     """Parse command line arguments.
 
     Returns:
-        Parsed arguments namespace with:
-        - path: Starting directory for the shell (optional)
-        - no_tunnel: Whether to skip Cloudflare tunnel
-        - verbose: Whether to show detailed logs
-        - update: Whether to update to latest version
-        - check_update: Whether to check for updates
+        Parsed Args dataclass with all CLI options.
     """
-    parser = argparse.ArgumentParser(
+    # Check for --version flag manually (tyro doesn't have built-in version action)
+    if "--version" in sys.argv or "-V" in sys.argv:
+        print(f"ptn {__version__}")
+        sys.exit(0)
+
+    args = tyro.cli(
+        Args,
+        prog="ptn",
         description="Porterminal - Web terminal via Cloudflare Tunnel",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {__version__}",
-    )
-    parser.add_argument(
-        "path",
-        nargs="?",
-        default=None,
-        help="Starting directory for the shell (default: current directory)",
-    )
-    parser.add_argument(
-        "-n",
-        "--no-tunnel",
-        action="store_true",
-        help="Start server only, without Cloudflare tunnel",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Show detailed startup logs",
-    )
-    parser.add_argument(
-        "-u",
-        "--update",
-        action="store_true",
-        help="Update to the latest version",
-    )
-    parser.add_argument(
-        "-c",
-        "--check-update",
-        action="store_true",
-        help="Check if a newer version is available",
-    )
-    parser.add_argument(
-        "-b",
-        "--background",
-        action="store_true",
-        help="Run in background and return immediately",
-    )
-    parser.add_argument(
-        "-i",
-        "--init",
-        nargs="?",
-        const=True,
-        default=False,
-        metavar="URL_OR_PATH",
-        help="Create .ptn/ptn.yaml config (optionally from URL or file path)",
-    )
-    parser.add_argument(
-        "-p",
-        "--password",
-        action="store_true",
-        help="Prompt for password to protect terminal access",
-    )
-    parser.add_argument(
-        "-tp",
-        "--toggle-password",
-        nargs="?",
-        const="toggle",
-        default=None,
-        metavar="on|off",
-        help="Set password requirement (on/off/true/false) or toggle if no value",
-    )
-    parser.add_argument(
-        "-sp",
-        "--save-password",
-        action="store_true",
-        help="Save or clear password in config (enter empty to clear)",
-    )
-    parser.add_argument(
-        "-C",
-        "--compose",
-        action="store_true",
-        help="Enable compose mode by default (text input before sending)",
-    )
-    # Internal argument for background mode communication
-    parser.add_argument(
-        "--_url-file",
-        dest="url_file",
-        help=argparse.SUPPRESS,
     )
 
-    args = parser.parse_args()
-
-    # Handle update commands early (before main app starts)
+    # Handle check-update early (before main app starts)
     if args.check_update:
         from porterminal.updater import check_for_updates, get_upgrade_command
 
@@ -122,14 +93,8 @@ def parse_args() -> argparse.Namespace:
             print(f"Already at latest version ({__version__})")
         sys.exit(0)
 
-    if args.update:
-        from porterminal.updater import update_package
-
-        success = update_package()
-        sys.exit(0 if success else 1)
-
-    if args.init:
-        _init_config(args.init if args.init is not True else None)
+    if args.init is not None:
+        _init_config(args.init if args.init else None)
         # Continue to launch ptn after creating config
 
     if args.toggle_password is not None:
@@ -274,7 +239,7 @@ def _toggle_password_requirement(value: str) -> None:
     elif value_lower == "toggle":
         new_value = None
     else:
-        print(f"Error: Invalid value '{value}'. Use on/off/true/false")
+        print(f"Error: Invalid value '{value}'. Use on/off/true/false/toggle")
         return
 
     config_path, data = _get_or_create_config()

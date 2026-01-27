@@ -298,6 +298,7 @@ html, body {
 }
 
 #btn-compose,
+#btn-settings,
 #btn-info,
 #btn-textview,
 #btn-shutdown {
@@ -320,6 +321,7 @@ html, body {
 }
 
 #btn-compose:active,
+#btn-settings:active,
 #btn-info:active,
 #btn-textview:active {
     color: var(--color-accent);
@@ -898,6 +900,15 @@ html, body {
     color: var(--text-high);
 }
 
+#help-header {
+    padding: var(--content-padding) 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-high);
+    font-size: 14px;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
 #help-body {
     padding: var(--content-padding) 16px;
 }
@@ -937,6 +948,483 @@ html, body {
     color: var(--text-high);
     font-size: 11px;
     text-align: center;
+}
+
+/* ========== SETTINGS POPUP ========== */
+#settings-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--overlay-bg);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+#settings-content {
+    position: relative;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-xl);
+    max-width: 340px;
+    width: 100%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-elevated);
+    animation: helpAppear var(--transition-fast);
+}
+
+#settings-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+    z-index: 1;
+}
+
+#settings-close:active {
+    color: var(--text-high);
+}
+
+#settings-header {
+    padding: var(--content-padding) 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-high);
+    font-size: 14px;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+#settings-body {
+    padding: 8px 16px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+.settings-section {
+    margin-bottom: 16px;
+}
+
+.settings-section:last-child {
+    margin-bottom: 8px;
+}
+
+.settings-section-title {
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    padding-left: 2px;
+}
+
+.settings-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.settings-item:last-child {
+    border-bottom: none;
+}
+
+.settings-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.settings-text {
+    color: var(--text-high);
+    font-size: 13px;
+}
+
+.settings-desc {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.settings-hint {
+    color: var(--text-disabled);
+    font-size: 10px;
+    font-family: Menlo, Monaco, Consolas, monospace;
+    background: var(--bg-surface);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+}
+
+.settings-readonly .settings-text {
+    color: var(--text-secondary);
+}
+
+.settings-readonly .settings-desc.enabled {
+    color: var(--color-success);
+}
+
+.settings-readonly .settings-desc.disabled {
+    color: var(--text-muted);
+}
+
+/* Password status indicator */
+.settings-desc.password-on {
+    color: var(--color-success);
+}
+
+.settings-desc.password-off {
+    color: var(--text-muted);
+}
+
+/* Password management actions */
+.settings-password-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.settings-password-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.settings-password-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-focus);
+}
+
+.settings-password-btn:active {
+    transform: scale(0.98);
+}
+
+.settings-password-clear {
+    color: var(--color-error);
+    border-color: var(--color-error);
+    opacity: 0.8;
+}
+
+.settings-password-clear:hover {
+    background: rgba(255, 82, 82, 0.1);
+    opacity: 1;
+}
+
+.settings-password-cancel {
+    background: transparent;
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+/* Password form */
+.settings-password-form {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.settings-password-input {
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    outline: none;
+}
+
+.settings-password-input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.settings-password-input::placeholder {
+    color: var(--text-muted);
+}
+
+.settings-password-form-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+/* Restart notice */
+.settings-restart-notice {
+    margin-top: 8px;
+    padding: 8px 12px;
+    font-size: 11px;
+    color: var(--color-warning);
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: var(--radius-sm);
+    text-align: center;
+}
+
+/* Toggle Switch - oval track with circle knob */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-medium);
+    border-radius: 10px;
+    transition: all var(--transition-fast);
+}
+
+.toggle-slider::before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    top: 2px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    transition: all var(--transition-fast);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background: var(--color-accent-bg);
+    border-color: var(--color-accent);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(16px);
+    background: var(--color-accent);
+}
+
+.toggle-switch:active .toggle-slider {
+    background: var(--hover-overlay);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+/* Button toggle item in settings */
+.settings-button-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.settings-button-item:last-child {
+    border-bottom: none;
+}
+
+.settings-button-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.settings-button-preview {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 24px;
+    padding: 0 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.settings-button-name {
+    color: var(--text-high);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Section header with add button */
+.settings-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.settings-add-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    font-weight: 300;
+    line-height: 1;
+    padding: 0 4px;
+    cursor: pointer;
+}
+
+.settings-add-btn:active {
+    color: var(--text-high);
+}
+
+/* Delete button */
+.settings-delete-btn {
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    color: var(--text-disabled);
+    font-size: 16px;
+    font-weight: 300;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+}
+
+.settings-delete-btn:active {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
+}
+
+/* Add form */
+.settings-add-form {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.settings-add-row {
+    display: flex;
+    gap: 8px;
+}
+
+.settings-add-input {
+    padding: 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-sm);
+    color: var(--text-high);
+    font-size: 12px;
+}
+
+.settings-add-label {
+    width: 70px;
+    flex-shrink: 0;
+}
+
+.settings-add-command {
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-add-input:focus {
+    border-color: var(--color-accent);
+    outline: none;
+}
+
+.settings-add-submit {
+    width: 32px;
+    background: var(--color-success-bg);
+    border: 1px solid var(--color-success-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-success-text);
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.settings-add-submit:active {
+    background: var(--color-success);
+    color: var(--text-white);
+}
+
+.settings-add-help {
+    color: var(--text-disabled);
+    font-size: 10px;
+    margin-top: 4px;
+}
+
+/* Settings toast notification */
+.settings-toast {
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 16px;
+    background: #1a1a1a;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    color: var(--text-high);
+    font-size: 12px;
+    box-shadow: var(--shadow-elevated);
+    z-index: 10001;
+    animation: toastAppear 0.2s ease-out;
+    pointer-events: none;
+}
+
+.settings-toast.success {
+    background: #1a3d1a;
+    border-color: #2d5a2d;
+    color: #8fdf8f;
+}
+
+.settings-toast.error {
+    background: #3d1a1a;
+    border-color: #5a2d2d;
+    color: #df8f8f;
+}
+
+@keyframes toastAppear {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
 }
 
 /* ========== TEXT VIEW POPUP ========== */

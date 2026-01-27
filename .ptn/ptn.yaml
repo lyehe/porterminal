@@ -29,11 +29,6 @@ buttons:
   - codex
   - 100
   - "\r"
-- label: tmux
-  send:
-  - tmux
-  - 100
-  - "\r"
 security:
-  require_password: true
-  password_hash: $2b$12$a204pVyBb7lmgpNznDEnQu/HW7XODZ7Y3cZDD8sxFSDaW39rfFhZS
+  password_hash: $2b$12$313AtcLw7SGOY76sJThHr.PRvtn7sCBXOgDexyoQDUxx/XO/..qGa
+  require_password: false

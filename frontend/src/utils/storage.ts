@@ -78,3 +78,33 @@ export function setComposeMode(enabled: boolean): void {
         // Ignore errors
     }
 }
+
+// ========== Disabled Buttons Storage ==========
+
+const DISABLED_BUTTONS_KEY = 'ptn_disabled_buttons';
+
+/**
+ * Get list of disabled button labels from localStorage.
+ * These buttons will be hidden in the toolbar.
+ */
+export function getDisabledButtons(): string[] {
+    try {
+        const value = localStorage.getItem(DISABLED_BUTTONS_KEY);
+        if (!value) return [];
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Set the list of disabled button labels.
+ */
+export function setDisabledButtons(labels: string[]): void {
+    try {
+        localStorage.setItem(DISABLED_BUTTONS_KEY, JSON.stringify(labels));
+    } catch {
+        // Ignore errors
+    }
+}

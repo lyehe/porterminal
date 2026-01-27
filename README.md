@@ -73,8 +73,7 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-sp, --save-password` | Save or clear password in config |
 | `-tp, --toggle-password` | Set password requirement (on/off/true/false) or toggle |
 | `-v, --verbose` | Show detailed startup logs |
-| `-i, --init` | Create `.ptn/ptn.yaml` config with auto-discovered project scripts |
-| `-u, --update` | Update to the latest version |
+| `-i, --init` | Create `.ptn/ptn.yaml` config (`-i ""` for auto-discovery, or `-i URL/PATH`) |
 | `-c, --check-update` | Check if a newer version is available |
 | `-V, --version` | Show version |
 
@@ -144,6 +143,10 @@ Config is searched in order: `$PORTERMINAL_CONFIG_PATH`, `./ptn.yaml`, `./.ptn/p
 ## Security
 
 Protect your terminal with a password:
+
+**From the UI:** Open Settings (gear icon) and use the Security section to set/change password and toggle password requirement. Changes require server restart.
+
+**From CLI:**
 
 ```bash
 # One-time password (prompt each session)

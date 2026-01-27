@@ -20,7 +20,7 @@ from porterminal.domain import (
     TabLimitChecker,
     TerminalDimensions,
 )
-from porterminal.infrastructure.config import ShellDetector
+from porterminal.infrastructure.config import ConfigService, ShellDetector
 from porterminal.infrastructure.registry import UserConnectionRegistry
 from porterminal.infrastructure.repositories import InMemorySessionRepository, InMemoryTabRepository
 
@@ -171,6 +171,9 @@ def create_container(
     # Create connection registry for broadcasting
     connection_registry = UserConnectionRegistry()
 
+    # Create config service for runtime settings
+    config_service = ConfigService()
+
     # Create PTY factory
     pty_factory = create_pty_factory(cwd)
 
@@ -213,6 +216,7 @@ def create_container(
         session_repository=session_repository,
         tab_repository=tab_repository,
         connection_registry=connection_registry,
+        config_service=config_service,
         pty_factory=pty_factory,
         available_shells=shells,
         default_shell_id=default_shell_id,

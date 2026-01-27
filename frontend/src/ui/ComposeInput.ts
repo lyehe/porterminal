@@ -9,11 +9,15 @@ import { getComposeMode, setComposeMode } from '@/utils/storage';
 export interface ComposeInputOptions {
     /** Server default for compose mode (used when user has no preference) */
     serverDefault?: boolean;
+    /** Callback when compose mode is toggled via the button */
+    onToggle?: (enabled: boolean) => void;
 }
 
 export interface ComposeInput {
     isEnabled(): boolean;
     setup(onSend: (text: string) => void): void;
+    /** Set compose mode enabled/disabled (for external sync from settings) */
+    setEnabled(enabled: boolean): void;
 }
 
 /** Setup touch/click handler with deduplication */
@@ -72,14 +76,22 @@ export function createComposeInput(options: ComposeInputOptions = {}): ComposeIn
         updateButtonState();
     }
 
-    function setEnabled(value: boolean): void {
+    function setEnabled(value: boolean, fromExternal = false): void {
         enabled = value;
         setComposeMode(value);
         updateUI();
+        // Notify external listeners when toggled via button (not from settings sync)
+        if (!fromExternal && options.onToggle) {
+            options.onToggle(value);
+        }
     }
 
     return {
         isEnabled: () => enabled,
+
+        setEnabled(value: boolean): void {
+            setEnabled(value, true); // fromExternal = true, don't trigger callback
+        },
 
         setup(onSend): void {
             onSendCallback = onSend;

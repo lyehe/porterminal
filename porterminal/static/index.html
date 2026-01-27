@@ -16,8 +16,8 @@
 
     <!-- Icons (PWA disabled - not useful for tunnel-based access) -->
     <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
-  <script type="module" crossorigin src="/static/assets/app-CnvUKy6a.js"></script>
-  <link rel="stylesheet" crossorigin href="/static/assets/app-D_WjJ1_P.css">
+  <script type="module" crossorigin src="/static/assets/app-DDkr84Kx.js"></script>
+  <link rel="stylesheet" crossorigin href="/static/assets/app--swReJp6.css">
 </head>
 <body>
     <div id="app">
@@ -29,6 +29,7 @@
             <div id="shell-selector">
                 <select id="shell-select"><option>...</option></select>
                 <button id="btn-compose" title="Compose Mode">▤</button>
+                <button id="btn-settings" title="Settings">☰</button>
                 <button id="btn-info" title="Help">ⓘ</button>
                 <button id="btn-shutdown" title="Shutdown">⏻</button>
             </div>
@@ -83,12 +84,12 @@
     </div>
 
     <!-- Help Popup -->
-    <div id="help-overlay" class="hidden">
+    <div id="help-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="help-header">
         <div id="help-content">
-            <button id="help-close">×</button>
+            <button id="help-close" aria-label="Close">×</button>
+            <div id="help-header">Gestures</div>
             <div id="help-body">
                 <div class="help-section">
-                    <div class="help-title">Gestures</div>
                     <div class="help-item"><span class="help-key">Swipe ← / →</span> History up/down</div>
                     <div class="help-item"><span class="help-key">Long press</span> Start selection</div>
                     <div class="help-item"><span class="help-key">Double tap</span> Select word</div>
@@ -108,6 +109,77 @@
                     <div class="help-title">Other</div>
                     <div class="help-item"><span class="help-key">TXT</span> Plain text view</div>
                     <div class="help-item"><span class="help-key">Hold ×</span> Close tab</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Popup -->
+    <div id="settings-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="settings-header">
+        <div id="settings-content">
+            <button id="settings-close" aria-label="Close">×</button>
+            <div id="settings-header">Settings</div>
+            <div id="settings-body">
+                <!-- General Section -->
+                <div class="settings-section">
+                    <div class="settings-section-title">General</div>
+                    <div class="settings-item">
+                        <label class="settings-label" for="settings-compose">
+                            <span class="settings-text">Compose Mode</span>
+                            <span class="settings-desc">Type freely before sending</span>
+                        </label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-compose" role="switch">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
+                        <label class="settings-label" for="settings-updates">
+                            <span class="settings-text">Update Notifications</span>
+                            <span class="settings-desc">Show when updates available</span>
+                        </label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-updates" role="switch">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <!-- Security Section -->
+                <div class="settings-section" id="settings-security-section">
+                    <div class="settings-section-title">Security</div>
+                    <!-- Require password toggle -->
+                    <div class="settings-item">
+                        <label class="settings-label" for="settings-require-password">
+                            <span class="settings-text">Require Password</span>
+                            <span class="settings-desc" id="settings-password-status">Off</span>
+                        </label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-require-password" role="switch">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <!-- Password management -->
+                    <div class="settings-password-actions">
+                        <button class="settings-password-btn" id="settings-set-password">Set Password</button>
+                        <button class="settings-password-btn settings-password-clear hidden" id="settings-clear-password">Clear</button>
+                    </div>
+                    <!-- Password form (hidden by default) -->
+                    <div class="settings-password-form hidden" id="settings-password-form">
+                        <input type="password" class="settings-password-input" id="settings-password-input" placeholder="New password" autocomplete="new-password">
+                        <input type="password" class="settings-password-input" id="settings-password-confirm" placeholder="Confirm password" autocomplete="new-password">
+                        <div class="settings-password-form-actions">
+                            <button class="settings-password-btn" id="settings-password-save">Save</button>
+                            <button class="settings-password-btn settings-password-cancel" id="settings-password-cancel">Cancel</button>
+                        </div>
+                    </div>
+                    <div class="settings-restart-notice hidden" id="settings-restart-notice">
+                        Restart server to apply changes
+                    </div>
+                </div>
+                <!-- Buttons Section (dynamic) -->
+                <div class="settings-section" id="settings-buttons-section">
+                    <div class="settings-section-title">Quick Buttons</div>
+                    <!-- Populated by JS -->
                 </div>
             </div>
         </div>

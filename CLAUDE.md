@@ -28,7 +28,7 @@ npm run watch                   # Build with watch mode
 npx tsc --noEmit                # Type check only (no build)
 ```
 
-**CLI options:** `ptn -n` (no tunnel), `ptn -b` (background), `ptn -p` (password), `ptn -v` (verbose), `ptn -i` (init config), `ptn -u` (update)
+**CLI options:** `ptn -n` (no tunnel), `ptn -b` (background), `ptn -p` (password), `ptn -sp` (save password), `ptn -tp` (toggle password), `ptn -v` (verbose), `ptn -i` (init config), `ptn -u` (update), `ptn -c` (check update)
 
 **Config:** Search order: `$PORTERMINAL_CONFIG_PATH` → `./ptn.yaml` → `./.ptn/ptn.yaml` → `~/.ptn/ptn.yaml`
 

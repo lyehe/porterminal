@@ -1,8 +1,6 @@
 """Update functionality for Porterminal."""
 
 import json
-import shutil
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -142,61 +140,6 @@ def get_upgrade_command() -> str:
         "pip": f"pip install -U {PACKAGE_NAME}",
     }
     return commands[method]
-
-
-def update_package() -> bool:
-    """Update ptn to the latest version.
-
-    Returns:
-        True if update succeeded, False otherwise.
-    """
-    has_update, latest = check_for_updates(use_cache=False)
-    if not has_update:
-        if latest:
-            print(f"Already at latest version ({__version__})")
-        else:
-            print("Could not check for updates (network error)")
-        return True
-
-    print(f"Updating {PACKAGE_NAME} {__version__} -> {latest}")
-
-    # Windows: can't upgrade while running (exe is locked)
-    if sys.platform == "win32":
-        print("On Windows, close ptn first then run from another terminal:")
-        print(f"  {get_upgrade_command()}")
-        return False
-
-    method = _detect_install_method()
-
-    # Build command
-    if method == "uvx" and shutil.which("uvx"):
-        # uvx is ephemeral - just tell user to run again with --refresh
-        print("You're using uvx (ephemeral mode). Just run:")
-        print(f"  uvx --refresh {PACKAGE_NAME}")
-        return False
-    elif method == "uv" and shutil.which("uv"):
-        cmd = ["uv", "tool", "upgrade", PACKAGE_NAME]
-    elif method == "pipx" and shutil.which("pipx"):
-        cmd = ["pipx", "upgrade", PACKAGE_NAME]
-    else:
-        cmd = [sys.executable, "-m", "pip", "install", "-U", PACKAGE_NAME]
-
-    try:
-        result = subprocess.run(cmd, timeout=120)
-        if result.returncode == 0:
-            print(f"Updated to {latest}. Restart to use new version.")
-            return True
-        print(f"Update failed (exit code {result.returncode})")
-        print(f"Try: {get_upgrade_command()}")
-        return False
-    except subprocess.TimeoutExpired:
-        print("Update timed out")
-        print(f"Try: {get_upgrade_command()}")
-        return False
-    except FileNotFoundError as e:
-        print(f"Command not found: {e}")
-        print(f"Try: {get_upgrade_command()}")
-        return False
 
 
 def check_and_notify() -> None:

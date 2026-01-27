@@ -14,6 +14,7 @@ from porterminal.domain import PTYPort, ShellCommand, TerminalDimensions
 from porterminal.domain.ports import SessionRepository, TabRepository
 
 if TYPE_CHECKING:
+    from porterminal.infrastructure.config import ConfigService
     from porterminal.infrastructure.registry import UserConnectionRegistry
 
 
@@ -37,6 +38,9 @@ class Container:
 
     # Registry for broadcasting
     connection_registry: "UserConnectionRegistry"
+
+    # Config service for runtime settings
+    config_service: "ConfigService"
 
     # Factories
     pty_factory: Callable[[ShellCommand, TerminalDimensions, dict[str, str], str | None], PTYPort]

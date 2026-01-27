@@ -50,17 +50,27 @@ export interface ShellConfig {
 /** Button send value: string or array of strings/numbers (numbers = wait ms) */
 export type ButtonSend = string | Array<string | number>;
 
+/** Button configuration */
+export interface ButtonConfig {
+    label: string;
+    send: ButtonSend;
+    row?: number;
+}
+
 /** App configuration from /api/config */
 export interface AppConfig {
     shells: ShellConfig[];
     default_shell: string;
-    buttons?: Array<{ label: string; send: ButtonSend; row?: number }>;
+    buttons?: ButtonConfig[];
     compose_mode?: boolean;  // Server default for compose mode
     // Version and update info
     version?: string;
     update_available?: boolean;
     latest_version?: string | null;
     upgrade_command?: string | null;
+    // Settings
+    password_protected?: boolean;
+    notify_on_startup?: boolean;
 }
 
 /** Gesture state for touch handling */

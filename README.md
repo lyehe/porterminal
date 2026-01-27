@@ -71,7 +71,7 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-b, --background` | Run in background and return immediately |
 | `-p, --password` | Prompt for password to protect this session |
 | `-sp, --save-password` | Save or clear password in config |
-| `-tp, --toggle-password` | Set password requirement (on/off/true/false) or toggle |
+| `-tp, --toggle-password` | Set password requirement (on/off/toggle) |
 | `-v, --verbose` | Show detailed startup logs |
 | `-i, --init` | Create `.ptn/ptn.yaml` config (`-i ""` for auto-discovery, or `-i URL/PATH`) |
 | `-c, --compose` | Enable compose mode by default |
@@ -98,7 +98,7 @@ ptn ~/projects/myapp   # Start in specific folder
 Run `ptn --init` to create a starter config. It auto-discovers project scripts from `package.json`, `pyproject.toml`, or `Makefile` and adds them as buttons:
 
 ```bash
-ptn -i
+ptn -i ""
 # Created: .ptn/ptn.yaml
 # Discovered 3 project script(s): build, dev, test
 ```
@@ -165,7 +165,7 @@ ptn -sp
 # Set or toggle password requirement
 ptn -tp on       # Enable
 ptn -tp off      # Disable
-ptn -tp          # Toggle
+ptn -tp toggle   # Toggle current state
 ```
 
 See [docs/security.md](docs/security.md) for details.

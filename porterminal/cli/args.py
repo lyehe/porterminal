@@ -8,11 +8,15 @@ from pathlib import Path
 from typing import Annotated
 
 import tyro
+import tyro.extras
 from rich.console import Console
 
 from porterminal import __version__
 
 console = Console()
+
+# Set accent color for help text
+tyro.extras.set_accent_color("cyan")
 
 
 @dataclass

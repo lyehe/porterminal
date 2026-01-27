@@ -161,4 +161,10 @@ def check_and_notify() -> None:
 
     has_update, latest = check_for_updates(use_cache=False)
     if has_update and latest:
-        print(f"Update available: {__version__} -> {latest}. Run: {get_upgrade_command()}")
+        from rich.console import Console
+
+        console = Console()
+        console.print(
+            f"[yellow]Update available:[/yellow] {__version__} → [green]{latest}[/green]  "
+            f"[dim]Run:[/dim] [cyan]{get_upgrade_command()}[/cyan]"
+        )

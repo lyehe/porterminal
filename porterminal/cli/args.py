@@ -8,8 +8,11 @@ from pathlib import Path
 from typing import Annotated
 
 import tyro
+from rich.console import Console
 
 from porterminal import __version__
+
+console = Console()
 
 
 @dataclass
@@ -72,7 +75,7 @@ def parse_args() -> Args:
     """
     # Check for --version flag manually (tyro doesn't have built-in version action)
     if "--version" in sys.argv or "-V" in sys.argv:
-        print(f"ptn {__version__}")
+        console.print(f"[cyan]ptn[/cyan] [bold]{__version__}[/bold]")
         sys.exit(0)
 
     args = tyro.cli(
@@ -87,10 +90,14 @@ def parse_args() -> Args:
 
         has_update, latest = check_for_updates(use_cache=False)
         if has_update:
-            print(f"Update available: {__version__} → {latest}")
-            print(f"Run: {get_upgrade_command()}")
+            console.print(
+                f"[yellow]Update available:[/yellow] {__version__} → [green]{latest}[/green]"
+            )
+            console.print(f"[dim]Run:[/dim] [cyan]{get_upgrade_command()}[/cyan]")
         else:
-            print(f"Already at latest version ({__version__})")
+            console.print(
+                f"[green]✓[/green] Already at latest version [bold]({__version__})[/bold]"
+            )
         sys.exit(0)
 
     if args.init is not None:
@@ -133,32 +140,35 @@ def _init_config(source: str | None = None) -> None:
         if source.startswith(("http://", "https://")):
             # Download from URL
             try:
-                print(f"Downloading config from {source}...")
+                console.print(f"[dim]Downloading config from[/dim] [cyan]{source}[/cyan]...")
                 with urlopen(source, timeout=10) as response:
                     content = response.read().decode("utf-8")
                 config_file.write_text(content)
-                print(f"Created: {config_file}")
+                console.print(f"[green]✓[/green] Created: [cyan]{config_file}[/cyan]")
             except (URLError, OSError, TimeoutError) as e:
-                print(f"Error downloading config: {e}")
+                console.print(f"[red]Error:[/red] Failed to download config: {e}")
                 return
         else:
             # Copy from local file
             source_path = Path(source).expanduser().resolve()
             if not source_path.exists():
-                print(f"Error: File not found: {source_path}")
+                console.print(f"[red]Error:[/red] File not found: [cyan]{source_path}[/cyan]")
                 return
             try:
                 content = source_path.read_text(encoding="utf-8")
                 config_file.write_text(content)
-                print(f"Created: {config_file} (from {source_path})")
+                console.print(
+                    f"[green]✓[/green] Created: [cyan]{config_file}[/cyan] "
+                    f"[dim](from {source_path})[/dim]"
+                )
             except OSError as e:
-                print(f"Error reading config: {e}")
+                console.print(f"[red]Error:[/red] Failed to read config: {e}")
                 return
         return
 
     # No source - use auto-discovery
     if config_file.exists():
-        print(f"Config already exists: {config_file}")
+        console.print(f"[yellow]Config already exists:[/yellow] [cyan]{config_file}[/cyan]")
         return
 
     # Build config with default buttons (row 1: AI coding tools)
@@ -185,11 +195,10 @@ def _init_config(source: str | None = None) -> None:
     yaml_content = yaml.safe_dump(config, default_flow_style=False, sort_keys=False)
     config_file.write_text(header + yaml_content)
 
-    print(f"Created: {config_file}")
+    console.print(f"[green]✓[/green] Created: [cyan]{config_file}[/cyan]")
     if discovered:
-        print(
-            f"Discovered {len(discovered)} project script(s): {', '.join(b['label'] for b in discovered)}"
-        )
+        labels = ", ".join(f"[bold]{b['label']}[/bold]" for b in discovered)
+        console.print(f"[dim]Discovered {len(discovered)} project script(s):[/dim] {labels}")
 
 
 def _get_or_create_config() -> tuple[Path, dict]:
@@ -239,7 +248,10 @@ def _toggle_password_requirement(value: str) -> None:
     elif value_lower == "toggle":
         new_value = None
     else:
-        print(f"Error: Invalid value '{value}'. Use on/off/true/false/toggle")
+        console.print(
+            f"[red]Error:[/red] Invalid value '[bold]{value}[/bold]'. "
+            "Use [cyan]on[/cyan]/[cyan]off[/cyan]/[cyan]toggle[/cyan]"
+        )
         return
 
     config_path, data = _get_or_create_config()
@@ -253,8 +265,11 @@ def _toggle_password_requirement(value: str) -> None:
     data["security"]["require_password"] = new_value
     _save_config(config_path, data)
 
-    status = "enabled" if new_value else "disabled"
-    print(f"Password requirement {status} in {config_path}")
+    if new_value:
+        console.print("[green]✓[/green] Password requirement [green]enabled[/green]")
+    else:
+        console.print("[yellow]✓[/yellow] Password requirement [yellow]disabled[/yellow]")
+    console.print(f"[dim]Config:[/dim] [cyan]{config_path}[/cyan]")
 
 
 def _save_password_to_config() -> None:
@@ -270,24 +285,24 @@ def _save_password_to_config() -> None:
 
     try:
         if has_password:
-            print("Password is currently set.")
-            print("Enter new password or press Enter to clear:")
+            console.print("[yellow]Password is currently set.[/yellow]")
+            console.print("[dim]Enter new password or press Enter to clear:[/dim]")
         password = getpass.getpass("Password: ")
 
         if not password:
             data["security"]["password_hash"] = ""
             data["security"]["require_password"] = False
             _save_config(config_path, data)
-            print(f"Password cleared in {config_path}")
-            print("Password protection disabled (require_password: false)")
+            console.print("[yellow]✓[/yellow] Password [yellow]cleared[/yellow]")
+            console.print(f"[dim]Config:[/dim] [cyan]{config_path}[/cyan]")
             return
 
         confirm = getpass.getpass("Confirm password: ")
         if password != confirm:
-            print("Error: Passwords do not match")
+            console.print("[red]Error:[/red] Passwords do not match")
             return
     except KeyboardInterrupt:
-        print("\nCancelled")
+        console.print("\n[dim]Cancelled[/dim]")
         return
 
     import bcrypt
@@ -296,5 +311,5 @@ def _save_password_to_config() -> None:
     data["security"]["require_password"] = True
     _save_config(config_path, data)
 
-    print(f"Password saved to {config_path}")
-    print("Password protection enabled (require_password: true)")
+    console.print("[green]✓[/green] Password [green]saved[/green]")
+    console.print(f"[dim]Config:[/dim] [cyan]{config_path}[/cyan]")

@@ -50,37 +50,6 @@ CAUTION_EASTER_EGGS = [
     "PUSHED TO MAIN FROM THE CHECKOUT LINE",
 ]
 
-# Anime girl pixel art for QR placeholder (square, only █ and space)
-ANIME_GIRL = """
-███████████████████████████
-██                       ██
-██  █████████████████    ██
-██  ██             ██    ██
-██  ██  ███   ███  ██    ██
-██  ██  ███   ███  ██    ██
-██  ██             ██    ██
-██  ██     ███     ██    ██
-██  ██      █      ██    ██
-██  ██             ██    ██
-██  ██   ███████   ██    ██
-██  ██             ██    ██
-██  █████████████████    ██
-██                       ██
-██     █████████████     ██
-██    ██           ██    ██
-██   ██             ██   ██
-██   ██             ██   ██
-██   ██    █████    ██   ██
-██   ██             ██   ██
-██   ██             ██   ██
-██    ██           ██    ██
-██     █████████████     ██
-██                       ██
-██                       ██
-██                       ██
-███████████████████████████
-""".strip()
-
 
 def get_caution() -> str:
     """Get caution message with 1% chance of easter egg."""
@@ -133,13 +102,87 @@ def _mask_url(url: str) -> str:
     return "█" * len(url)
 
 
-def get_qr_placeholder() -> str:
-    """Get the anime girl placeholder for hidden QR code.
+def _generate_spiral(size: int) -> str:
+    """Generate a square spiral pattern using only █ and space.
+
+    Args:
+        size: Size of the square (width and height in characters).
 
     Returns:
-        ASCII art anime girl.
+        ASCII art spiral pattern.
     """
-    return ANIME_GIRL
+    grid = [[False] * size for _ in range(size)]
+
+    # Draw spiral path with alternating colors every few steps
+    x, y = 0, 0
+    dx, dy = 1, 0  # Start moving right
+    min_x, max_x = 0, size - 1
+    min_y, max_y = 0, size - 1
+    step = 0
+    band_size = max(2, size // 9)  # Alternate every N steps
+
+    while min_x <= max_x and min_y <= max_y:
+        grid[y][x] = (step // band_size) % 2 == 0
+        step += 1
+
+        next_x, next_y = x + dx, y + dy
+
+        if dx == 1 and next_x > max_x:
+            min_y += 1
+            dx, dy = 0, 1
+        elif dy == 1 and next_y > max_y:
+            max_x -= 1
+            dx, dy = -1, 0
+        elif dx == -1 and next_x < min_x:
+            max_y -= 1
+            dx, dy = 0, -1
+        elif dy == -1 and next_y < min_y:
+            min_x += 1
+            dx, dy = 1, 0
+
+        next_x, next_y = x + dx, y + dy
+        if min_x <= next_x <= max_x and min_y <= next_y <= max_y:
+            x, y = next_x, next_y
+        else:
+            break
+
+    # Convert to string using only █ and space
+    lines = []
+    for row in grid:
+        line = "".join("█" if cell else " " for cell in row)
+        lines.append(line)
+
+    return "\n".join(lines)
+
+
+def get_qr_placeholder(url: str) -> str:
+    """Generate a spiral placeholder matching the QR code size.
+
+    Args:
+        url: URL that would be encoded (used to determine QR size).
+
+    Returns:
+        ASCII art spiral pattern.
+    """
+    # Generate a real QR to get its dimensions
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=1,
+        border=1,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+
+    # Get the QR code dimensions
+    buffer = io.StringIO()
+    qr.print_ascii(out=buffer, invert=True)
+    qr_lines = [line for line in buffer.getvalue().split("\n") if line]
+
+    # Use QR width as the spiral size (it's square)
+    size = len(qr_lines[0]) if qr_lines else 27
+
+    return _generate_spiral(size)
 
 
 def display_connected_screen(url: str, cwd: str | None = None) -> None:
@@ -151,8 +194,8 @@ def display_connected_screen(url: str, cwd: str | None = None) -> None:
     """
     console.clear()
 
-    # Build anime girl placeholder (replaces QR when hidden)
-    placeholder_text = get_qr_placeholder()
+    # Build spiral placeholder (same size as QR would be)
+    placeholder_text = get_qr_placeholder(url)
 
     # Build logo and tagline with gradients
     logo_colored = _apply_gradient(

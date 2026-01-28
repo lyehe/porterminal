@@ -345,12 +345,7 @@ def main() -> int:
                     console.print(f"\n[yellow]Tunnel stopped (exit code {code})[/yellow]")
                 break
 
-            # Hide QR code after first connection (unless --keep-qr)
-            if not qr_hidden and connected_event.is_set():
-                qr_hidden = True
-                display_connected_screen(display_url, cwd=display_cwd)
-
-            # Handle URL visibility toggle from frontend
+            # Handle URL visibility toggle from frontend (takes priority)
             if url_visibility_event.is_set():
                 url_visibility_event.clear()
                 if url_visible[0]:
@@ -358,11 +353,18 @@ def main() -> int:
                     display_startup_screen(
                         display_url, is_tunnel=not args.no_tunnel, cwd=display_cwd
                     )
-                    qr_hidden = False  # Reset so it can hide again on next connection
+                    qr_hidden = False
+                    # Clear connected_event so auto-hide doesn't trigger immediately
+                    connected_event.clear()
                 else:
                     # Hide URL and QR code (URL masked with blocks)
                     display_connected_screen(display_url, cwd=display_cwd)
                     qr_hidden = True
+
+            # Hide QR code after first connection (unless --keep-qr)
+            elif not qr_hidden and connected_event.is_set():
+                qr_hidden = True
+                display_connected_screen(display_url, cwd=display_cwd)
 
             shutdown_event.wait(0.1)
     finally:

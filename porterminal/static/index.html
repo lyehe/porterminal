@@ -16,8 +16,8 @@
 
     <!-- Icons (PWA disabled - not useful for tunnel-based access) -->
     <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
-  <script type="module" crossorigin src="/static/assets/app-C6FEFcrM.js"></script>
-  <link rel="stylesheet" crossorigin href="/static/assets/app--swReJp6.css">
+  <script type="module" crossorigin src="/static/assets/app-BLXfMcUG.js"></script>
+  <link rel="stylesheet" crossorigin href="/static/assets/app-D-hntTUl.css">
 </head>
 <body>
     <div id="app">
@@ -44,7 +44,7 @@
         <div id="compose-container" class="hidden">
             <div id="compose-wrapper">
                 <textarea id="compose-textarea" rows="1"></textarea>
-                <span id="compose-placeholder" class="rainbow-text">Type or dictate here, edit before send</span>
+                <span id="compose-placeholder" class="rainbow-text">Compose...</span>
             </div>
             <button id="compose-send" title="Send to terminal">➤</button>
         </div>
@@ -126,7 +126,6 @@
                     <div class="settings-item">
                         <label class="settings-label" for="settings-compose">
                             <span class="settings-text">Compose Mode</span>
-                            <span class="settings-desc">Type freely before sending</span>
                         </label>
                         <label class="toggle-switch">
                             <input type="checkbox" id="settings-compose" role="switch">
@@ -136,7 +135,6 @@
                     <div class="settings-item">
                         <label class="settings-label" for="settings-updates">
                             <span class="settings-text">Update Notifications</span>
-                            <span class="settings-desc">Show when updates available</span>
                         </label>
                         <label class="toggle-switch">
                             <input type="checkbox" id="settings-updates" role="switch">
@@ -147,29 +145,30 @@
                 <!-- Security Section -->
                 <div class="settings-section" id="settings-security-section">
                     <div class="settings-section-title">Security</div>
-                    <!-- Require password toggle -->
-                    <div class="settings-item">
+                    <!-- Password row: toggle + inline actions -->
+                    <div class="settings-item settings-password-row">
                         <label class="settings-label" for="settings-require-password">
                             <span class="settings-text">Require Password</span>
                             <span class="settings-desc" id="settings-password-status">Off</span>
                         </label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="settings-require-password" role="switch">
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                    <!-- Password management -->
-                    <div class="settings-password-actions">
-                        <button class="settings-password-btn" id="settings-set-password">Set Password</button>
-                        <button class="settings-password-btn settings-password-clear hidden" id="settings-clear-password">Clear</button>
+                        <div class="settings-password-inline">
+                            <button class="settings-password-link" id="settings-set-password">Edit</button>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="settings-require-password" role="switch">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
                     </div>
                     <!-- Password form (hidden by default) -->
                     <div class="settings-password-form hidden" id="settings-password-form">
-                        <input type="password" class="settings-password-input" id="settings-password-input" placeholder="New password" autocomplete="new-password">
-                        <input type="password" class="settings-password-input" id="settings-password-confirm" placeholder="Confirm password" autocomplete="new-password">
+                        <div class="settings-password-inputs">
+                            <input type="password" class="settings-password-input" id="settings-password-input" placeholder="New password" autocomplete="new-password">
+                            <input type="password" class="settings-password-input" id="settings-password-confirm" placeholder="Confirm" autocomplete="new-password">
+                        </div>
                         <div class="settings-password-form-actions">
-                            <button class="settings-password-btn" id="settings-password-save">Save</button>
                             <button class="settings-password-btn settings-password-cancel" id="settings-password-cancel">Cancel</button>
+                            <button class="settings-password-btn settings-password-save" id="settings-password-save">Save</button>
+                            <button class="settings-password-btn settings-password-clear hidden" id="settings-clear-password">Clear</button>
                         </div>
                     </div>
                     <div class="settings-restart-notice hidden" id="settings-restart-notice">
@@ -179,7 +178,6 @@
                     <div class="settings-item">
                         <label class="settings-label" for="settings-show-url">
                             <span class="settings-text">Show URL in CLI</span>
-                            <span class="settings-desc">Display URL and QR code</span>
                         </label>
                         <label class="toggle-switch">
                             <input type="checkbox" id="settings-show-url" role="switch">

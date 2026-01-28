@@ -1093,81 +1093,104 @@ html, body {
     color: var(--text-muted);
 }
 
-/* Password management actions */
-.settings-password-actions {
+/* Password row with inline controls */
+.settings-password-row {
+    flex-wrap: wrap;
+}
+
+.settings-password-inline {
     display: flex;
-    gap: 8px;
-    margin-top: 8px;
+    align-items: center;
+    gap: 10px;
 }
 
-.settings-password-btn {
-    padding: 6px 12px;
-    font-size: 12px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    background: var(--bg-surface);
-    color: var(--text-primary);
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.settings-password-btn:hover {
-    background: var(--bg-hover);
-    border-color: var(--border-focus);
-}
-
-.settings-password-btn:active {
-    transform: scale(0.98);
-}
-
-.settings-password-clear {
-    color: var(--color-error);
-    border-color: var(--color-error);
-    opacity: 0.8;
-}
-
-.settings-password-clear:hover {
-    background: rgba(255, 82, 82, 0.1);
-    opacity: 1;
-}
-
-.settings-password-cancel {
+.settings-password-link {
     background: transparent;
-    border-color: var(--border-color);
-    color: var(--text-secondary);
+    border: none;
+    color: var(--text-muted);
+    font-size: 11px;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.settings-password-link:active {
+    background: var(--hover-overlay);
+    color: var(--text-high);
 }
 
 /* Password form */
 .settings-password-form {
-    margin-top: 12px;
+    width: 100%;
+    padding: 10px 0;
+    border-top: 1px solid var(--border-subtle);
+    margin-top: 8px;
+}
+
+.settings-password-inputs {
     display: flex;
-    flex-direction: column;
     gap: 8px;
+    margin-bottom: 10px;
 }
 
 .settings-password-input {
-    padding: 8px 12px;
-    font-size: 14px;
-    border: 1px solid var(--border-color);
+    flex: 1;
+    padding: 8px 10px;
+    font-size: 13px;
+    border: 1px solid var(--border-medium);
     border-radius: var(--radius-sm);
-    background: var(--bg-input);
-    color: var(--text-primary);
+    background: var(--bg-surface);
+    color: var(--text-high);
     outline: none;
+    min-width: 0;
 }
 
 .settings-password-input:focus {
-    border-color: var(--border-focus);
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+    border-color: var(--color-accent);
 }
 
 .settings-password-input::placeholder {
-    color: var(--text-muted);
+    color: var(--text-disabled);
 }
 
 .settings-password-form-actions {
     display: flex;
     gap: 8px;
-    margin-top: 4px;
+    justify-content: flex-end;
+}
+
+.settings-password-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.settings-password-btn:active {
+    background: var(--hover-overlay);
+}
+
+.settings-password-save {
+    background: var(--color-accent-bg);
+    color: var(--color-accent-text);
+}
+
+.settings-password-save:active {
+    background: var(--color-accent-strong);
+}
+
+.settings-password-clear {
+    color: var(--color-danger-muted);
+}
+
+.settings-password-clear:active {
+    background: var(--color-danger-bg);
+    color: var(--color-danger-text);
 }
 
 /* Restart notice */
@@ -1175,9 +1198,9 @@ html, body {
     margin-top: 8px;
     padding: 8px 12px;
     font-size: 11px;
-    color: var(--color-warning);
-    background: rgba(255, 193, 7, 0.1);
-    border: 1px solid rgba(255, 193, 7, 0.3);
+    color: var(--color-locked);
+    background: rgba(255, 160, 60, 0.1);
+    border: 1px solid rgba(255, 160, 60, 0.3);
     border-radius: var(--radius-sm);
     text-align: center;
 }

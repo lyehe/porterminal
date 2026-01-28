@@ -97,23 +97,23 @@ export function createSettingsOverlay(): SettingsOverlay {
         const result = await configService.updateSettings({
             notify_on_startup: updatesToggle.checked,
         });
-        showToast(result.success ? 'Saved' : (result.error || 'Failed to save'),
+        showToast(result.success ? 'Saved' : (result.error || 'Failed, try refresh'),
             result.success ? 'success' : 'error');
     }, 300);
 
     /** Update password UI state based on status */
     function updatePasswordUI(passwordSaved: boolean, requirePassword: boolean, currentlyProtected: boolean): void {
-        // Update status text
+        // Update status text - only show when active or pending
         if (passwordStatus) {
             if (currentlyProtected) {
                 passwordStatus.textContent = 'Active';
                 passwordStatus.className = 'settings-desc password-on';
             } else if (requirePassword) {
-                passwordStatus.textContent = 'On (restart needed)';
+                passwordStatus.textContent = 'Restart needed';
                 passwordStatus.className = 'settings-desc password-on';
             } else {
-                passwordStatus.textContent = 'Off';
-                passwordStatus.className = 'settings-desc password-off';
+                passwordStatus.textContent = '';
+                passwordStatus.className = 'settings-desc';
             }
         }
 
@@ -122,10 +122,12 @@ export function createSettingsOverlay(): SettingsOverlay {
             requirePasswordToggle.checked = requirePassword;
         }
 
-        // Update buttons
+        // Update Edit link text
         if (setPasswordBtn) {
-            setPasswordBtn.textContent = passwordSaved ? 'Change Password' : 'Set Password';
+            setPasswordBtn.textContent = passwordSaved ? 'Edit' : 'Set';
         }
+
+        // Show Clear button only when password is saved
         if (clearPasswordBtn) {
             clearPasswordBtn.classList.toggle('hidden', !passwordSaved);
         }
@@ -177,7 +179,7 @@ export function createSettingsOverlay(): SettingsOverlay {
             showPasswordForm(false);
             await refreshPasswordStatus();
         } else {
-            showToast(result.error || 'Failed to save', 'error');
+            showToast(result.error || 'Failed, try refresh', 'error');
         }
     }
 
@@ -191,7 +193,7 @@ export function createSettingsOverlay(): SettingsOverlay {
             needsRestart = true;
             await refreshPasswordStatus();
         } else {
-            showToast(result.error || 'Failed to clear', 'error');
+            showToast(result.error || 'Failed, try refresh', 'error');
         }
     }
 
@@ -207,7 +209,7 @@ export function createSettingsOverlay(): SettingsOverlay {
         } else {
             // Revert toggle on failure
             requirePasswordToggle.checked = !requirePasswordToggle.checked;
-            showToast(result.error || 'Failed to update', 'error');
+            showToast(result.error || 'Failed, try refresh', 'error');
         }
     }
 
@@ -221,7 +223,7 @@ export function createSettingsOverlay(): SettingsOverlay {
         } catch {
             // Revert toggle on failure
             showUrlToggle.checked = !showUrlToggle.checked;
-            showToast('Failed to update', 'error');
+            showToast('Failed, try refresh', 'error');
         }
     }
 
@@ -311,7 +313,7 @@ export function createSettingsOverlay(): SettingsOverlay {
                 callbacks?.onButtonsChanged?.(updatedButtons);
                 renderButtonToggles(updatedButtons);
             } else {
-                showToast(result.error || 'Failed to add', 'error');
+                showToast(result.error || 'Failed, try refresh', 'error');
             }
         };
 
@@ -382,7 +384,7 @@ export function createSettingsOverlay(): SettingsOverlay {
                     callbacks?.onButtonsChanged?.(updatedButtons);
                     renderButtonToggles(updatedButtons);
                 } else {
-                    showToast(result.error || 'Failed to remove', 'error');
+                    showToast(result.error || 'Failed, try refresh', 'error');
                 }
             });
 

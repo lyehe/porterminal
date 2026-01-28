@@ -1,7 +1,6 @@
 """Display utilities for the startup screen."""
 
 import io
-import random
 import sys
 
 import qrcode
@@ -18,44 +17,21 @@ if sys.platform == "win32":
 console = Console(force_terminal=True)
 
 LOGO = r"""
-██████  ██████  ██████  ██████  ██████  ██████  ██   ██  ██  ██   ██   ████   ██
-██  ██  ██  ██  ██  ██    ██    ██      ██  ██  ███ ███  ██  ███  ██  ██  ██  ██
-██████  ██  ██  ██████    ██    ████    ██████  ██ █ ██  ██  ██ █ ██  ██████  ██
-██      ██  ██  ██  ██    ██    ██      ██  ██  ██   ██  ██  ██  ███  ██  ██  ██
-██      ██████  ██  ██    ██    ██████  ██  ██  ██   ██  ██  ██   ██  ██  ██  ██████
+████████  ██████████  ██      ██
+██    ██      ██      ████    ██
+████████      ██      ██  ██  ██
+██            ██      ██    ████
 """
 
-TAGLINE = r"""
-█ █ █ █▄▄ █▀▀   █▀▀ █▀█ █▀▄ █▀▀   █▀▀ █▀█ █▀█ █▀▄▀█   ▄▀█ █▄ █ █▄█ █ █ █ █▀▀ █▀█ █▀▀
-▀▄▀ █ █▄█ ██▄   █▄▄ █▄█ █▄▀ ██▄   █▀  █▀▄ █▄█ █ ▀ █   █▀█ █ ▀█  █  ▀▄▀▄▀ ██▄ █▀▄ ██▄
+TAGLINE_PORTABLE = r"""
+█▀█ █▀█ █▀█ ▀█▀ ▄▀█ █▄▄ █   █▀▀
+█▀▀ █▄█ █▀▄  █  █▀█ █▄█ █▄▄ ██▄
 """.strip()
 
-CAUTION_DEFAULT = "CAUTION: DO NOT VIBE CODE WHILE DRIVING"
-
-CAUTION_EASTER_EGGS = [
-    "VIBE CODING ON THE TOILET IS FINE THO",
-    "DEPLOYING TO PROD FROM BED IS A LIFESTYLE",
-    "TOUCHING GRASS WHILE TOUCHING CODE",
-    "MOM SAID IT'S MY TURN ON THE SERVER",
-    "IT WORKS ON MY PHONE",
-    "404: WORK-LIFE BALANCE NOT FOUND",
-    "git commit -m 'fixed from toilet'",
-    "*HACKER VOICE* I'M IN (the bathroom)",
-    "THEY SAID REMOTE WORK. I DELIVERED.",
-    "TECHNICALLY THIS IS A STANDING DESK",
-    "SUDO MAKE ME A SANDWICH (I'M IN LINE)",
-    "MY OTHER TERMINAL IS A YACHT",
-    "REAL PROGRAMMERS CODE IN TRAFFIC JAMS",
-    "MERGE CONFLICTS RESOLVED AT 30,000 FT",
-    "PUSHED TO MAIN FROM THE CHECKOUT LINE",
-]
-
-
-def get_caution() -> str:
-    """Get caution message with 1% chance of easter egg."""
-    if random.random() < 0.01:
-        return random.choice(CAUTION_EASTER_EGGS)
-    return CAUTION_DEFAULT
+TAGLINE_TERMINAL = r"""
+▀█▀ █▀▀ █▀█ █▀▄▀█ █ █▄ █ ▄▀█ █
+ █  ██▄ █▀▄ █ ▀ █ █ █ ▀█ █▀█ █▄▄
+""".strip()
 
 
 def _apply_gradient(lines: list[str], colors: list[str]) -> list[str]:
@@ -98,21 +74,26 @@ def _generate_spiral(width: int, height: int) -> str:
     """Generate a spiral pattern using half-block characters like QR code.
 
     Args:
-        width: Width in characters.
-        height: Height in grid rows (will be halved for output).
+        width: Width in characters (output width).
+        height: Height in output lines.
 
     Returns:
         ASCII art spiral pattern using █▀▄ and space.
     """
-    grid = [[False] * width for _ in range(height)]
+    # Ensure even dimensions for symmetric spiral
+    grid_width = width + (width % 2)
+    grid_height = height * 2  # Each output line = 2 grid rows
+    grid_height = grid_height + (grid_height % 2)
+
+    grid = [[False] * grid_width for _ in range(grid_height)]
 
     # Draw spiral path with alternating colors
     x, y = 0, 0
     dx, dy = 1, 0
-    min_x, max_x = 0, width - 1
-    min_y, max_y = 0, height - 1
+    min_x, max_x = 0, grid_width - 1
+    min_y, max_y = 0, grid_height - 1
     step = 0
-    band_size = max(2, (width + height) // 18)
+    band_size = max(2, (grid_width + grid_height) // 18)
 
     while min_x <= max_x and min_y <= max_y:
         grid[y][x] = (step // band_size) % 2 == 0
@@ -139,13 +120,13 @@ def _generate_spiral(width: int, height: int) -> str:
         else:
             break
 
-    # Convert to half-block characters (2 rows per output line, like QR)
+    # Convert to half-block characters (2 grid rows per output line)
     lines = []
-    for row in range(0, height, 2):
+    for row in range(0, grid_height, 2):
         line = ""
-        for col in range(width):
-            top = grid[row][col] if row < height else False
-            bottom = grid[row + 1][col] if row + 1 < height else False
+        for col in range(grid_width):
+            top = grid[row][col]
+            bottom = grid[row + 1][col] if row + 1 < grid_height else False
             if top and bottom:
                 line += "█"
             elif top and not bottom:
@@ -154,9 +135,11 @@ def _generate_spiral(width: int, height: int) -> str:
                 line += "▄"
             else:
                 line += " "
-        lines.append(line)
+        # Trim to original width
+        lines.append(line[:width])
 
-    return "\n".join(lines)
+    # Trim to original height
+    return "\n".join(lines[:height])
 
 
 def get_qr_placeholder(url: str) -> str:
@@ -183,12 +166,11 @@ def get_qr_placeholder(url: str) -> str:
     qr.print_ascii(out=buffer, invert=True)
     qr_lines = [line for line in buffer.getvalue().split("\n") if line]
 
-    # Width and height of output (height is halved due to half-blocks)
-    width = len(qr_lines[0]) if qr_lines else 27
-    output_height = len(qr_lines) if qr_lines else 14
+    # Width and height match QR output exactly
+    width = len(qr_lines[0]) if qr_lines else 28
+    height = len(qr_lines) if qr_lines else 14
 
-    # Grid height is 2x output height (each output line = 2 grid rows)
-    return _generate_spiral(width, output_height * 2)
+    return _generate_spiral(width, height)
 
 
 def display_startup_screen(
@@ -216,33 +198,40 @@ def display_startup_screen(
         display_url = f"[bold cyan]{url}[/bold cyan]"
     else:
         right_panel = get_qr_placeholder(url)
-        display_url = "[dim]Show URL in ☰ (top right)[/dim]"
+        display_url = "[dim]Show URL via Settings (top right)[/dim]"
 
     # Status indicator
     if is_tunnel:
-        status = "[green]●[/green] TUNNEL ACTIVE - SCAN THE QR CODE TO ACCESS YOUR TERMINAL"
+        if show_url:
+            status = "[green]●[/green] TUNNEL ACTIVE - SCAN QR TO CONNECT"
+        else:
+            status = "[green]●[/green] TUNNEL ACTIVE"
     else:
         status = "[yellow]●[/yellow] LOCAL MODE"
 
     # Build logo and tagline with gradients
     logo_colored = _apply_gradient(
         LOGO.strip().split("\n"),
-        ["bold bright_cyan", "bright_cyan", "cyan", "bright_blue", "blue"],
+        ["bold bright_cyan", "bright_cyan", "cyan", "bright_blue"],
     )
-    tagline_colored = _apply_gradient(
-        TAGLINE.split("\n"),
+    portable_colored = _apply_gradient(
+        TAGLINE_PORTABLE.split("\n"),
+        ["bright_yellow", "yellow"],
+    )
+    terminal_colored = _apply_gradient(
+        TAGLINE_TERMINAL.split("\n"),
         ["bright_magenta", "magenta"],
     )
 
     # Left side content
     left_lines = [
         *logo_colored,
+        "",
+        *portable_colored,
+        "",
+        *terminal_colored,
         f"[dim]v{__version__}[/dim]",
         "",
-        *tagline_colored,
-        "",
-        f"[bold yellow]{get_caution()}[/bold yellow]",
-        "[bright_red]Use -p for password protection if your screen is exposed[/bright_red]",
         status,
         display_url,
     ]
@@ -254,13 +243,11 @@ def display_startup_screen(
 
     # Create side-by-side layout (logo left, QR/spiral right)
     table = Table.grid(padding=(0, 4))
-    table.add_column(justify="left", vertical="middle")
-    table.add_column(justify="left", vertical="middle")
+    table.add_column(justify="left", vertical="top")
+    table.add_column(justify="left", vertical="top")
     table.add_row(left_content, right_panel)
 
-    console.print()
     console.print(Align.center(table))
-    console.print()
 
 
 # Alias for backwards compatibility

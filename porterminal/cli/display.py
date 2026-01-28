@@ -102,24 +102,25 @@ def _mask_url(url: str) -> str:
     return "█" * len(url)
 
 
-def _generate_spiral(size: int) -> str:
-    """Generate a square spiral pattern using only █ and space.
+def _generate_spiral(width: int, height: int) -> str:
+    """Generate a spiral pattern using half-block characters like QR code.
 
     Args:
-        size: Size of the square (width and height in characters).
+        width: Width in characters.
+        height: Height in grid rows (will be halved for output).
 
     Returns:
-        ASCII art spiral pattern.
+        ASCII art spiral pattern using █▀▄ and space.
     """
-    grid = [[False] * size for _ in range(size)]
+    grid = [[False] * width for _ in range(height)]
 
-    # Draw spiral path with alternating colors every few steps
+    # Draw spiral path with alternating colors
     x, y = 0, 0
-    dx, dy = 1, 0  # Start moving right
-    min_x, max_x = 0, size - 1
-    min_y, max_y = 0, size - 1
+    dx, dy = 1, 0
+    min_x, max_x = 0, width - 1
+    min_y, max_y = 0, height - 1
     step = 0
-    band_size = max(2, size // 9)  # Alternate every N steps
+    band_size = max(2, (width + height) // 18)
 
     while min_x <= max_x and min_y <= max_y:
         grid[y][x] = (step // band_size) % 2 == 0
@@ -146,10 +147,21 @@ def _generate_spiral(size: int) -> str:
         else:
             break
 
-    # Convert to string using only █ and space
+    # Convert to half-block characters (2 rows per output line, like QR)
     lines = []
-    for row in grid:
-        line = "".join("█" if cell else " " for cell in row)
+    for row in range(0, height, 2):
+        line = ""
+        for col in range(width):
+            top = grid[row][col] if row < height else False
+            bottom = grid[row + 1][col] if row + 1 < height else False
+            if top and bottom:
+                line += "█"
+            elif top and not bottom:
+                line += "▀"
+            elif not top and bottom:
+                line += "▄"
+            else:
+                line += " "
         lines.append(line)
 
     return "\n".join(lines)
@@ -162,7 +174,7 @@ def get_qr_placeholder(url: str) -> str:
         url: URL that would be encoded (used to determine QR size).
 
     Returns:
-        ASCII art spiral pattern.
+        ASCII art spiral pattern using same characters as QR.
     """
     # Generate a real QR to get its dimensions
     qr = qrcode.QRCode(
@@ -174,15 +186,17 @@ def get_qr_placeholder(url: str) -> str:
     qr.add_data(url)
     qr.make(fit=True)
 
-    # Get the QR code dimensions
+    # Get the QR code output dimensions
     buffer = io.StringIO()
     qr.print_ascii(out=buffer, invert=True)
     qr_lines = [line for line in buffer.getvalue().split("\n") if line]
 
-    # Use QR width as the spiral size (it's square)
-    size = len(qr_lines[0]) if qr_lines else 27
+    # Width and height of output (height is halved due to half-blocks)
+    width = len(qr_lines[0]) if qr_lines else 27
+    output_height = len(qr_lines) if qr_lines else 14
 
-    return _generate_spiral(size)
+    # Grid height is 2x output height (each output line = 2 grid rows)
+    return _generate_spiral(width, output_height * 2)
 
 
 def display_connected_screen(url: str, cwd: str | None = None) -> None:

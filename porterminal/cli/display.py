@@ -94,6 +94,38 @@ def get_qr_code(url: str) -> str:
     return "\n".join(lines)
 
 
+def display_connected_screen(url: str, cwd: str | None = None) -> None:
+    """Display minimal screen after first connection (QR hidden).
+
+    Args:
+        url: URL to display.
+        cwd: Current working directory to display.
+    """
+    console.clear()
+
+    # Build logo with gradients
+    logo_colored = _apply_gradient(
+        LOGO.strip().split("\n"),
+        ["bold bright_cyan", "bright_cyan", "cyan", "bright_blue", "blue"],
+    )
+
+    lines = [
+        *logo_colored,
+        f"[dim]v{__version__}[/dim]",
+        "",
+        "[green]●[/green] [bold green]CONNECTED[/bold green]",
+        f"[bold cyan]{url}[/bold cyan]",
+    ]
+    if cwd:
+        lines.append(f"[dim]{cwd}[/dim]")
+    lines.append("[dim]Ctrl+C to stop[/dim]")
+
+    console.print()
+    for line in lines:
+        console.print(Align.center(line))
+    console.print()
+
+
 def display_startup_screen(
     url: str,
     is_tunnel: bool = True,

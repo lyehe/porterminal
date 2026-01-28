@@ -23,7 +23,7 @@ from threading import Event, Thread
 
 from rich.console import Console
 
-from porterminal.cli import display_startup_screen, parse_args
+from porterminal.cli import display_connected_screen, display_startup_screen, parse_args
 from porterminal.infrastructure import (
     CloudflaredInstaller,
     drain_process_output,
@@ -309,6 +309,16 @@ def main() -> int:
     def signal_handler(signum: int, frame: object) -> None:
         shutdown_event.set()
 
+    # Track first connection to hide QR code
+    import tempfile
+
+    qr_hidden = args.url_file is not None  # Already hidden if background mode
+    connect_file = (
+        Path(tempfile.gettempdir()) / f"porterminal-{server_process.pid}.connected"
+        if server_process
+        else None
+    )
+
     old_handler = signal.signal(signal.SIGINT, signal_handler)
     try:
         while not shutdown_event.is_set():
@@ -326,9 +336,22 @@ def main() -> int:
                 else:
                     console.print(f"\n[yellow]Tunnel stopped (exit code {code})[/yellow]")
                 break
+
+            # Hide QR code after first connection
+            if not qr_hidden and connect_file and connect_file.exists():
+                qr_hidden = True
+                display_connected_screen(display_url, cwd=display_cwd)
+
             shutdown_event.wait(0.1)
     finally:
         signal.signal(signal.SIGINT, old_handler)
+
+        # Cleanup connection file
+        if connect_file:
+            try:
+                connect_file.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     if shutdown_event.is_set():
         console.print("\n[dim]Shutting down...[/dim]")

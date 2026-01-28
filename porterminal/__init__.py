@@ -348,7 +348,7 @@ def main() -> int:
             # Hide QR code after first connection (unless --keep-qr)
             if not qr_hidden and connected_event.is_set():
                 qr_hidden = True
-                display_connected_screen(cwd=display_cwd)
+                display_connected_screen(display_url, cwd=display_cwd)
 
             # Handle URL visibility toggle from frontend
             if url_visibility_event.is_set():
@@ -360,8 +360,8 @@ def main() -> int:
                     )
                     qr_hidden = False  # Reset so it can hide again on next connection
                 else:
-                    # Hide URL and QR code
-                    display_connected_screen(cwd=display_cwd)
+                    # Hide URL and QR code (URL masked with blocks)
+                    display_connected_screen(display_url, cwd=display_cwd)
                     qr_hidden = True
 
             shutdown_event.wait(0.1)

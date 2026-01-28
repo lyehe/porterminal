@@ -94,10 +94,19 @@ def get_qr_code(url: str) -> str:
     return "\n".join(lines)
 
 
-def display_connected_screen(cwd: str | None = None) -> None:
-    """Display minimal screen after first connection (QR and URL hidden).
+def _mask_url(url: str) -> str:
+    """Replace URL content with block characters, keeping protocol visible."""
+    if "://" in url:
+        protocol, rest = url.split("://", 1)
+        return f"{protocol}://{'█' * len(rest)}"
+    return "█" * len(url)
+
+
+def display_connected_screen(url: str, cwd: str | None = None) -> None:
+    """Display minimal screen after first connection (QR hidden, URL masked).
 
     Args:
+        url: URL to display (will be masked with blocks).
         cwd: Current working directory to display.
     """
     console.clear()
@@ -108,11 +117,14 @@ def display_connected_screen(cwd: str | None = None) -> None:
         ["bold bright_cyan", "bright_cyan", "cyan", "bright_blue", "blue"],
     )
 
+    masked_url = _mask_url(url)
+
     lines = [
         *logo_colored,
         f"[dim]v{__version__}[/dim]",
         "",
         "[green]●[/green] [bold green]CONNECTED[/bold green]",
+        f"[dim]{masked_url}[/dim]",
     ]
     if cwd:
         lines.append(f"[dim]{cwd}[/dim]")

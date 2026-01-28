@@ -102,8 +102,84 @@ def _mask_url(url: str) -> str:
     return "█" * len(url)
 
 
+def _generate_spiral(size: int) -> str:
+    """Generate a black/white square spiral pattern.
+
+    Args:
+        size: Size of the square (in characters width, half that in height).
+
+    Returns:
+        ASCII art spiral pattern using half-block characters.
+    """
+    # Create a grid for the spiral (double height because we use half-blocks)
+    grid_size = size
+    grid = [[False] * grid_size for _ in range(grid_size)]
+
+    # Fill the spiral pattern - alternate rings of filled/empty
+    for ring in range(grid_size // 2 + 1):
+        fill = ring % 2 == 0  # Alternate between filled and empty rings
+        for x in range(ring, grid_size - ring):
+            for y in range(ring, grid_size - ring):
+                # Only fill the border of this ring
+                if x == ring or x == grid_size - ring - 1 or y == ring or y == grid_size - ring - 1:
+                    grid[y][x] = fill
+
+    # Convert to half-block characters (2 rows per character)
+    lines = []
+    for row in range(0, grid_size, 2):
+        line = ""
+        for col in range(grid_size):
+            top = grid[row][col] if row < grid_size else False
+            bottom = grid[row + 1][col] if row + 1 < grid_size else False
+            if top and bottom:
+                line += "█"
+            elif top and not bottom:
+                line += "▀"
+            elif not top and bottom:
+                line += "▄"
+            else:
+                line += " "
+        lines.append(line)
+
+    return "\n".join(lines)
+
+
+def get_spiral_placeholder(url: str) -> str:
+    """Generate a spiral pattern matching the size of a QR code for the URL.
+
+    Args:
+        url: URL that would be encoded (used to determine QR size).
+
+    Returns:
+        ASCII art spiral pattern.
+    """
+    # Generate a real QR to get its dimensions
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=1,
+        border=1,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+
+    # Get the QR code dimensions
+    buffer = io.StringIO()
+    qr.print_ascii(out=buffer, invert=True)
+    qr_lines = [line for line in buffer.getvalue().split("\n") if line]
+
+    if not qr_lines:
+        return _generate_spiral(21)  # Default size
+
+    # Match the QR code width (it's typically square)
+    width = len(qr_lines[0]) if qr_lines else 21
+
+    # Generate spiral with matching dimensions
+    return _generate_spiral(width)
+
+
 def display_connected_screen(url: str, cwd: str | None = None) -> None:
-    """Display minimal screen after first connection (QR hidden, URL masked).
+    """Display screen after first connection (QR replaced with spiral, URL masked).
 
     Args:
         url: URL to display (will be masked with blocks).
@@ -111,28 +187,47 @@ def display_connected_screen(url: str, cwd: str | None = None) -> None:
     """
     console.clear()
 
-    # Build logo with gradients
+    # Build spiral placeholder (same size as QR would be)
+    spiral_text = get_spiral_placeholder(url)
+
+    # Build logo and tagline with gradients
     logo_colored = _apply_gradient(
         LOGO.strip().split("\n"),
         ["bold bright_cyan", "bright_cyan", "cyan", "bright_blue", "blue"],
     )
+    tagline_colored = _apply_gradient(
+        TAGLINE.split("\n"),
+        ["bright_magenta", "magenta"],
+    )
 
     masked_url = _mask_url(url)
 
-    lines = [
+    # Left side content (same structure as startup screen)
+    left_lines = [
         *logo_colored,
         f"[dim]v{__version__}[/dim]",
         "",
+        *tagline_colored,
+        "",
         "[green]●[/green] [bold green]CONNECTED[/bold green]",
+        "",
+        "",
         f"[dim]{masked_url}[/dim]",
     ]
     if cwd:
-        lines.append(f"[dim]{cwd}[/dim]")
-    lines.append("[dim]Ctrl+C to stop[/dim]")
+        left_lines.append(f"[dim]{cwd}[/dim]")
+    left_lines.append("[dim]Ctrl+C to stop[/dim]")
+
+    left_content = "\n".join(left_lines)
+
+    # Create side-by-side layout (same as startup screen)
+    table = Table.grid(padding=(0, 4))
+    table.add_column(justify="left", vertical="middle")
+    table.add_column(justify="left", vertical="middle")
+    table.add_row(left_content, spiral_text)
 
     console.print()
-    for line in lines:
-        console.print(Align.center(line))
+    console.print(Align.center(table))
     console.print()
 
 

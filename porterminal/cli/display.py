@@ -199,78 +199,32 @@ def get_qr_placeholder(url: str) -> str:
     return _generate_spiral(width, output_height * 2)
 
 
-def display_connected_screen(url: str, cwd: str | None = None) -> None:
-    """Display screen after first connection (QR replaced with spiral, URL masked).
-
-    Args:
-        url: URL to display (will be masked with blocks).
-        cwd: Current working directory to display.
-    """
-    console.clear()
-
-    # Build spiral placeholder (same size as QR would be)
-    placeholder_text = get_qr_placeholder(url)
-
-    # Build logo and tagline with gradients
-    logo_colored = _apply_gradient(
-        LOGO.strip().split("\n"),
-        ["bold bright_cyan", "bright_cyan", "cyan", "bright_blue", "blue"],
-    )
-    tagline_colored = _apply_gradient(
-        TAGLINE.split("\n"),
-        ["bright_magenta", "magenta"],
-    )
-
-    masked_url = _mask_url(url)
-
-    # Left side content (same structure as startup screen)
-    left_lines = [
-        *logo_colored,
-        f"[dim]v{__version__}[/dim]",
-        "",
-        *tagline_colored,
-        "",
-        "[green]●[/green] [bold green]CONNECTED[/bold green]",
-        "",
-        "",
-        f"[dim]{masked_url}[/dim]",
-    ]
-    if cwd:
-        left_lines.append(f"[dim]{cwd}[/dim]")
-    left_lines.append("[dim]Ctrl+C to stop[/dim]")
-
-    left_content = "\n".join(left_lines)
-
-    # Create side-by-side layout (same as startup screen)
-    table = Table.grid(padding=(0, 4))
-    table.add_column(justify="left", vertical="middle")
-    table.add_column(justify="left", vertical="middle")
-    table.add_row(left_content, placeholder_text)
-
-    console.print()
-    console.print(Align.center(table))
-    console.print()
-
-
 def display_startup_screen(
     url: str,
     is_tunnel: bool = True,
     cwd: str | None = None,
+    show_url: bool = True,
 ) -> None:
-    """Display the final startup screen with QR code.
+    """Display the startup screen with QR code or spiral placeholder.
 
     Args:
         url: Primary URL to display and encode in QR.
         is_tunnel: Whether tunnel mode is active.
         cwd: Current working directory to display.
+        show_url: If True, show URL and QR. If False, mask URL and show spiral.
     """
     console.clear()
 
-    # Build QR code
-    try:
-        qr_text = get_qr_code(url)
-    except Exception:
-        qr_text = "[QR code unavailable]"
+    # Build QR code or spiral placeholder
+    if show_url:
+        try:
+            right_panel = get_qr_code(url)
+        except Exception:
+            right_panel = "[QR code unavailable]"
+        display_url = f"[bold cyan]{url}[/bold cyan]"
+    else:
+        right_panel = get_qr_placeholder(url)
+        display_url = f"[dim]{_mask_url(url)}[/dim]"
 
     # Status indicator
     if is_tunnel:
@@ -298,7 +252,7 @@ def display_startup_screen(
         f"[bold yellow]{get_caution()}[/bold yellow]",
         "[bright_red]Use -p for password protection if your screen is exposed[/bright_red]",
         status,
-        f"[bold cyan]{url}[/bold cyan]",
+        display_url,
     ]
     if cwd:
         left_lines.append(f"[dim]{cwd}[/dim]")
@@ -306,12 +260,18 @@ def display_startup_screen(
 
     left_content = "\n".join(left_lines)
 
-    # Create side-by-side layout (logo left, QR right)
+    # Create side-by-side layout (logo left, QR/spiral right)
     table = Table.grid(padding=(0, 4))
     table.add_column(justify="left", vertical="middle")
     table.add_column(justify="left", vertical="middle")
-    table.add_row(left_content, qr_text)
+    table.add_row(left_content, right_panel)
 
     console.print()
     console.print(Align.center(table))
     console.print()
+
+
+# Alias for backwards compatibility
+def display_connected_screen(url: str, cwd: str | None = None) -> None:
+    """Display screen with URL hidden (calls display_startup_screen with show_url=False)."""
+    display_startup_screen(url, is_tunnel=True, cwd=cwd, show_url=False)

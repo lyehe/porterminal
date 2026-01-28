@@ -23,7 +23,7 @@ from threading import Event, Thread
 
 from rich.console import Console
 
-from porterminal.cli import display_connected_screen, display_startup_screen, parse_args
+from porterminal.cli import display_startup_screen, parse_args
 from porterminal.infrastructure import (
     CloudflaredInstaller,
     drain_process_output,
@@ -348,23 +348,26 @@ def main() -> int:
             # Handle URL visibility toggle from frontend (takes priority)
             if url_visibility_event.is_set():
                 url_visibility_event.clear()
+                display_startup_screen(
+                    display_url,
+                    is_tunnel=not args.no_tunnel,
+                    cwd=display_cwd,
+                    show_url=url_visible[0],
+                )
+                qr_hidden = not url_visible[0]
                 if url_visible[0]:
-                    # Show URL and QR code
-                    display_startup_screen(
-                        display_url, is_tunnel=not args.no_tunnel, cwd=display_cwd
-                    )
-                    qr_hidden = False
                     # Clear connected_event so auto-hide doesn't trigger immediately
                     connected_event.clear()
-                else:
-                    # Hide URL and QR code (URL masked with blocks)
-                    display_connected_screen(display_url, cwd=display_cwd)
-                    qr_hidden = True
 
             # Hide QR code after first connection (unless --keep-qr)
             elif not qr_hidden and connected_event.is_set():
                 qr_hidden = True
-                display_connected_screen(display_url, cwd=display_cwd)
+                display_startup_screen(
+                    display_url,
+                    is_tunnel=not args.no_tunnel,
+                    cwd=display_cwd,
+                    show_url=False,
+                )
 
             shutdown_event.wait(0.1)
     finally:

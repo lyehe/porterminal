@@ -216,7 +216,7 @@ def display_startup_screen(
         display_url = f"[bold cyan]{url}[/bold cyan]"
     else:
         right_panel = get_qr_placeholder(url)
-        display_url = "[dim]Show URL in Settings[/dim]"
+        display_url = "[dim]Show URL in ☰ (top right)[/dim]"
 
     # Status indicator
     if is_tunnel:

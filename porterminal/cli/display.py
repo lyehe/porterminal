@@ -94,14 +94,6 @@ def get_qr_code(url: str) -> str:
     return "\n".join(lines)
 
 
-def _mask_url(url: str) -> str:
-    """Replace URL content with block characters, keeping protocol visible."""
-    if "://" in url:
-        protocol, rest = url.split("://", 1)
-        return f"{protocol}://{'█' * len(rest)}"
-    return "█" * len(url)
-
-
 def _generate_spiral(width: int, height: int) -> str:
     """Generate a spiral pattern using half-block characters like QR code.
 
@@ -224,7 +216,7 @@ def display_startup_screen(
         display_url = f"[bold cyan]{url}[/bold cyan]"
     else:
         right_panel = get_qr_placeholder(url)
-        display_url = f"[dim]{_mask_url(url)}[/dim]"
+        display_url = "[dim]Enable in frontend ☰ menu[/dim]"
 
     # Status indicator
     if is_tunnel:

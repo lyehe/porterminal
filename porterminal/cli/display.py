@@ -50,6 +50,24 @@ CAUTION_EASTER_EGGS = [
     "PUSHED TO MAIN FROM THE CHECKOUT LINE",
 ]
 
+# Anime girl ASCII art for QR placeholder (Japanese style)
+ANIME_GIRL = r"""
+       ▄███████▄
+     ▄█▀▀▀▀▀▀▀▀▀█▄
+    █▀ ▄▀▀▀▀▀▀▄ ▀█
+   █▀ █ ▀█  █▀ █ ▀█
+   █  █  ●  ●  █  █
+   █  █    ▽   █  █
+   █  █   ◡    █  █
+   █▄ ▀▄      ▄▀ ▄█
+    ▀█▄ ▀▀▀▀▀▀ ▄█▀
+     ▀▀███████▀▀
+      █▀▀▀▀▀▀▀█
+     █▀       ▀█
+    █▀  ▄██▄   ▀█
+   █▀            ▀█
+""".strip()
+
 
 def get_caution() -> str:
     """Get caution message with 1% chance of easter egg."""
@@ -102,106 +120,13 @@ def _mask_url(url: str) -> str:
     return "█" * len(url)
 
 
-def _generate_spiral(size: int) -> str:
-    """Generate a black/white square spiral pattern.
-
-    Args:
-        size: Size of the square (in characters width, half that in height).
+def get_qr_placeholder() -> str:
+    """Get the anime girl placeholder for hidden QR code.
 
     Returns:
-        ASCII art spiral pattern using half-block characters.
+        ASCII art anime girl.
     """
-    grid_size = size
-    grid = [[False] * grid_size for _ in range(grid_size)]
-
-    # Draw spiral path with alternating colors every few steps
-    x, y = 0, 0
-    dx, dy = 1, 0  # Start moving right
-    min_x, max_x = 0, grid_size - 1
-    min_y, max_y = 0, grid_size - 1
-    step = 0
-    band_size = max(3, grid_size // 9)  # Alternate every N steps for visible bands
-
-    while min_x <= max_x and min_y <= max_y:
-        # Fill current cell - alternate based on position along spiral path
-        grid[y][x] = (step // band_size) % 2 == 0
-        step += 1
-
-        # Move to next position
-        next_x, next_y = x + dx, y + dy
-
-        # Check if we need to turn
-        if dx == 1 and next_x > max_x:  # Moving right, hit right edge
-            min_y += 1
-            dx, dy = 0, 1
-        elif dy == 1 and next_y > max_y:  # Moving down, hit bottom edge
-            max_x -= 1
-            dx, dy = -1, 0
-        elif dx == -1 and next_x < min_x:  # Moving left, hit left edge
-            max_y -= 1
-            dx, dy = 0, -1
-        elif dy == -1 and next_y < min_y:  # Moving up, hit top edge
-            min_x += 1
-            dx, dy = 1, 0
-
-        next_x, next_y = x + dx, y + dy
-        if min_x <= next_x <= max_x and min_y <= next_y <= max_y:
-            x, y = next_x, next_y
-        else:
-            break
-
-    # Convert to half-block characters (2 rows per character)
-    lines = []
-    for row in range(0, grid_size, 2):
-        line = ""
-        for col in range(grid_size):
-            top = grid[row][col] if row < grid_size else False
-            bottom = grid[row + 1][col] if row + 1 < grid_size else False
-            if top and bottom:
-                line += "█"
-            elif top and not bottom:
-                line += "▀"
-            elif not top and bottom:
-                line += "▄"
-            else:
-                line += " "
-        lines.append(line)
-
-    return "\n".join(lines)
-
-
-def get_spiral_placeholder(url: str) -> str:
-    """Generate a spiral pattern matching the size of a QR code for the URL.
-
-    Args:
-        url: URL that would be encoded (used to determine QR size).
-
-    Returns:
-        ASCII art spiral pattern.
-    """
-    # Generate a real QR to get its dimensions
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=1,
-        border=1,
-    )
-    qr.add_data(url)
-    qr.make(fit=True)
-
-    # Get the QR code dimensions
-    buffer = io.StringIO()
-    qr.print_ascii(out=buffer, invert=True)
-    qr_lines = [line for line in buffer.getvalue().split("\n") if line]
-
-    if not qr_lines:
-        return _generate_spiral(21)  # Default size
-
-    # Match the QR code width (it's typically square)
-    width = len(qr_lines[0]) if qr_lines else 21
-
-    # Generate spiral with matching dimensions
-    return _generate_spiral(width)
+    return ANIME_GIRL
 
 
 def display_connected_screen(url: str, cwd: str | None = None) -> None:
@@ -213,8 +138,8 @@ def display_connected_screen(url: str, cwd: str | None = None) -> None:
     """
     console.clear()
 
-    # Build spiral placeholder (same size as QR would be)
-    spiral_text = get_spiral_placeholder(url)
+    # Build anime girl placeholder (replaces QR when hidden)
+    placeholder_text = get_qr_placeholder()
 
     # Build logo and tagline with gradients
     logo_colored = _apply_gradient(
@@ -250,7 +175,7 @@ def display_connected_screen(url: str, cwd: str | None = None) -> None:
     table = Table.grid(padding=(0, 4))
     table.add_column(justify="left", vertical="middle")
     table.add_column(justify="left", vertical="middle")
-    table.add_row(left_content, spiral_text)
+    table.add_row(left_content, placeholder_text)
 
     console.print()
     console.print(Align.center(table))

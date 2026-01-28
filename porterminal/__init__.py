@@ -297,27 +297,29 @@ def main() -> int:
         # Display final screen (only in foreground mode)
         display_startup_screen(display_url, is_tunnel=not args.no_tunnel, cwd=display_cwd)
 
-    # Drain process output silently in background (only when not verbose)
-    if server_process is not None and not verbose:
-        Thread(target=drain_process_output, args=(server_process,), daemon=True).start()
-    if tunnel_process is not None:
-        Thread(target=drain_process_output, args=(tunnel_process,), daemon=True).start()
-
-    # Use an event for responsive Ctrl+C handling on Windows
+    # Use events for Ctrl+C handling and connection detection
     shutdown_event = Event()
+    connected_event = Event()
 
     def signal_handler(signum: int, frame: object) -> None:
         shutdown_event.set()
 
-    # Track first connection to hide QR code
-    import tempfile
+    def on_connected() -> None:
+        connected_event.set()
 
-    qr_hidden = args.url_file is not None  # Already hidden if background mode
-    connect_file = (
-        Path(tempfile.gettempdir()) / f"porterminal-{server_process.pid}.connected"
-        if server_process
-        else None
-    )
+    # Drain process output silently in background (only when not verbose)
+    if server_process is not None and not verbose:
+        Thread(
+            target=drain_process_output,
+            args=(server_process,),
+            kwargs={"on_connected": on_connected},
+            daemon=True,
+        ).start()
+    if tunnel_process is not None:
+        Thread(target=drain_process_output, args=(tunnel_process,), daemon=True).start()
+
+    # Track if QR is already hidden (background mode)
+    qr_hidden = args.url_file is not None
 
     old_handler = signal.signal(signal.SIGINT, signal_handler)
     try:
@@ -338,20 +340,13 @@ def main() -> int:
                 break
 
             # Hide QR code after first connection
-            if not qr_hidden and connect_file and connect_file.exists():
+            if not qr_hidden and connected_event.is_set():
                 qr_hidden = True
                 display_connected_screen(display_url, cwd=display_cwd)
 
             shutdown_event.wait(0.1)
     finally:
         signal.signal(signal.SIGINT, old_handler)
-
-        # Cleanup connection file
-        if connect_file:
-            try:
-                connect_file.unlink(missing_ok=True)
-            except OSError:
-                pass
 
     if shutdown_event.is_set():
         console.print("\n[dim]Shutting down...[/dim]")

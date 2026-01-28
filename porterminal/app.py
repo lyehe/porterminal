@@ -5,7 +5,6 @@ import ctypes
 import logging
 import os
 import signal
-import tempfile
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
@@ -427,14 +426,10 @@ def create_app() -> FastAPI:
             await connection_registry.register(user_id, connection)
 
             # Signal first connection (for hiding QR code in CLI)
-            first_connect_file = (
-                Path(tempfile.gettempdir()) / f"porterminal-{os.getpid()}.connected"
-            )
-            if not first_connect_file.exists():
-                try:
-                    first_connect_file.write_text("1")
-                except OSError:
-                    pass
+            # Use a marker that drain_process_output can detect
+            if not hasattr(app.state, "_first_connection_signaled"):
+                app.state._first_connection_signaled = True
+                print("@@CONNECTED@@", flush=True)
 
             # Send initial state sync
             state_sync = management_service.build_state_sync(user_id)

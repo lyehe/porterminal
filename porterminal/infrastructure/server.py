@@ -163,12 +163,17 @@ def start_cloudflared(port: int) -> tuple[subprocess.Popen, str | None]:
     return process, url
 
 
-def drain_process_output(process: subprocess.Popen) -> None:
+def drain_process_output(
+    process: subprocess.Popen,
+    on_connected: callable = None,
+) -> None:
     """Drain process output silently (only print errors and security warnings).
 
     Args:
         process: Subprocess to drain output from.
+        on_connected: Optional callback when first client connects.
     """
+    connected_signaled = False
     try:
         for line in iter(process.stdout.readline, ""):
             if not line:
@@ -176,6 +181,14 @@ def drain_process_output(process: subprocess.Popen) -> None:
             line = line.strip()
             if not line:
                 continue
+
+            # Check for connection marker
+            if not connected_signaled and line == "@@CONNECTED@@":
+                connected_signaled = True
+                if on_connected:
+                    on_connected()
+                continue
+
             # Always print security warnings and related messages
             if any(
                 kw in line.lower()

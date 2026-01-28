@@ -111,18 +111,44 @@ def _generate_spiral(size: int) -> str:
     Returns:
         ASCII art spiral pattern using half-block characters.
     """
-    # Create a grid for the spiral (double height because we use half-blocks)
     grid_size = size
     grid = [[False] * grid_size for _ in range(grid_size)]
 
-    # Fill the spiral pattern - alternate rings of filled/empty
-    for ring in range(grid_size // 2 + 1):
-        fill = ring % 2 == 0  # Alternate between filled and empty rings
-        for x in range(ring, grid_size - ring):
-            for y in range(ring, grid_size - ring):
-                # Only fill the border of this ring
-                if x == ring or x == grid_size - ring - 1 or y == ring or y == grid_size - ring - 1:
-                    grid[y][x] = fill
+    # Draw spiral path with alternating colors every few steps
+    x, y = 0, 0
+    dx, dy = 1, 0  # Start moving right
+    min_x, max_x = 0, grid_size - 1
+    min_y, max_y = 0, grid_size - 1
+    step = 0
+    band_size = max(3, grid_size // 9)  # Alternate every N steps for visible bands
+
+    while min_x <= max_x and min_y <= max_y:
+        # Fill current cell - alternate based on position along spiral path
+        grid[y][x] = (step // band_size) % 2 == 0
+        step += 1
+
+        # Move to next position
+        next_x, next_y = x + dx, y + dy
+
+        # Check if we need to turn
+        if dx == 1 and next_x > max_x:  # Moving right, hit right edge
+            min_y += 1
+            dx, dy = 0, 1
+        elif dy == 1 and next_y > max_y:  # Moving down, hit bottom edge
+            max_x -= 1
+            dx, dy = -1, 0
+        elif dx == -1 and next_x < min_x:  # Moving left, hit left edge
+            max_y -= 1
+            dx, dy = 0, -1
+        elif dy == -1 and next_y < min_y:  # Moving up, hit top edge
+            min_x += 1
+            dx, dy = 1, 0
+
+        next_x, next_y = x + dx, y + dy
+        if min_x <= next_x <= max_x and min_y <= next_y <= max_y:
+            x, y = next_x, next_y
+        else:
+            break
 
     # Convert to half-block characters (2 rows per character)
     lines = []

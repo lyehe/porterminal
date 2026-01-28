@@ -342,7 +342,7 @@ def main() -> int:
             # Hide QR code after first connection (unless --keep-qr)
             if not qr_hidden and connected_event.is_set():
                 qr_hidden = True
-                display_connected_screen(display_url, cwd=display_cwd)
+                display_connected_screen(cwd=display_cwd)
 
             shutdown_event.wait(0.1)
     finally:

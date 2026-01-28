@@ -94,11 +94,10 @@ def get_qr_code(url: str) -> str:
     return "\n".join(lines)
 
 
-def display_connected_screen(url: str, cwd: str | None = None) -> None:
-    """Display minimal screen after first connection (QR hidden).
+def display_connected_screen(cwd: str | None = None) -> None:
+    """Display minimal screen after first connection (QR and URL hidden).
 
     Args:
-        url: URL to display.
         cwd: Current working directory to display.
     """
     console.clear()
@@ -114,7 +113,6 @@ def display_connected_screen(url: str, cwd: str | None = None) -> None:
         f"[dim]v{__version__}[/dim]",
         "",
         "[green]●[/green] [bold green]CONNECTED[/bold green]",
-        f"[bold cyan]{url}[/bold cyan]",
     ]
     if cwd:
         lines.append(f"[dim]{cwd}[/dim]")

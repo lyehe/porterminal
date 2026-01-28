@@ -63,6 +63,9 @@ class Args:
     compose: Annotated[bool, tyro.conf.arg(aliases=["-c"])] = False
     """Enable compose mode by default."""
 
+    keep_qr: Annotated[bool, tyro.conf.arg(aliases=["-k"])] = False
+    """Keep QR code visible after first connection."""
+
     # Internal argument for background mode communication (hidden from help)
     url_file: Annotated[
         str | None,

@@ -318,8 +318,8 @@ def main() -> int:
     if tunnel_process is not None:
         Thread(target=drain_process_output, args=(tunnel_process,), daemon=True).start()
 
-    # Track if QR is already hidden (background mode)
-    qr_hidden = args.url_file is not None
+    # Track if QR hiding is disabled or already hidden
+    qr_hidden = args.url_file is not None or args.keep_qr
 
     old_handler = signal.signal(signal.SIGINT, signal_handler)
     try:
@@ -339,7 +339,7 @@ def main() -> int:
                     console.print(f"\n[yellow]Tunnel stopped (exit code {code})[/yellow]")
                 break
 
-            # Hide QR code after first connection
+            # Hide QR code after first connection (unless --keep-qr)
             if not qr_hidden and connected_event.is_set():
                 qr_hidden = True
                 display_connected_screen(display_url, cwd=display_cwd)

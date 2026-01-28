@@ -74,6 +74,8 @@ class ManagementService:
             await self._handle_close_tab(user_id, connection, message)
         elif msg_type == "rename_tab":
             await self._handle_rename_tab(user_id, connection, message)
+        elif msg_type == "show_url":
+            await self._handle_show_url(connection, message)
         elif msg_type == "ping":
             await connection.send_message({"type": "pong"})
         else:
@@ -243,6 +245,30 @@ class ManagementService:
             user_id,
             self._tab_service.build_tab_state_update("update", tab),
             exclude=connection,
+        )
+
+    async def _handle_show_url(
+        self,
+        connection: ConnectionPort,
+        message: dict,
+    ) -> None:
+        """Handle show/hide URL request - signals CLI to update display."""
+        request_id = message.get("request_id", "")
+        visible = message.get("visible", True)
+
+        # Print marker to stdout for CLI to detect
+        marker = "true" if visible else "false"
+        print(f"@@URL_VISIBILITY:{marker}@@", flush=True)
+
+        logger.info("URL visibility set to %s", visible)
+
+        await connection.send_message(
+            {
+                "type": "show_url_response",
+                "request_id": request_id,
+                "success": True,
+                "visible": visible,
+            }
         )
 
     def build_state_sync(self, user_id: UserId) -> dict:

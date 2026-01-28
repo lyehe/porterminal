@@ -297,9 +297,11 @@ def main() -> int:
         # Display final screen (only in foreground mode)
         display_startup_screen(display_url, is_tunnel=not args.no_tunnel, cwd=display_cwd)
 
-    # Use events for Ctrl+C handling and connection detection
+    # Use events for Ctrl+C handling and connection/visibility detection
     shutdown_event = Event()
     connected_event = Event()
+    url_visibility_event = Event()  # Set when visibility should change
+    url_visible = [True]  # Mutable container for visibility state
 
     def signal_handler(signum: int, frame: object) -> None:
         shutdown_event.set()
@@ -307,12 +309,16 @@ def main() -> int:
     def on_connected() -> None:
         connected_event.set()
 
+    def on_url_visibility(visible: bool) -> None:
+        url_visible[0] = visible
+        url_visibility_event.set()
+
     # Drain process output silently in background (only when not verbose)
     if server_process is not None and not verbose:
         Thread(
             target=drain_process_output,
             args=(server_process,),
-            kwargs={"on_connected": on_connected},
+            kwargs={"on_connected": on_connected, "on_url_visibility": on_url_visibility},
             daemon=True,
         ).start()
     if tunnel_process is not None:
@@ -343,6 +349,20 @@ def main() -> int:
             if not qr_hidden and connected_event.is_set():
                 qr_hidden = True
                 display_connected_screen(cwd=display_cwd)
+
+            # Handle URL visibility toggle from frontend
+            if url_visibility_event.is_set():
+                url_visibility_event.clear()
+                if url_visible[0]:
+                    # Show URL and QR code
+                    display_startup_screen(
+                        display_url, is_tunnel=not args.no_tunnel, cwd=display_cwd
+                    )
+                    qr_hidden = False  # Reset so it can hide again on next connection
+                else:
+                    # Hide URL and QR code
+                    display_connected_screen(cwd=display_cwd)
+                    qr_hidden = True
 
             shutdown_event.wait(0.1)
     finally:

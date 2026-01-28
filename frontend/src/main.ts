@@ -505,7 +505,7 @@ async function init(): Promise<void> {
     let currentConfig = config;
 
     // Setup settings overlay
-    settingsOverlay.setup(configService, {
+    settingsOverlay.setup(configService, managementService, {
         onComposeModeChange: (enabled) => {
             composeInput.setEnabled(enabled);
         },

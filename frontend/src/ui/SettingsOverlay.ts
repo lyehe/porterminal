@@ -5,6 +5,7 @@
 
 import type { AppConfig, ButtonConfig } from '@/types';
 import type { ConfigService } from '@/services/ConfigService';
+import type { ManagementService } from '@/services/ManagementService';
 import { getComposeMode, setComposeMode, getDisabledButtons, setDisabledButtons } from '@/utils/storage';
 
 export interface SettingsCallbacks {
@@ -22,7 +23,7 @@ export interface SettingsOverlay {
     /** Hide the overlay */
     hide(): void;
     /** Setup event handlers and wire callbacks */
-    setup(configService: ConfigService, callbacks: SettingsCallbacks): void;
+    setup(configService: ConfigService, managementService: ManagementService, callbacks: SettingsCallbacks): void;
     /** Sync compose mode state (for external changes) */
     syncComposeMode(enabled: boolean): void;
 }
@@ -81,8 +82,12 @@ export function createSettingsOverlay(): SettingsOverlay {
     const passwordCancelBtn = document.getElementById('settings-password-cancel') as HTMLButtonElement | null;
     const restartNotice = document.getElementById('settings-restart-notice');
 
+    // URL visibility toggle
+    const showUrlToggle = document.getElementById('settings-show-url') as HTMLInputElement | null;
+
     let callbacks: SettingsCallbacks | null = null;
     let configService: ConfigService | null = null;
+    let managementService: ManagementService | null = null;
     let focusTrap: (() => void) | null = null;
     let needsRestart = false;
 
@@ -203,6 +208,20 @@ export function createSettingsOverlay(): SettingsOverlay {
             // Revert toggle on failure
             requirePasswordToggle.checked = !requirePasswordToggle.checked;
             showToast(result.error || 'Failed to update', 'error');
+        }
+    }
+
+    /** Handle show URL toggle */
+    async function handleShowUrlToggle(): Promise<void> {
+        if (!managementService || !showUrlToggle) return;
+
+        try {
+            const visible = await managementService.setUrlVisibility(showUrlToggle.checked);
+            showToast(visible ? 'URL visible' : 'URL hidden');
+        } catch {
+            // Revert toggle on failure
+            showUrlToggle.checked = !showUrlToggle.checked;
+            showToast('Failed to update', 'error');
         }
     }
 
@@ -415,8 +434,9 @@ export function createSettingsOverlay(): SettingsOverlay {
             }
         },
 
-        setup(service: ConfigService, cbs: SettingsCallbacks): void {
+        setup(service: ConfigService, mgmtService: ManagementService, cbs: SettingsCallbacks): void {
             configService = service;
+            managementService = mgmtService;
             callbacks = cbs;
 
             // Close button
@@ -452,6 +472,9 @@ export function createSettingsOverlay(): SettingsOverlay {
             clearPasswordBtn?.addEventListener('click', handlePasswordClear);
             passwordSaveBtn?.addEventListener('click', handlePasswordSave);
             passwordCancelBtn?.addEventListener('click', () => showPasswordForm(false));
+
+            // URL visibility toggle
+            showUrlToggle?.addEventListener('change', handleShowUrlToggle);
 
             // Enter key to save password
             passwordConfirm?.addEventListener('keydown', (e) => {

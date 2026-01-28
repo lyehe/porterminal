@@ -32,6 +32,9 @@ export interface ManagementService {
 
     /** Send authentication password */
     authenticate(password: string): void;
+
+    /** Toggle URL/QR visibility in CLI */
+    setUrlVisibility(visible: boolean): Promise<boolean>;
 }
 
 export interface ManagementCallbacks {
@@ -118,6 +121,20 @@ export function createManagementService(
                             pending.resolve(undefined);
                         } else {
                             pending.reject(new Error(msg.error || 'Failed to close tab'));
+                        }
+                    }
+                    break;
+                }
+
+                case 'show_url_response': {
+                    const pending = pendingRequests.get(msg.request_id);
+                    if (pending) {
+                        clearTimeout(pending.timeout);
+                        pendingRequests.delete(msg.request_id);
+                        if (msg.success) {
+                            pending.resolve(msg.visible);
+                        } else {
+                            pending.reject(new Error('Failed to update URL visibility'));
                         }
                     }
                     break;
@@ -261,6 +278,10 @@ export function createManagementService(
             if (ws?.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'auth', password }));
             }
+        },
+
+        setUrlVisibility(visible: boolean): Promise<boolean> {
+            return sendRequest<boolean>('show_url', { visible });
         },
     };
 }

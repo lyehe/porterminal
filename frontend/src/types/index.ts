@@ -209,11 +209,20 @@ export interface AuthMessage {
     password: string;
 }
 
+/** Response to show_url request */
+export interface ShowUrlResponse {
+    type: 'show_url_response';
+    request_id: string;
+    success: boolean;
+    visible: boolean;
+}
+
 export type ManagementMessage =
     | TabStateSyncMessage
     | TabStateUpdateMessage
     | CreateTabResponse
     | CloseTabResponse
+    | ShowUrlResponse
     | PongMessage
     | AuthRequiredMessage
     | AuthSuccessMessage

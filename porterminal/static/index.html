@@ -16,7 +16,7 @@
 
     <!-- Icons (PWA disabled - not useful for tunnel-based access) -->
     <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
-  <script type="module" crossorigin src="/static/assets/app-DDkr84Kx.js"></script>
+  <script type="module" crossorigin src="/static/assets/app-C6FEFcrM.js"></script>
   <link rel="stylesheet" crossorigin href="/static/assets/app--swReJp6.css">
 </head>
 <body>
@@ -174,6 +174,17 @@
                     </div>
                     <div class="settings-restart-notice hidden" id="settings-restart-notice">
                         Restart server to apply changes
+                    </div>
+                    <!-- Show URL/QR toggle -->
+                    <div class="settings-item">
+                        <label class="settings-label" for="settings-show-url">
+                            <span class="settings-text">Show URL in CLI</span>
+                            <span class="settings-desc">Display URL and QR code</span>
+                        </label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settings-show-url" role="switch">
+                            <span class="toggle-slider"></span>
+                        </label>
                     </div>
                 </div>
                 <!-- Buttons Section (dynamic) -->

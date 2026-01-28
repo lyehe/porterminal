@@ -166,12 +166,14 @@ def start_cloudflared(port: int) -> tuple[subprocess.Popen, str | None]:
 def drain_process_output(
     process: subprocess.Popen,
     on_connected: callable = None,
+    on_url_visibility: callable = None,
 ) -> None:
     """Drain process output silently (only print errors and security warnings).
 
     Args:
         process: Subprocess to drain output from.
         on_connected: Optional callback when first client connects.
+        on_url_visibility: Optional callback when URL visibility changes (receives bool).
     """
     connected_signaled = False
     try:
@@ -187,6 +189,13 @@ def drain_process_output(
                 connected_signaled = True
                 if on_connected:
                     on_connected()
+                continue
+
+            # Check for URL visibility marker
+            if line.startswith("@@URL_VISIBILITY:") and line.endswith("@@"):
+                visible = "true" in line.lower()
+                if on_url_visibility:
+                    on_url_visibility(visible)
                 continue
 
             # Always print security warnings and related messages

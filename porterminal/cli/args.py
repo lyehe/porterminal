@@ -42,20 +42,20 @@ class Args:
     background: Annotated[bool, tyro.conf.arg(aliases=["-b"])] = False
     """Run in background and return immediately."""
 
-    init: Annotated[
+    init: Annotated[bool, tyro.conf.arg(aliases=["-i"])] = False
+    """Create .ptn/ptn.yaml config with auto-discovered scripts."""
+
+    init_from: Annotated[
         str | None,
-        tyro.conf.arg(aliases=["-i"], metavar="URL_OR_PATH"),
+        tyro.conf.arg(aliases=["-if"], metavar="URL_OR_PATH"),
     ] = None
-    """Create .ptn/ptn.yaml config. Use "" for auto-discovery or provide URL/path."""
+    """Create .ptn/ptn.yaml from a URL or local file path."""
 
     password: Annotated[bool, tyro.conf.arg(aliases=["-p"])] = False
     """Prompt for password to protect terminal access."""
 
-    toggle_password: Annotated[
-        str | None,
-        tyro.conf.arg(aliases=["-tp"], metavar="on|off"),
-    ] = None
-    """Set password requirement (on/off) or 'toggle'."""
+    toggle_password: Annotated[bool, tyro.conf.arg(aliases=["-tp"])] = False
+    """Toggle password requirement on/off."""
 
     save_password: Annotated[bool, tyro.conf.arg(aliases=["-sp"])] = False
     """Save or clear password in config."""
@@ -107,12 +107,12 @@ def parse_args() -> Args:
             )
         sys.exit(0)
 
-    if args.init is not None:
-        _init_config(args.init if args.init else None)
+    if args.init or args.init_from is not None:
+        _init_config(args.init_from)
         # Continue to launch ptn after creating config
 
-    if args.toggle_password is not None:
-        _toggle_password_requirement(args.toggle_password)
+    if args.toggle_password:
+        _set_password_requirement(None)  # None means toggle
         sys.exit(0)
 
     if args.save_password:
@@ -174,10 +174,6 @@ def _init_config(source: str | None = None) -> None:
         return
 
     # No source - use auto-discovery
-    if config_file.exists():
-        console.print(f"[yellow]Config already exists:[/yellow] [cyan]{config_file}[/cyan]")
-        return
-
     # Build config with default buttons (row 1: AI coding tools)
     config: dict = {
         "buttons": [
@@ -241,31 +237,18 @@ def _save_config(config_path: Path, data: dict) -> None:
         yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
 
 
-def _toggle_password_requirement(value: str) -> None:
+def _set_password_requirement(value: bool | None) -> None:
     """Set or toggle security.require_password in config file.
 
     Args:
-        value: "on", "off", "true", "false", or "toggle"
+        value: True to enable, False to disable, None to toggle.
     """
-    value_lower = value.lower()
-    if value_lower in ("on", "true", "1"):
-        new_value = True
-    elif value_lower in ("off", "false", "0"):
-        new_value = False
-    elif value_lower == "toggle":
-        new_value = None
-    else:
-        console.print(
-            f"[red]Error:[/red] Invalid value '[bold]{value}[/bold]'. "
-            "Use [cyan]on[/cyan]/[cyan]off[/cyan]/[cyan]toggle[/cyan]"
-        )
-        return
-
     config_path, data = _get_or_create_config()
 
     if "security" not in data:
         data["security"] = {}
 
+    new_value = value
     if new_value is None:
         new_value = not data["security"].get("require_password", False)
 

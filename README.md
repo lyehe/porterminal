@@ -39,6 +39,7 @@ So I built something simpler: **run a command, scan a QR, start typing.**
 - **Full terminal apps** - vim, htop, less, tmux all work correctly with proper alt-screen buffer handling.
 - **Persistent multi-tab sessions** - Sessions survive disconnects. Close the browser, switch networks, reconnect from another device—your shell and running processes are still there. Multiple devices can view the same session simultaneously.
 - **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish, Nushell, and any shell via `$SHELL`). Auto-detects your shells.
+- **Private by default** - The secret tunnel URL never sits on screen, so it's safe to screen-share or screenshot the QR. Press `c` to copy the URL when you need it.
 
 ## Install
 
@@ -77,6 +78,8 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-c, --compose` | Enable compose mode by default |
 | `-u, --check-update` | Check if a newer version is available |
 | `-V, --version` | Show version |
+
+**While running:** with a tunnel active, the connection URL is hidden on screen for privacy — press **`c`** to copy it to your clipboard, or scan the QR to connect. `Ctrl+C` stops the server.
 
 ## Mobile Gestures
 

@@ -18,22 +18,29 @@ from threading import Event, Thread
 Handlers = dict[str, Callable[[], None]]
 
 
-def start_key_listener(shutdown_event: Event, handlers: Handlers) -> None:
+def start_key_listener(shutdown_event: Event, handlers: Handlers) -> Thread | None:
     """Start a daemon thread dispatching single keypresses to ``handlers``.
 
     Keys are matched case-insensitively, so ``{"c": ...}`` also fires on "C".
-    The thread stops when ``shutdown_event`` is set. It is a no-op when stdin is
-    not an interactive terminal (piped, redirected, or detached/background).
+    The thread stops when ``shutdown_event`` is set; the caller should set it and
+    ``join()`` the returned thread on shutdown so the terminal is restored before
+    any further output. It is a no-op (returns None) when stdin is not an
+    interactive terminal (piped, redirected, or detached/background).
 
     Args:
         shutdown_event: Setting this stops the listener loop.
         handlers: Map of lowercase key char -> zero-arg callback.
+
+    Returns:
+        The listener thread, or None if stdin is not a TTY.
     """
     if not sys.stdin.isatty():
-        return
+        return None
 
     target = _listen_windows if sys.platform == "win32" else _listen_unix
-    Thread(target=target, args=(shutdown_event, handlers), daemon=True).start()
+    thread = Thread(target=target, args=(shutdown_event, handlers), daemon=True)
+    thread.start()
+    return thread
 
 
 def _dispatch(ch: str, handlers: Handlers) -> None:
@@ -64,6 +71,7 @@ def _listen_windows(shutdown_event: Event, handlers: Handlers) -> None:
 
 def _listen_unix(shutdown_event: Event, handlers: Handlers) -> None:
     import atexit
+    import os
     import select
     import termios
     import tty
@@ -89,9 +97,11 @@ def _listen_unix(shutdown_event: Event, handlers: Handlers) -> None:
         # raises SIGINT and output newline translation stays intact for redraws.
         tty.setcbreak(fd)
         while not shutdown_event.is_set():
-            ready, _, _ = select.select([sys.stdin], [], [], 0.2)
+            ready, _, _ = select.select([fd], [], [], 0.2)
             if ready:
-                ch = sys.stdin.read(1)
+                # Read the raw fd, not the buffered sys.stdin TextIOWrapper, so a
+                # byte can't sit in Python's buffer unseen by the next select().
+                ch = os.read(fd, 1).decode(errors="ignore")
                 if ch:
                     _dispatch(ch, handlers)
     finally:

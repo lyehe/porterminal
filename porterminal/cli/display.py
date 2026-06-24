@@ -191,8 +191,9 @@ def display_startup_screen(
         copy_mode: If True, the plaintext URL is never printed; the URL line
             shows a "press c to copy" hint instead (the user copies it with the
             'c' hotkey). The QR still follows ``show_url``.
-        copy_status: Optional transient line (e.g. copy confirmation) shown in
-            place of the copy hint. Only used when ``copy_mode`` is True.
+        copy_status: Optional line (e.g. a copy confirmation) shown in place of
+            the default hint, until the next redraw. Only used when ``copy_mode``
+            is True.
     """
     console.clear()
 

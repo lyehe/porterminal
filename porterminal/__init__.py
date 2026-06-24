@@ -328,7 +328,7 @@ def main() -> int:
     url_visibility_event = Event()  # Set when visibility should change
     url_visible = [True]  # Mutable container for visibility state
     copy_event = Event()  # Set when the 'c' hotkey copies the URL
-    copy_feedback: list[str | None] = [None]  # Transient feedback line (mutable cell)
+    copy_feedback: list[str | None] = [None]  # Feedback line, shown until next redraw
 
     def signal_handler(signum: int, frame: object) -> None:
         shutdown_event.set()
@@ -363,8 +363,9 @@ def main() -> int:
         Thread(target=drain_process_output, args=(tunnel_process,), daemon=True).start()
 
     # Listen for the 'c' hotkey to copy the URL (foreground interactive only)
-    if interactive:
-        start_key_listener(shutdown_event, {"c": handle_copy})
+    listener_thread = (
+        start_key_listener(shutdown_event, {"c": handle_copy}) if interactive else None
+    )
 
     # qr_hidden = "auto-hide-on-connect is disabled or already handled" - distinct
     # from current_show_url, which tracks whether the QR is actually on screen now.
@@ -416,6 +417,13 @@ def main() -> int:
 
     if shutdown_event.is_set():
         console.print("\n[dim]Shutting down...[/dim]")
+
+    # Stop the key listener and let it restore the terminal (cbreak) before we
+    # print or clean up. The loop may have exited via process death without
+    # shutdown_event set, so set it here to cover that path too.
+    shutdown_event.set()
+    if listener_thread is not None:
+        listener_thread.join(timeout=1)
 
     # Cleanup - terminate gracefully, then kill if needed
     def cleanup_process(proc: subprocess.Popen | None, name: str) -> None:

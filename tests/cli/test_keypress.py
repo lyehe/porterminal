@@ -61,21 +61,23 @@ class TestStartKeyListener:
     """Tests for listener startup guards."""
 
     def test_noop_when_not_a_tty(self, monkeypatch):
-        """No thread is spawned when stdin is not an interactive terminal."""
+        """No thread is spawned and None is returned when stdin is not a TTY."""
         monkeypatch.setattr(keypress.sys, "stdin", _FakeStdin(tty=False))
         started: list = []
         monkeypatch.setattr(keypress, "Thread", lambda *a, **k: _FakeThread(started))
 
-        start_key_listener(Event(), {"c": lambda: None})
+        result = start_key_listener(Event(), {"c": lambda: None})
 
         assert started == []
+        assert result is None
 
     def test_starts_thread_when_tty(self, monkeypatch):
-        """A daemon thread is spawned when stdin is a terminal."""
+        """A daemon thread is spawned and returned when stdin is a terminal."""
         monkeypatch.setattr(keypress.sys, "stdin", _FakeStdin(tty=True))
         started: list = []
         monkeypatch.setattr(keypress, "Thread", lambda *a, **k: _FakeThread(started))
 
-        start_key_listener(Event(), {"c": lambda: None})
+        result = start_key_listener(Event(), {"c": lambda: None})
 
         assert started == ["started"]
+        assert result is not None

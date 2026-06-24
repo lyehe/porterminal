@@ -1,51 +1,32 @@
-# Contributing to Porterminal
+# Contributing
 
-## Development Workflow
+**Porterminal does not accept external contributions.**
 
-1. Create feature branch from `master`:
-   ```bash
-   git checkout master
-   git pull origin master
-   git checkout -b feature/your-feature
-   ```
+For security reasons, this project is authored and maintained by a single
+trusted maintainer. Porterminal exposes terminal access over the network, so
+the trust boundary and software supply chain are deliberately kept as small as
+possible — all code is written and reviewed in-house.
 
-2. Make changes and test locally:
-   ```bash
-   uv run pytest
-   uv run ruff check . && uv run ruff format .
-   cd frontend && npm run build
-   ```
+## What this means
 
-3. Push and create PR to `master`:
-   ```bash
-   git push -u origin feature/your-feature
-   # Open PR on GitHub: feature/your-feature -> master
-   ```
+- **Pull requests are not accepted.** Unsolicited PRs will be closed without
+  review, regardless of quality. Please do not invest time in a code change
+  intended for this repository.
+- **Bug reports and feature requests** are welcome as
+  [issues](https://github.com/lyehe/porterminal/issues), but may be closed or
+  left unactioned at the maintainer's discretion.
+- **Security vulnerabilities** must be reported privately — see
+  [SECURITY.md](.github/SECURITY.md). Please do **not** open a public issue for
+  a security problem.
 
-4. After PR approval and merge, delete feature branch
+## Forking
 
-## Release Process
+Porterminal is open source under [AGPL-3.0](LICENSE). You are free to fork,
+modify, and run your own copy. To run from source:
 
-1. Ensure `master` has all changes for release
-2. Tag and push:
-   ```bash
-   git tag v0.x.x -m "Release v0.x.x"
-   git push origin v0.x.x
-   ```
-3. CI automatically publishes to PyPI and creates GitHub Release
-
-## Code Quality
-
-Before submitting a PR, ensure:
-
-- **Linting**: `uv run ruff check .`
-- **Formatting**: `uv run ruff format .`
-- **Tests**: `uv run pytest`
-- **Frontend**: `cd frontend && npm run build`
-
-## Branch Protection
-
-The `master` branch requires:
-- Pull request with at least 1 approval
-- All CI checks to pass (lint, tests, frontend build)
-- Branch to be up-to-date before merging
+```bash
+git clone https://github.com/lyehe/porterminal
+cd porterminal
+uv sync
+uv run ptn
+```

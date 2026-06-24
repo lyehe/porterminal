@@ -1,6 +1,21 @@
+# Dependabot is configured for SECURITY UPDATES ONLY.
+#
+# `open-pull-requests-limit: 0` disables routine *version* update PRs for each
+# ecosystem. Dependabot *security* updates (raised in response to security
+# advisories) are unaffected by this limit and continue to flow - they have a
+# separate, fixed cap of 10 open PRs.
+#
+# Net effect: we stay pinned to the exact versions in uv.lock and
+# frontend/package-lock.json, and Dependabot only opens a PR when a dependency
+# has a known vulnerability. No more surprise major bumps (e.g. TS 6 / Vite 8).
+#
+# REQUIRES (repo Settings -> Code security): "Dependabot alerts" AND
+# "Dependabot security updates" must both be enabled - this file alone does not
+# turn them on. Dependabot also reads this file from the DEFAULT branch
+# (master), so changes only take effect once merged to master.
 version: 2
 updates:
-  # Python dependencies (pip/uv)
+  # Python dependencies (pip/uv) - security updates only
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -11,16 +26,10 @@ updates:
     labels:
       - "dependencies"
       - "python"
-    groups:
-      python-minor:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-    open-pull-requests-limit: 5
+      - "security"
+    open-pull-requests-limit: 0
 
-  # npm dependencies (frontend)
+  # npm dependencies (frontend) - security updates only
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
@@ -31,25 +40,10 @@ updates:
     labels:
       - "dependencies"
       - "javascript"
-    groups:
-      npm-minor:
-        patterns:
-          - "*"
-        exclude-patterns:
-          - "@xterm/*"
-        update-types:
-          - "minor"
-          - "patch"
-      xterm:
-        patterns:
-          - "@xterm/*"
-        update-types:
-          - "major"
-          - "minor"
-          - "patch"
-    open-pull-requests-limit: 5
+      - "security"
+    open-pull-requests-limit: 0
 
-  # GitHub Actions
+  # GitHub Actions - security updates only
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -60,7 +54,5 @@ updates:
     labels:
       - "dependencies"
       - "ci"
-    groups:
-      actions:
-        patterns:
-          - "*"
+      - "security"
+    open-pull-requests-limit: 0

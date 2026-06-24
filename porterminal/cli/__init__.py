@@ -1,6 +1,7 @@
 """CLI utilities for Porterminal."""
 
 from .args import parse_args
+from .clipboard import copy_to_clipboard
 from .display import (
     LOGO,
     TAGLINE_PORTABLE,
@@ -9,9 +10,12 @@ from .display import (
     display_startup_screen,
     get_qr_code,
 )
+from .keypress import start_key_listener
 
 __all__ = [
     "parse_args",
+    "copy_to_clipboard",
+    "start_key_listener",
     "display_connected_screen",
     "display_startup_screen",
     "get_qr_code",

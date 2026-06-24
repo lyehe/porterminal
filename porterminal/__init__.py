@@ -23,7 +23,12 @@ from threading import Event, Thread
 
 from rich.console import Console
 
-from porterminal.cli import display_startup_screen, parse_args
+from porterminal.cli import (
+    copy_to_clipboard,
+    display_startup_screen,
+    parse_args,
+    start_key_listener,
+)
 from porterminal.infrastructure import (
     CloudflaredInstaller,
     drain_process_output,
@@ -89,7 +94,10 @@ def _run_in_background(args) -> int:
                         is_tunnel = url.startswith("https://")
                         cwd = args.path or os.getcwd()
 
-                        # Display full startup screen with QR code
+                        # Background mode intentionally shows the URL in plaintext:
+                        # the parent exits right after this, so there is no persistent
+                        # display to protect and no key listener. The hidden-URL /
+                        # 'c'-to-copy flow is foreground-tunnel-only.
                         display_startup_screen(url, is_tunnel=is_tunnel, cwd=cwd)
 
                         # Add background mode info
@@ -287,6 +295,23 @@ def main() -> int:
     else:
         display_url = tunnel_url
 
+    # The copy-to-clipboard hotkey only makes sense for the secret tunnel URL on
+    # an interactive terminal. A localhost URL (--no-tunnel) has nothing to hide,
+    # and a background child (args.url_file) has no keyboard - in both cases the
+    # URL is shown normally and no key listener runs.
+    interactive = sys.stdin.isatty() and not args.url_file and not args.no_tunnel
+
+    def redraw(show_url: bool = True, status: str | None = None) -> None:
+        """Render the startup screen, keeping the invariant args in one place."""
+        display_startup_screen(
+            display_url,
+            is_tunnel=not args.no_tunnel,
+            cwd=display_cwd,
+            show_url=show_url,
+            copy_mode=interactive,
+            copy_status=status,
+        )
+
     # If running as background child, write URL to file and skip display
     if args.url_file:
         try:
@@ -295,13 +320,15 @@ def main() -> int:
             console.print(f"[red]Error writing URL file:[/red] {e}")
     else:
         # Display final screen (only in foreground mode)
-        display_startup_screen(display_url, is_tunnel=not args.no_tunnel, cwd=display_cwd)
+        redraw()
 
     # Use events for Ctrl+C handling and connection/visibility detection
     shutdown_event = Event()
     connected_event = Event()
     url_visibility_event = Event()  # Set when visibility should change
     url_visible = [True]  # Mutable container for visibility state
+    copy_event = Event()  # Set when the 'c' hotkey copies the URL
+    copy_feedback: list[str | None] = [None]  # Feedback line, shown until next redraw
 
     def signal_handler(signum: int, frame: object) -> None:
         shutdown_event.set()
@@ -312,6 +339,17 @@ def main() -> int:
     def on_url_visibility(visible: bool) -> None:
         url_visible[0] = visible
         url_visibility_event.set()
+
+    def handle_copy() -> None:
+        # Runs on the key-listener thread. On failure, reveal the URL inline so
+        # it's still recoverable even though it's normally hidden.
+        if copy_to_clipboard(display_url):
+            copy_feedback[0] = "[green]✓ URL copied to clipboard[/green]"
+        else:
+            copy_feedback[0] = (
+                f"[yellow]⚠ Clipboard unavailable:[/yellow] [cyan]{display_url}[/cyan]"
+            )
+        copy_event.set()
 
     # Drain process output silently in background (only when not verbose)
     if server_process is not None and not verbose:
@@ -324,8 +362,15 @@ def main() -> int:
     if tunnel_process is not None:
         Thread(target=drain_process_output, args=(tunnel_process,), daemon=True).start()
 
-    # Track if QR hiding is disabled or already hidden
+    # Listen for the 'c' hotkey to copy the URL (foreground interactive only)
+    listener_thread = (
+        start_key_listener(shutdown_event, {"c": handle_copy}) if interactive else None
+    )
+
+    # qr_hidden = "auto-hide-on-connect is disabled or already handled" - distinct
+    # from current_show_url, which tracks whether the QR is actually on screen now.
     qr_hidden = args.url_file is not None or args.keep_qr
+    current_show_url = True  # QR is visible after the initial display above
 
     old_handler = signal.signal(signal.SIGINT, signal_handler)
     try:
@@ -348,12 +393,8 @@ def main() -> int:
             # Handle URL visibility toggle from frontend (takes priority)
             if url_visibility_event.is_set():
                 url_visibility_event.clear()
-                display_startup_screen(
-                    display_url,
-                    is_tunnel=not args.no_tunnel,
-                    cwd=display_cwd,
-                    show_url=url_visible[0],
-                )
+                current_show_url = url_visible[0]
+                redraw(show_url=current_show_url)
                 qr_hidden = not url_visible[0]
                 if url_visible[0]:
                     # Clear connected_event so auto-hide doesn't trigger immediately
@@ -362,12 +403,13 @@ def main() -> int:
             # Hide QR code after first connection (unless --keep-qr)
             elif not qr_hidden and connected_event.is_set():
                 qr_hidden = True
-                display_startup_screen(
-                    display_url,
-                    is_tunnel=not args.no_tunnel,
-                    cwd=display_cwd,
-                    show_url=False,
-                )
+                current_show_url = False
+                redraw(show_url=False)
+
+            # Show transient feedback after the 'c' hotkey copies the URL
+            elif copy_event.is_set():
+                copy_event.clear()
+                redraw(show_url=current_show_url, status=copy_feedback[0])
 
             shutdown_event.wait(0.1)
     finally:
@@ -375,6 +417,13 @@ def main() -> int:
 
     if shutdown_event.is_set():
         console.print("\n[dim]Shutting down...[/dim]")
+
+    # Stop the key listener and let it restore the terminal (cbreak) before we
+    # print or clean up. The loop may have exited via process death without
+    # shutdown_event set, so set it here to cover that path too.
+    shutdown_event.set()
+    if listener_thread is not None:
+        listener_thread.join(timeout=1)
 
     # Cleanup - terminate gracefully, then kill if needed
     def cleanup_process(proc: subprocess.Popen | None, name: str) -> None:

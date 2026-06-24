@@ -178,6 +178,8 @@ def display_startup_screen(
     is_tunnel: bool = True,
     cwd: str | None = None,
     show_url: bool = True,
+    copy_mode: bool = False,
+    copy_status: str | None = None,
 ) -> None:
     """Display the startup screen with QR code or spiral placeholder.
 
@@ -185,19 +187,32 @@ def display_startup_screen(
         url: Primary URL to display and encode in QR.
         is_tunnel: Whether tunnel mode is active.
         cwd: Current working directory to display.
-        show_url: If True, show URL and QR. If False, mask URL and show spiral.
+        show_url: If True, show the QR code. If False, mask it with a spiral.
+        copy_mode: If True, the plaintext URL is never printed; the URL line
+            shows a "press c to copy" hint instead (the user copies it with the
+            'c' hotkey). The QR still follows ``show_url``.
+        copy_status: Optional line (e.g. a copy confirmation) shown in place of
+            the default hint, until the next redraw. Only used when ``copy_mode``
+            is True.
     """
     console.clear()
 
-    # Build QR code or spiral placeholder
+    # Build QR code or spiral placeholder (depends only on show_url).
     if show_url:
         try:
             right_panel = get_qr_code(url)
         except Exception:
             right_panel = "[QR code unavailable]"
-        display_url = f"[bold cyan]{url}[/bold cyan]"
     else:
         right_panel = get_qr_placeholder(url)
+
+    # URL line. In copy mode the plaintext URL is never shown - the user copies
+    # it with the 'c' hotkey - so the line is a hint or transient feedback.
+    if copy_mode:
+        display_url = copy_status or "[dim]Press 'c' to copy URL[/dim]"
+    elif show_url:
+        display_url = f"[bold cyan]{url}[/bold cyan]"
+    else:
         display_url = "[dim]Show URL via Settings (top right)[/dim]"
 
     # Status indicator

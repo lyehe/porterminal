@@ -178,7 +178,11 @@ See [docs/security.md](docs/security.md) for details.
 
 ## Contributing
 
-Issues and PRs welcome.
+**This project does not accept external contributions** (pull requests or code
+changes) for security reasons — see [CONTRIBUTING.md](CONTRIBUTING.md). You're
+welcome to fork and run your own copy under [AGPL-3.0](LICENSE).
+
+Run from source:
 
 ```bash
 git clone https://github.com/lyehe/porterminal

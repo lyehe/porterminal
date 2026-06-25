@@ -15,14 +15,22 @@
 
 
 <p align="center">
+  <b>A web terminal you reach from your phone — or hand to an AI agent.</b><br>
+  One command, one URL.
+</p>
+
+<p align="center">
   <b>1.</b> <code>uvx ptn</code><br>
-  <b>2.</b> Scan the QR<br>
-  <b>3.</b> Access your terminal from your phone<br>
+  <b>2.</b> Scan the QR from your phone — or give the URL to an AI agent (MCP)<br>
+  <b>3.</b> Drive your terminal from anywhere<br>
 </p>
 
 <p align="center">
   <img src="assets/demo.gif" alt="Porterminal demo" width="320">
 </p>
+
+> [!WARNING]
+> **The URL is full, unauthenticated access to this computer.** Whoever — or whatever AI agent — you hand it to gets a real shell on your machine. That power is the whole point, and it is *dangerously simple* to give an agent more than you intended. There is no auth by default: treat the URL like a password, share it only with people and agents you trust, and read [Security](#security) before exposing anything sensitive.
 
 ## Why
 
@@ -167,7 +175,7 @@ Config is searched in order: `$PORTERMINAL_CONFIG_PATH`, `./ptn.yaml`, `./.ptn/p
 
 ## Security
 
-Protect your terminal with a password:
+**By default there is no authentication** — the only thing protecting your machine is that nobody can guess the random tunnel URL. Anyone, or any AI agent, that gets the URL has a full, non-elevated shell. Don't expose anything you wouldn't hand to a stranger, and add a password for anything sensitive:
 
 **From the UI:** Open Settings (gear icon) and use the Security section to set/change password and toggle password requirement. Changes require server restart.
 

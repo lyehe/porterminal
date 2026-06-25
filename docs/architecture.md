@@ -277,9 +277,13 @@ Optimizes data transfer:
 
 ## Rate Limiting
 
-Token bucket algorithm:
-- **Rate**: 100 messages/second
-- **Burst**: 500 messages
+Token bucket algorithm (byte-based) on terminal input:
+- **Rate**: 1 KB/s sustained (1000 bytes/s)
+- **Burst**: 16 KB (16384 bytes)
+
+Agent (MCP) sessions override this with an effectively-unlimited config: the
+limiter exists to throttle an unauthenticated human client, not the trusted
+agent path, where it would silently drop bulk input.
 
 ## Session Management
 

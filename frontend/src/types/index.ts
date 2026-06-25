@@ -17,6 +17,7 @@ export interface Tab {
     sessionId: string | null;
     heartbeatInterval: ReturnType<typeof setInterval> | null;
     reconnectAttempts: number;
+    origin: 'human' | 'agent';   // Who created the tab (agent tabs show a badge)
 }
 
 /** Server tab info from tab_list message */
@@ -27,6 +28,7 @@ export interface ServerTab {
     name: string;
     created_at: string;
     last_accessed: string;
+    origin?: 'human' | 'agent';  // Provenance; agent tabs are MCP-driven
 }
 
 /** Connection state machine */

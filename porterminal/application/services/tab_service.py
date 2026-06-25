@@ -3,6 +3,7 @@
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Literal
 
 from porterminal.domain import (
     SessionId,
@@ -37,7 +38,7 @@ class TabService:
         session_id: SessionId,
         shell_id: str,
         name: str | None = None,
-        origin: str = "human",
+        origin: Literal["human", "agent"] = "human",
     ) -> Tab:
         """Create a new tab for a session.
 

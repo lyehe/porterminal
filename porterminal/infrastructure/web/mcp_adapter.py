@@ -47,7 +47,10 @@ AGENT_TOOLS: dict[str, str] = {
         "Send raw keystrokes to the terminal (no automatic Enter; include "
         "'\\r' to submit). Use to answer prompts or drive TUIs."
     ),
-    "send_signal": "Send a control signal: 'int' (Ctrl-C) or 'eof' (Ctrl-D).",
+    "send_signal": (
+        "Send a control signal. 'int' (Ctrl-C) interrupts the running command. "
+        "'eof' (Ctrl-D) ends input on POSIX shells but is a no-op on Windows."
+    ),
 }
 
 

@@ -16,11 +16,14 @@ import re
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
+from porterminal.application.ports import AgentConnectionPort, ConnectionRegistryPort
 from porterminal.domain import (
+    PTYPort,
     RateLimitConfig,
+    Session,
     ShellCommand,
+    Tab,
     TerminalDimensions,
     UserId,
 )
@@ -79,9 +82,9 @@ def _probe_command(shell_id: str, marker: str) -> str:
 
 @dataclass
 class _AgentSession:
-    session: Any
-    tab: Any
-    conn: Any
+    session: Session[PTYPort]
+    tab: Tab
+    conn: AgentConnectionPort
     task: asyncio.Task
     shell_id: str
     lock: asyncio.Lock
@@ -96,8 +99,8 @@ class AgentTerminalService:
         session_service: SessionService,
         tab_service: TabService,
         terminal_service: TerminalService,
-        connection_registry: Any,
-        connection_factory: Callable[[int, int], Any],
+        connection_registry: ConnectionRegistryPort,
+        connection_factory: Callable[[int, int], AgentConnectionPort],
         shell_provider: Callable[[str | None], ShellCommand | None],
         default_dimensions: TerminalDimensions,
         owner_user_id: UserId,
@@ -193,8 +196,14 @@ class AgentTerminalService:
             return False
         await rec.conn.close()
         rec.task.cancel()
-        with contextlib.suppress(asyncio.CancelledError, Exception):
+        try:
             await rec.task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.debug(
+                "Agent session task error during close mcp=%s", mcp_session_id, exc_info=True
+            )
         await self._sessions.destroy_session(rec.session.id)
         logger.info("Agent session closed mcp=%s", mcp_session_id)
         return True
@@ -291,7 +300,7 @@ class AgentTerminalService:
                 m = pattern.search(text)
                 if m:
                     exit_code = int(m.group(1))
-                    output = self._extract_output(text[: m.start()], command, probe)
+                    output = self._extract_output(text[: m.start()], command, marker)
                     return {
                         "status": "completed",
                         "exit_code": exit_code,
@@ -342,24 +351,35 @@ class AgentTerminalService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _screen_text(conn: Any) -> str:
+    def _screen_text(conn: AgentConnectionPort) -> str:
         return "\n".join(line.rstrip() for line in conn.screen_lines()).strip("\n")
 
     @staticmethod
-    def _extract_output(segment: str, command: str, probe: str) -> str:
-        """Best-effort: drop echoed command/probe/prompt lines, keep output."""
-        keep = []
+    def _extract_output(segment: str, command: str, marker: str) -> str:
+        """Extract command output from the captured region before the marker.
+
+        The region holds: the echoed command, its output, then the echoed
+        marker-print line (which contains the random `marker`). We stop at that
+        echoed marker line and drop only the *first* command-echo line, so
+        output lines that happen to repeat the command text are preserved.
+        """
+        cmd = command.strip()
+        keep: list[str] = []
+        dropped_echo = False
         for line in segment.splitlines():
+            if marker in line:
+                break  # reached the echoed marker-print command; output ended
             stripped = line.strip()
             if not stripped:
                 continue
-            if command.strip() in line or probe.strip() in line:
-                continue  # echoed input line (with its prompt prefix)
+            if not dropped_echo and cmd and cmd in line:
+                dropped_echo = True  # drop the single echoed command line
+                continue
             keep.append(line.rstrip())
         return "\n".join(keep).strip()
 
     @staticmethod
-    async def _settle(conn: Any, idle: float, max_wait: float) -> None:
+    async def _settle(conn: AgentConnectionPort, idle: float, max_wait: float) -> None:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + max_wait
         while loop.time() < deadline:

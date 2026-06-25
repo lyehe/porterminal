@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 
 from ..values.session_id import SessionId
 from ..values.tab_id import TabId
@@ -46,7 +47,7 @@ class Tab:
     # Provenance: "human" (created via the phone/management UI) or "agent"
     # (created by an AI agent via the MCP endpoint). Surfaced to the frontend
     # so agent-driven tabs can render a distinguishing badge.
-    origin: str = "human"
+    origin: Literal["human", "agent"] = "human"
 
     def __post_init__(self) -> None:
         _validate_tab_name(self.name)

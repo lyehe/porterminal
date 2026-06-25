@@ -17,8 +17,11 @@ phone co-views and can take over for free.
 """
 
 import asyncio
+import logging
 
 import pyte
+
+logger = logging.getLogger(__name__)
 
 # Cap the raw capture buffer; commands are short, so this only trims between
 # commands. We track how many bytes were dropped so absolute offsets taken by
@@ -56,7 +59,7 @@ class AgentSessionConnection:
         except Exception:
             # pyte should never raise on valid terminal output, but a rendering
             # error must not kill the read loop / lose the raw capture.
-            pass
+            logger.debug("pyte feed error (ignored; raw capture kept)", exc_info=True)
         self._capture += data
         if len(self._capture) > _CAPTURE_CAP:
             trim = len(self._capture) - _CAPTURE_CAP

@@ -1,7 +1,7 @@
 # Agent Terminal Access via MCP — Design Spec
 
 **Date:** 2026-06-24
-**Status:** Approved (brainstorming) → ready for implementation planning
+**Status:** MVP implemented and validated end-to-end (agent-in-the-loop) — see §17.
 **Topic:** Give any MCP-capable AI agent full terminal control of the machine through the same running `ptn` server and tunnel that already serves the phone terminal.
 
 ---
@@ -292,3 +292,9 @@ The architecture was reviewed against the live codebase and current library docs
 7. **SDK version churn:** pin `mcp`; confirm class names at implementation. → §16.
 
 **Stale doc to fix while here:** `docs/architecture.md` states rate limiting is "100 messages/second, burst 500"; the real config is **1 KB/s sustained, 16 KB burst** (`RateLimitConfig`). Correct it as part of this work.
+
+### Live validation (agent-in-the-loop)
+
+The MVP was implemented and driven end-to-end by a real MCP agent against a live `pwsh` PTY — automated in `tests/e2e/test_agent_mcp_e2e.py` (uvicorn + the official `mcp` client, no mocks) and dogfooded interactively via `scripts/agent_drive.py`. Confirmed working: tool discovery; `run_command` with clean output and correct exit codes; **persistent shell state across separate tool calls** (`cd` and shell variables survive); `read_screen`; `send_keys`; `send_signal` (Ctrl-C); and driving an interactive Python REPL. The exit-code marker's echo-avoidance trick (scan `marker\d+`; the shell's echo contains the *expression*, not digits) held up on PowerShell.
+
+**Finding:** the interactive path is timing-sensitive on Windows ConPTY — the first tool call pays session-warmup latency, so an agent should pace `send_keys`→`read_screen` (and `read_screen` now does a brief settle so it never returns a blank/mid-draw snapshot). `run_command` (the 90% path) was solid throughout.

@@ -43,6 +43,11 @@ class Tab:
     created_at: datetime
     last_accessed: datetime
 
+    # Provenance: "human" (created via the phone/management UI) or "agent"
+    # (created by an AI agent via the MCP endpoint). Surfaced to the frontend
+    # so agent-driven tabs can render a distinguishing badge.
+    origin: str = "human"
+
     def __post_init__(self) -> None:
         _validate_tab_name(self.name)
 
@@ -69,4 +74,5 @@ class Tab:
             "name": self.name,
             "created_at": self.created_at.isoformat(),
             "last_accessed": self.last_accessed.isoformat(),
+            "origin": self.origin,
         }

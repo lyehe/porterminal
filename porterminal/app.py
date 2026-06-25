@@ -18,7 +18,7 @@ from .composition import create_container
 from .container import Container
 from .domain import UserId
 from .infrastructure.auth import authenticate_connection, validate_auth_message
-from .infrastructure.web import FastAPIWebSocketAdapter
+from .infrastructure.web import FastAPIWebSocketAdapter, McpAdapter
 from .logging_setup import setup_logging_from_env
 from .updater import check_for_updates, get_upgrade_command
 
@@ -86,13 +86,21 @@ async def lifespan(app: FastAPI):
 
     await container.session_service.start()
 
-    logger.info("Porterminal server started")
+    # Wire up agent (MCP) access: bind the service to the adapter mounted in
+    # create_app(), and run the MCP session manager for the app's lifetime
+    # (required by the SDK - it is not started by FastAPI's Mount).
+    mcp_adapter: McpAdapter = app.state.mcp_adapter
+    mcp_adapter.bind(container.agent_terminal_service)
 
-    yield
+    async with mcp_adapter.session_manager.run():
+        logger.info("Porterminal server started")
 
-    # Shutdown
-    await container.session_service.stop()
-    logger.info("Porterminal server stopped")
+        yield
+
+        # Shutdown
+        await container.agent_terminal_service.shutdown()
+        await container.session_service.stop()
+        logger.info("Porterminal server stopped")
 
 
 def create_app() -> FastAPI:
@@ -115,6 +123,13 @@ def create_app() -> FastAPI:
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
         return response
+
+    # Mount the agent (MCP) endpoint at /mcp. The adapter is stashed on app
+    # state so the lifespan can run its session manager and bind the service
+    # at startup (the container, and thus the service, is created in lifespan).
+    mcp_adapter = McpAdapter()
+    app.state.mcp_adapter = mcp_adapter
+    app.mount("/mcp", mcp_adapter.streamable_http_app())
 
     # Mount static files
     if STATIC_DIR.exists():

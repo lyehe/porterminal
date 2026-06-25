@@ -185,6 +185,7 @@ class TerminalService:
         session: Session[PTYPort],
         connection: ConnectionPort,
         skip_buffer: bool = False,
+        rate_limit_config: RateLimitConfig | None = None,
     ) -> None:
         """Handle terminal session I/O with multi-client support.
 
@@ -195,10 +196,15 @@ class TerminalService:
             session: Terminal session to handle.
             connection: Network connection to client.
             skip_buffer: Whether to skip sending buffered output.
+            rate_limit_config: Per-connection override of the input rate limit.
+                Agent connections pass an effectively-unlimited config because
+                the default limiter (1 KB/s sustained) exists to throttle an
+                unauthenticated human client and would silently drop a trusted
+                agent's bulk input.
         """
         session_id = str(session.id)
         clock = AsyncioClock()
-        rate_limiter = TokenBucketRateLimiter(self._rate_limit_config, clock)
+        rate_limiter = TokenBucketRateLimiter(rate_limit_config or self._rate_limit_config, clock)
         lock = self._get_session_lock(session_id)
 
         # Register atomically to prevent race with broadcast.

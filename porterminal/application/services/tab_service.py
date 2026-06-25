@@ -37,6 +37,7 @@ class TabService:
         session_id: SessionId,
         shell_id: str,
         name: str | None = None,
+        origin: str = "human",
     ) -> Tab:
         """Create a new tab for a session.
 
@@ -72,6 +73,7 @@ class TabService:
             name=name,
             created_at=now,
             last_accessed=now,
+            origin=origin,
         )
 
         self._repository.add(tab)

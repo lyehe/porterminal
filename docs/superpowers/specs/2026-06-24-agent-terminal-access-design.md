@@ -76,10 +76,12 @@ Because the agent and the phone are both just connections on the same session, *
 
 Implements `ConnectionPort` but talks to MCP tools instead of a socket:
 
-- **`send_output(data)`** — feed bytes into a `pyte` stream (updates a rendered screen) **and** append ANSI-stripped text to a bounded rolling accumulator; signal a "new output" event. (Two consumers: `read_screen` reads the pyte screen; `run_command` scans the accumulator for its completion marker.)
-- **`receive()`** — `await` an internal input queue; returns bytes that the existing input loop writes to the PTY. Tools push onto this queue.
-- **`send_message(msg)`** — minimal/no-op (e.g. ignore heartbeat pings, `resize_sync`).
+- **`send_output(data)`** — feed raw PTY **bytes** into a `pyte.ByteStream` (its incremental decoder correctly handles UTF-8 / escape sequences split across reads — do **not** `bytes.decode()` per chunk) **and** append the raw bytes to a bounded rolling capture buffer; set an asyncio "new output" event. Two consumers: `read_screen` reads `screen.display`; `run_command` scans the (ANSI-stripped) capture buffer for its completion marker.
+- **`receive()`** — `await` an internal input queue; returns bytes the existing input loop writes to the PTY. Tools push onto this queue, **chunked to ≤ `MAX_INPUT_SIZE` (4096)** so the per-write size guard never rejects a large command/paste.
+- **`send_message(msg)`** — **capture** control/error messages (`error`, rate-limit, `pause_ack`) into last-error state so tools can surface them; otherwise ignore (heartbeat `ping`, `resize_sync`). Must **not** silently drop errors — see §11.
 - **`is_connected()` / `close()`** — track MCP-session liveness; unblock `receive()` on close.
+
+> **Relaxed rate limit for agent sessions.** The existing input limiter is **byte-based — 1 KB/s sustained, 16 KB burst** (the architecture doc's "100 messages/second" is stale) — and on overflow it *drops* input rather than delaying it. That exists to throttle an *unauthenticated human* client; for a trusted, explicitly-authorized agent it would silently truncate bulk input. Agent sessions therefore run with an effectively-unlimited `RateLimitConfig`. This requires `TerminalService` to accept a per-session/per-connection rate config (or a second instance dedicated to agent sessions).
 
 ### 5.3 `AgentTerminalService` (new application service)
 
@@ -92,7 +94,13 @@ Orchestrates an agent session and exposes the operations the MCP tools call:
 
 ### 5.4 MCP adapter (new infrastructure adapter)
 
-A FastMCP (official `mcp` Python SDK) server defining the four tools as thin delegations to `AgentTerminalService`, mounted on the existing FastAPI app at `/mcp`. The MCP session id maps 1:1 to a PTY session.
+An MCP server (official `mcp` Python SDK) defining the four tools as thin delegations to `AgentTerminalService`. Integration shape **verified against the SDK docs** (see §17):
+
+- Mount the tool server's ASGI app: `Mount("/mcp", app=server.streamable_http_app(json_response=True, streamable_http_path="/"))`. `json_response=True` → request/response JSON, no long-lived SSE (tunnel-friendly).
+- **The session manager must be run inside the parent FastAPI `lifespan`** — `async with server.session_manager.run(): ...` (via `AsyncExitStack`). Without this the endpoint does not function; the SDK enters it **once** at startup and shares it across requests.
+- A tool reads its HTTP request context for the **`Mcp-Session-Id`** header (the SDK exposes the Starlette `Request` to tool handlers); that id maps 1:1 to a PTY session.
+- Tools reach `AgentTerminalService` via a reference **bound at lifespan startup** — the mounted sub-app does **not** share the parent's `app.state`, and the container is created during `lifespan`, so construction-time injection won't work.
+- **Pin the `mcp` version** — exact class/import names differ across releases (`FastMCP` vs `MCPServer` vs lowlevel `Server`); the concepts above are stable.
 
 ### 5.5 Layer placement (hexagonal)
 
@@ -143,6 +151,10 @@ Returns `"\n".join(screen.display).rstrip()` from the `pyte` screen, which the b
 
 Known fiddly bits (documented, bounded by the timeout fallback): stripping the shell's command echo and prompt strings; multi-line commands; PowerShell's `$LASTEXITCODE` (native) vs `$?` (cmdlet) semantics. The random marker + timeout fallback + `read_screen` escape hatch keep this robust enough without trying to perfectly parse every shell.
 
+**Timeout is capped** below the Cloudflare Quick Tunnel idle limit (≈100 s) — default 30 s, hard max ~60 s — because with `json_response=True` the HTTP POST is held open with no bytes until the tool returns, and a longer silent hold risks a tunnel cut. For genuinely long operations the agent backgrounds the command (or polls `read_screen`); the tool description says so.
+
+**First-command readiness:** `run_command` snapshots the capture-buffer offset immediately before sending, so the shell's startup banner/prompt is excluded; a brief initial-prompt quiescence wait at session creation further reduces contamination of the first command's output.
+
 ### 7.3 `send_keys` / `send_signal`
 
 `send_keys(text)` pushes UTF-8 bytes onto the input queue. `send_signal` pushes the corresponding control byte. Both go through the same input loop that writes to the PTY, so they interleave naturally with human input.
@@ -151,7 +163,7 @@ Known fiddly bits (documented, bounded by the timeout fallback): stripping the s
 
 ## 8. Session & identity lifecycle
 
-- **Identity:** agent sessions are created under the **owner `UserId`** (the local user — `"local-user"` in the default no-auth case) so they appear in the human's tab list and broadcast channel. Single-user tool; no cross-user concerns.
+- **Identity:** agent sessions are created under the **owner `UserId`** so they appear in the human's tab list and broadcast channel. Defaults to `"local-user"` (the default no-auth case). ⚠️ With Cloudflare Access enabled the phone's identity is the user's email, not `"local-user"`, so the owner identity must be **configurable** — otherwise agent tabs won't appear on the phone. CF-Access co-view is otherwise out of scope; the single-user assumption holds.
 - **One shell per MCP connection.** Created lazily on first tool call for a new MCP session id.
 - **Tab:** created with `origin="agent"`; `tab_state_update("add", tab)` is broadcast so the phone shows the 🤖 tab immediately.
 - **Teardown:** on MCP-session end, explicit close, or phone "close tab" → destroy session + tab (existing cascade). Consistent with porterminal's no-auto-timeout model; an agent-idle cleanup can be added later if lingering shells become a problem.
@@ -160,9 +172,9 @@ Known fiddly bits (documented, bounded by the timeout fallback): stripping the s
 
 ## 9. Transport
 
-- **MCP Streamable HTTP**, request/response (POST) oriented. Our tools are agent-asks → server-answers, so we avoid long-lived SSE where possible — sidestepping Cloudflare Quick Tunnel idle-timeout quirks.
-- Mounted on the existing uvicorn/FastAPI app; exposed through the existing tunnel with no new tunnel config.
-- **The exact MCP Python SDK API** (FastMCP construction, ASGI mounting, accessing the MCP session id, lifespan integration) will be confirmed against current docs via Context7 at the start of implementation planning, rather than assumed here.
+- **MCP Streamable HTTP with `json_response=True`** — request/response JSON, no long-lived SSE. Verified as a real SDK option (§5.4, §17). Sidesteps Cloudflare Quick Tunnel idle-timeout quirks for the common case.
+- Mounted on the existing uvicorn/FastAPI app; exposed through the existing tunnel with no new tunnel config. The session manager runs inside the parent `lifespan` (§5.4).
+- **Held-POST caveat:** each tool response is held open until it returns, so a `run_command` silent for longer than the tunnel idle limit (≈100 s) risks a cut. Mitigated by capping `run_command` timeout (§7.2); long operations are backgrounded/polled.
 
 ---
 
@@ -176,11 +188,12 @@ Known fiddly bits (documented, bounded by the timeout fallback): stripping the s
 
 ## 11. Error handling
 
+- **Never silently drop.** The input loop replies to oversize/rate-limit violations via `send_message`; the agent connection **captures** those (§5.2) so a tool returns the error instead of hanging to timeout.
+- **Oversized input:** the agent connection **chunks** writes to ≤ `MAX_INPUT_SIZE` (4096), so the guard isn't tripped in the first place.
+- **Rate limiting:** agent sessions use an effectively-unlimited `RateLimitConfig` (§5.2) — the human-abuse limiter is inappropriate for a trusted agent and would drop bulk input.
 - **PTY dead / shell exited:** `run_command` / `read_screen` return a clear error status; the tab closes via the existing session-destroyed cascade.
-- **Tool call on a torn-down session:** return an MCP tool error instructing the agent that the session ended.
-- **Oversized input:** reuse `TerminalService`'s existing `MAX_INPUT_SIZE` guard.
-- **Rate limiting:** reuse the existing token-bucket limiter on PTY writes.
-- **Overlapping tool calls on one session:** serialized by a per-session lock; the second call waits.
+- **Tool call on a torn-down session:** return an MCP tool error telling the agent the session ended.
+- **Overlapping tool calls on one session:** serialized by a per-session lock; the second waits.
 
 ---
 
@@ -219,10 +232,12 @@ Reuse existing patterns (`pytest-asyncio` auto mode, `FakePTY`, `MockConnection`
 | Risk | Mitigation |
 |---|---|
 | `run_command` completion detection across shells (primary risk) | Random marker + per-shell payload + `timeout`→`waiting` fallback + `read_screen` escape hatch |
-| MCP Streamable HTTP through Cloudflare Quick Tunnel (SSE idle timeouts) | Lean on request/response POST mode; verify behavior; add keepalive only if needed |
-| Exact MCP Python SDK API surface | Confirm via Context7 before coding; isolate in the MCP adapter |
-| `pyte` fidelity on complex TUIs | `read_screen` is best-effort; agents mostly use `run_command`; acceptable |
-| Lingering agent shells | Teardown on MCP-session end; defer idle-cleanup to Phase 2 |
+| Long/silent `run_command` cut by tunnel idle (~100 s) with held-POST | Cap timeout (default 30 s, max ~60 s); background or poll long ops (§7.2) |
+| MCP SDK class/import names differ by version | **Verified** mount + lifespan + `json_response` shape (§17); **pin** `mcp`; isolate in the adapter |
+| Agent input silently dropped by size/rate guards | Chunk to ≤4096; relaxed rate limit; capture `send_message` errors (§5.2, §11) |
+| `pyte` byte handling (UTF-8 / escape split across reads) | Feed via `pyte.ByteStream` incremental decoder, never per-chunk `decode()` (§5.2) |
+| `pyte` fidelity on complex TUIs; `TERM` mismatch | `read_screen` best-effort; agents mostly use `run_command`; acceptable |
+| Lingering agent shells | Teardown on MCP-session end if the SDK exposes it; phone-close always works; idle cleanup → Phase 2 |
 
 ---
 
@@ -241,7 +256,8 @@ Reuse existing patterns (`pytest-asyncio` auto mode, `FakePTY`, `MockConnection`
 - `porterminal/application/services/__init__.py` — export `AgentTerminalService`.
 - `porterminal/composition.py` — construct `AgentTerminalService` + MCP adapter; pass services.
 - `porterminal/container.py` — hold the new service / mounted MCP app.
-- `porterminal/app.py` — mount `/mcp`.
+- `porterminal/app.py` — mount `/mcp` **and enter the MCP session manager in `lifespan`** (`AsyncExitStack`); bind `AgentTerminalService` after container creation.
+- `porterminal/application/services/terminal_service.py` — accept a per-session/per-connection `RateLimitConfig` so agent sessions can relax the limiter.
 - `porterminal/cli/display.py` — show the copyable `/mcp` URL on startup.
 - `frontend/src/services/TabService.ts`, `frontend/src/types/index.ts`, tab UI — 🤖 badge for `origin === "agent"`.
 - `docs/architecture.md`, `docs/frontend_features.md`, `README.md` — document agent access.
@@ -250,5 +266,29 @@ Reuse existing patterns (`pytest-asyncio` auto mode, `FakePTY`, `MockConnection`
 
 ## 16. Dependencies
 
-- **`mcp`** — official MCP Python SDK (FastMCP + Streamable HTTP). Pure Python, cross-platform.
-- **`pyte`** — pure-Python terminal emulator for server-side screen rendering. Cross-platform (Windows-safe).
+- **`mcp`** (**pinned** to a known-good version) — official MCP Python SDK (Streamable HTTP). Pure Python, cross-platform. Class names vary by release, so pin and confirm imports at implementation time.
+- **`pyte`** — pure-Python terminal emulator for server-side screen rendering. Cross-platform (Windows-safe). Use `pyte.Screen` + `pyte.ByteStream`.
+
+---
+
+## 17. Technical review (verified 2026-06-24)
+
+The architecture was reviewed against the live codebase and current library docs (MCP Python SDK `/modelcontextprotocol/python-sdk`, pyte `/selectel/pyte`). **The design holds; no blocking issues.** Verified facts and the fixes folded into this spec:
+
+**Verified sound (no change):**
+- Mounting an MCP Streamable HTTP app at `/mcp` on the existing FastAPI/Starlette app works (`Mount` + `streamable_http_app(...)`).
+- `json_response=True` is a real SDK option giving request/response (no long-lived SSE) — the tunnel-friendly mode this spec assumed.
+- The "agent = just another client" model is valid: `TerminalService` already broadcasts one PTY read loop to all `ConnectionPort`s and accepts input from any, so the phone co-views/takes-over the agent's shell for free.
+- `connection_registry.broadcast(...)`, `tab_service.create_tab(...)`, and `build_tab_state_update("add", tab)` exist and suffice to surface the 🤖 tab on the phone.
+- The CLI already owns the tunnel URL, so showing `/mcp` is a pure display change (no server round-trip).
+
+**Issues found and resolved in this spec:**
+1. **MCP session manager must run in the parent lifespan** (`async with server.session_manager.run()` via `AsyncExitStack`) — was under-specified. → §5.4, §15.
+2. **Tools can't use the parent `app.state`** (mounted sub-app); the service is **bound at lifespan startup**; MCP session id + headers come from the tool request context. → §5.4.
+3. **pyte must consume bytes via `ByteStream`**, not per-chunk `decode()` (split UTF-8/escape sequences) — latent corruption bug. → §5.2.
+4. **Input guards silently drop agent input:** `MAX_INPUT_SIZE` (4096) and the **byte** rate limiter (**1 KB/s / 16 KB burst**, not the doc's "100 msg/s") reject (don't delay) bulk input, and the error went to a no-op `send_message`. → chunk writes, relax the limiter for agent sessions, and capture errors. §5.2, §11; also requires a `TerminalService` rate-config change (§15).
+5. **Held-POST vs tunnel idle:** cap `run_command` timeout below ≈100 s. → §7.2, §9.
+6. **Owner identity** must be configurable so agent tabs show on the phone under Cloudflare Access (default `"local-user"`). → §8.
+7. **SDK version churn:** pin `mcp`; confirm class names at implementation. → §16.
+
+**Stale doc to fix while here:** `docs/architecture.md` states rate limiting is "100 messages/second, burst 500"; the real config is **1 KB/s sustained, 16 KB burst** (`RateLimitConfig`). Correct it as part of this work.

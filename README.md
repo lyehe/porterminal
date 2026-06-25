@@ -86,7 +86,7 @@ ptn ~/projects/myapp   # Start in specific folder
 
 The same URL also works for AI agents. Porterminal serves a Model Context Protocol (MCP) terminal at **`<url>/mcp`** (Streamable HTTP) — point any MCP-capable client (Claude, Cursor, etc.) at it and the agent gets its own persistent shell, shown as a 🤖 tab you can watch and take over from your phone.
 
-Hand the agent the tunnel URL; it discovers how to drive it from **`<url>/llms.txt`** (also linked invisibly from the page, so the human UI is unchanged). Example client config:
+Hand the agent the tunnel URL. MCP clients can auto-discover the server from **`<url>/.well-known/mcp.json`** (the MCP `server.json` descriptor), and there's a human/agent-readable **`<url>/llms.txt`** with usage — both linked invisibly from the page, so the human UI is unchanged. Example client config:
 
 ```json
 {

@@ -132,6 +132,21 @@ async def test_llms_txt_and_discovery_hints(mcp_url):
         assert "<!DOCTYPE html>" in r2.text or "<html" in r2.text
 
 
+async def test_well_known_mcp_server_json(mcp_url):
+    base = mcp_url.removesuffix("/mcp")
+    async with httpx.AsyncClient() as c:
+        for path in ("/.well-known/mcp.json", "/.well-known/mcp/server.json"):
+            r = await c.get(f"{base}{path}")
+            assert r.status_code == 200, path
+            assert "application/json" in r.headers.get("content-type", ""), path
+            doc = r.json()
+            assert doc["name"], path  # reverse-DNS server name
+            assert doc["version"], path
+            remote = doc["remotes"][0]
+            assert remote["type"] == "streamable-http", remote
+            assert remote["url"].endswith("/mcp"), remote
+
+
 @pytest.fixture
 async def base_url_fast(monkeypatch):
     """Same server, but with a 1s reaper so disconnect cleanup is testable."""

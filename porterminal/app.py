@@ -104,6 +104,17 @@ async def lifespan(app: FastAPI):
         logger.info("Porterminal server stopped")
 
 
+def _request_base_url(request: Request) -> str:
+    """Best-effort absolute base URL from the request (tunnel-aware)."""
+    host = request.headers.get("host") or request.url.netloc
+    scheme = (
+        "https"
+        if request.headers.get("x-forwarded-proto") == "https" or request.headers.get("cf-ray")
+        else request.url.scheme
+    )
+    return f"{scheme}://{host}"
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
@@ -148,10 +159,13 @@ def create_app() -> FastAPI:
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     "Pragma": "no-cache",
                     "Expires": "0",
-                    # Invisible to humans; points AI agents at the usage page and
-                    # the MCP endpoint (the human UI is otherwise untouched).
+                    # Invisible to humans; points AI agents at machine-readable
+                    # discovery (server.json), the usage page, and the MCP
+                    # endpoint (the human UI is otherwise untouched).
                     "Link": (
-                        '</llms.txt>; rel="alternate"; type="text/markdown", </mcp>; rel="related"'
+                        '</.well-known/mcp.json>; rel="alternate"; type="application/json", '
+                        '</llms.txt>; rel="alternate"; type="text/markdown", '
+                        '</mcp>; rel="related"'
                     ),
                 },
             )
@@ -168,14 +182,7 @@ def create_app() -> FastAPI:
         host runs an MCP terminal and how to drive it. Public by design - the
         tunnel URL is the credential, and the endpoint path isn't sensitive.
         """
-        # Best-effort absolute base URL from the request (works behind the tunnel).
-        host = request.headers.get("host") or request.url.netloc
-        scheme = (
-            "https"
-            if request.headers.get("x-forwarded-proto") == "https" or request.headers.get("cf-ray")
-            else request.url.scheme
-        )
-        base = f"{scheme}://{host}"
+        base = _request_base_url(request)
 
         adapter: McpAdapter = app.state.mcp_adapter
         tools = "\n".join(f"- `{name}` - {desc}" for name, desc in adapter.tool_summaries())
@@ -188,6 +195,7 @@ you (an AI agent) control a real shell over the Model Context Protocol (MCP).
 ## Connect
 
 MCP endpoint (Streamable HTTP): {base}/mcp
+Machine-readable discovery: {base}/.well-known/mcp.json (MCP server.json)
 
 Point any MCP client at that URL. Example client config:
 
@@ -220,6 +228,32 @@ to see the prompt and `send_keys` / `send_signal` to drive it.
   shell runs non-elevated (it can't install software that requires admin).
 """
         return PlainTextResponse(body, media_type="text/markdown; charset=utf-8")
+
+    @app.get("/.well-known/mcp/server.json")
+    @app.get("/.well-known/mcp.json")
+    async def mcp_server_json(request: Request) -> dict:
+        """MCP server descriptor (`server.json`) for client/agent auto-discovery.
+
+        Follows the Model Context Protocol `server.json` schema used by the MCP
+        Registry. Served at both `/.well-known/mcp/server.json` (as Replicate
+        does) and `/.well-known/mcp.json`, because the well-known discovery path
+        is still being finalized (SEPs #1649/#1960). Machine-readable companion
+        to /llms.txt; a client that 404s here falls back to being handed /mcp.
+        """
+        base = _request_base_url(request)
+        return {
+            "$schema": (
+                "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json"
+            ),
+            "name": "io.github.lyehe/porterminal",
+            "title": "Porterminal",
+            "description": (
+                "Web terminal + MCP agent terminal on this machine, exposed via a Cloudflare tunnel."
+            ),
+            "version": __version__,
+            "repository": {"url": "https://github.com/lyehe/porterminal", "source": "github"},
+            "remotes": [{"type": "streamable-http", "url": f"{base}/mcp"}],
+        }
 
     @app.get("/health")
     async def health():

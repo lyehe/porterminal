@@ -331,7 +331,7 @@ A third entry point, alongside the two human WebSockets, lets AI agents drive th
 - **`AgentTerminalService`** (`application/services/agent_terminal_service.py`) maps one MCP session to a dedicated PTY session + 🤖 tab, and reaps it when the client disconnects.
 - **`AgentSessionConnection`** (`infrastructure/web/agent_connection.py`) implements the same `ConnectionPort` the human path uses, bridging request/response MCP tools onto the shared multi-client `TerminalService` (a `pyte` screen powers `read_screen`). Because the agent is "just another client", a human co-views and can take over the agent's shell for free.
 
-**Discovery:** `GET /llms.txt` serves agent usage instructions (the `llms.txt` convention), and the `/` response carries a `Link:` header plus an inert `<link rel="alternate">` pointing to it - invisible to humans. Tool descriptions live once in `AGENT_TOOLS` (`mcp_adapter.py`) and render into both `tools/list` and `/llms.txt`.
+**Discovery:** `GET /.well-known/mcp.json` (and `/.well-known/mcp/server.json`) serves the machine-readable MCP `server.json` descriptor (name/version/`remotes`→`/mcp`) that capable clients auto-detect; `GET /llms.txt` serves human/agent-readable usage; and the `/` response carries a `Link:` header (plus an inert `<link rel="alternate">`) pointing at both - all invisible to humans. Tool descriptions live once in `AGENT_TOOLS` (`mcp_adapter.py`) and render into both `tools/list` and `/llms.txt`.
 
 See [agent-access.md](agent-access.md) and the [design spec](superpowers/specs/2026-06-24-agent-terminal-access-design.md).
 

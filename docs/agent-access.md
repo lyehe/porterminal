@@ -7,16 +7,21 @@ an MCP client at it and drives a real shell. Both see the same sessions.
 
 ## Discovery — how an agent finds it from the URL
 
-You don't have to tell the agent anything beyond the base URL. Three signals,
-all invisible to humans, lead it to the instructions:
+You don't have to tell the agent anything beyond the base URL. Several signals,
+all invisible to humans, lead a client to the MCP endpoint:
 
-- **`/llms.txt`** — a plain-text usage page (the emerging `llms.txt` convention).
-  This is the canonical "how to use this host" page for agents.
-- **A `Link:` response header** on the base page:
-  `Link: </llms.txt>; rel="alternate"; type="text/markdown", </mcp>; rel="related"`.
-- **An inert `<link rel="alternate" href="/llms.txt">`** (plus an HTML comment)
-  in the page `<head>` — visible to an agent that fetches the page, ignored by
-  browsers.
+- **`/.well-known/mcp.json`** (also `/.well-known/mcp/server.json`) — a
+  machine-readable MCP `server.json` descriptor: server name, version, and a
+  `remotes` entry pointing at the `streamable-http` `/mcp` endpoint. This is the
+  MCP-native discovery surface that capable clients auto-detect. The well-known
+  path is still being finalized upstream (SEPs #1649 / #1960), so we serve both
+  spellings; a client that 404s falls back to being handed the `/mcp` URL.
+- **`/llms.txt`** — a human/agent-readable prose page (the `llms.txt` convention)
+  with the endpoint, an example client config, and the tool list. `llms.txt` is
+  popular but not reliably auto-fetched, so treat it as the readable companion to
+  `server.json`, not the primary discovery.
+- **A `Link:` response header** on the base page pointing at both, plus an inert
+  `<link rel="alternate">` + HTML comment in the page `<head>`.
 
 The human UI at `/` is never changed by any of this. (We deliberately do **not**
 content-negotiate the base URL, which would misfire for uptime monitors, link

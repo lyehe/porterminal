@@ -75,8 +75,10 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-sp, --save-password` | Save or clear password in config |
 | `-tp, --toggle-password` | Set password requirement (on/off/toggle) |
 | `-v, --verbose` | Show detailed startup logs |
-| `-i, --init` | Create `.ptn/ptn.yaml` config (`-i ""` for auto-discovery, or `-i URL/PATH`) |
+| `-i, --init` | Create `.ptn/ptn.yaml` with auto-discovered project scripts as buttons |
+| `-if, --init-from URL/PATH` | Create `.ptn/ptn.yaml` from a URL or local file |
 | `-c, --compose` | Enable compose mode by default |
+| `-k, --keep-qr` | Keep the QR code visible after the first connection |
 | `-u, --check-update` | Check if a newer version is available |
 | `-V, --version` | Show version |
 
@@ -120,7 +122,7 @@ Tools: `run_command` (clean output + exit code), `read_screen`, `send_keys`, `se
 Run `ptn --init` to create a starter config. It auto-discovers project scripts from `package.json`, `pyproject.toml`, or `Makefile` and adds them as buttons:
 
 ```bash
-ptn -i ""
+ptn -i
 # Created: .ptn/ptn.yaml
 # Discovered 3 project script(s): build, dev, test
 ```

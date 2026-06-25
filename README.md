@@ -34,7 +34,7 @@
 
 ## Why
 
-I wanted to vibe code from bed.
+I want to control my swarm anywhere.
 
 **ngrok** requires registration and the free tier sucks. **Cloudflare Quick Tunnel** works great but is hard to use directly on the phone. **Termius** requires complicated setup: port forwarding, firewall rules, key management... Tried **Claude Code web**, but it can't access my local hardware and environment. Also tried **Happy**, but it's too bulky and updates lag behind.
 

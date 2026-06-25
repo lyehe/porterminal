@@ -11,6 +11,7 @@ Porterminal provides a mobile-friendly terminal interface that you can access fr
 - [Installation](installation.md) - Get started with Porterminal
 - [Configuration](configuration.md) - Customize your setup
 - [Security](security.md) - Password protection & best practices
+- [Agent access (MCP)](agent-access.md) - Let AI agents drive the terminal
 - [Architecture](architecture.md) - Technical details
 - [Development](development.md) - Contributing & release process
 - [Changelog](CHANGELOG.md) - Version history
@@ -25,6 +26,7 @@ Porterminal provides a mobile-friendly terminal interface that you can access fr
 | Secure | Optional password protection, env vars sanitized |
 | Zero-config | Cloudflare tunnel with QR code for instant access |
 | Cross-platform | Windows, Linux, and macOS support |
+| Agent-ready (MCP) | AI agents drive a shell via the `/mcp` endpoint; usage discoverable at `/llms.txt` |
 
 ## How It Works
 

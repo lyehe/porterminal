@@ -323,6 +323,18 @@ With Cloudflare Access enabled:
 
 Shell detection uses platform-specific methods (registry on Windows, `/etc/shells` on Unix).
 
+## Agent (MCP) Access
+
+A third entry point, alongside the two human WebSockets, lets AI agents drive the terminal over the [Model Context Protocol](https://modelcontextprotocol.io):
+
+- **`/mcp`** - a FastMCP **Streamable HTTP** server (`infrastructure/web/mcp_adapter.py`), mounted on the FastAPI app and run from the app lifespan. Tools: `run_command`, `read_screen`, `send_keys`, `send_signal`.
+- **`AgentTerminalService`** (`application/services/agent_terminal_service.py`) maps one MCP session to a dedicated PTY session + 🤖 tab, and reaps it when the client disconnects.
+- **`AgentSessionConnection`** (`infrastructure/web/agent_connection.py`) implements the same `ConnectionPort` the human path uses, bridging request/response MCP tools onto the shared multi-client `TerminalService` (a `pyte` screen powers `read_screen`). Because the agent is "just another client", a human co-views and can take over the agent's shell for free.
+
+**Discovery:** `GET /llms.txt` serves agent usage instructions (the `llms.txt` convention), and the `/` response carries a `Link:` header plus an inert `<link rel="alternate">` pointing to it - invisible to humans. Tool descriptions live once in `AGENT_TOOLS` (`mcp_adapter.py`) and render into both `tools/list` and `/llms.txt`.
+
+See [agent-access.md](agent-access.md) and the [design spec](superpowers/specs/2026-06-24-agent-terminal-access-design.md).
+
 ## Frontend Architecture
 
 Backend-driven UI - server maintains canonical state, frontend renders reactively.

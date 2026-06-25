@@ -112,6 +112,26 @@ async def test_run_command_reports_nonzero_exit(mcp_url):
             assert data.get("exit_code") != 0, data
 
 
+async def test_llms_txt_and_discovery_hints(mcp_url):
+    base = mcp_url.removesuffix("/mcp")
+    async with httpx.AsyncClient() as c:
+        # /llms.txt advertises the MCP endpoint and all four tools.
+        r = await c.get(f"{base}/llms.txt")
+        assert r.status_code == 200
+        assert "text/markdown" in r.headers.get("content-type", "")
+        body = r.text
+        assert "/mcp" in body
+        for tool in ("run_command", "read_screen", "send_keys", "send_signal"):
+            assert tool in body, f"missing tool in llms.txt: {tool}"
+
+        # The base page points agents to /llms.txt + /mcp via a Link header,
+        # while the human HTML body is still served unchanged.
+        r2 = await c.get(f"{base}/")
+        link = r2.headers.get("link", "")
+        assert "/llms.txt" in link and "/mcp" in link, link
+        assert "<!DOCTYPE html>" in r2.text or "<html" in r2.text
+
+
 @pytest.fixture
 async def base_url_fast(monkeypatch):
     """Same server, but with a 1s reaper so disconnect cleanup is testable."""

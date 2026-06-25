@@ -40,6 +40,7 @@ So I built something simpler: **run a command, scan a QR, start typing.**
 - **Persistent multi-tab sessions** - Sessions survive disconnects. Close the browser, switch networks, reconnect from another device—your shell and running processes are still there. Multiple devices can view the same session simultaneously.
 - **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish, Nushell, and any shell via `$SHELL`). Auto-detects your shells.
 - **Private by default** - The secret tunnel URL never sits on screen, so it's safe to screen-share or screenshot the QR. Press `c` to copy the URL when you need it.
+- **Agent-ready (MCP)** - The same URL an AI agent can drive: an MCP terminal at `/mcp` lets any MCP client run commands, read the screen, and answer prompts. Agents discover how to use it from `/llms.txt`. See [Agent access (MCP)](#agent-access-mcp).
 
 ## Install
 
@@ -80,6 +81,24 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-V, --version` | Show version |
 
 **While running:** with a tunnel active, the connection URL is hidden on screen for privacy — press **`c`** to copy it to your clipboard, or scan the QR to connect. `Ctrl+C` stops the server.
+
+## Agent access (MCP)
+
+The same URL also works for AI agents. Porterminal serves a Model Context Protocol (MCP) terminal at **`<url>/mcp`** (Streamable HTTP) — point any MCP-capable client (Claude, Cursor, etc.) at it and the agent gets its own persistent shell, shown as a 🤖 tab you can watch and take over from your phone.
+
+Hand the agent the tunnel URL; it discovers how to drive it from **`<url>/llms.txt`** (also linked invisibly from the page, so the human UI is unchanged). Example client config:
+
+```json
+{
+  "mcpServers": {
+    "porterminal": { "url": "https://<your-tunnel>.trycloudflare.com/mcp" }
+  }
+}
+```
+
+Tools: `run_command` (clean output + exit code), `read_screen`, `send_keys`, `send_signal` (Ctrl-C / EOF).
+
+> **Security:** like the human terminal, the only protection is the secret tunnel URL — anyone (or any agent) with it gets full, non-elevated shell access. If you need real auth, use a different tool. See [docs/agent-access.md](docs/agent-access.md).
 
 ## Mobile Gestures
 

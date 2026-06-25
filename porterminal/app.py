@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI, Query, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import RequestResponseEndpoint
 
@@ -148,12 +148,78 @@ def create_app() -> FastAPI:
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     "Pragma": "no-cache",
                     "Expires": "0",
+                    # Invisible to humans; points AI agents at the usage page and
+                    # the MCP endpoint (the human UI is otherwise untouched).
+                    "Link": (
+                        '</llms.txt>; rel="alternate"; type="text/markdown", </mcp>; rel="related"'
+                    ),
                 },
             )
         return JSONResponse(
             {"error": "index.html not found"},
             status_code=404,
         )
+
+    @app.get("/llms.txt", response_class=PlainTextResponse)
+    async def llms_txt(request: Request):
+        """Agent-facing usage instructions (the `llms.txt` convention).
+
+        Invisible to humans (they get the UI at `/`); this tells an AI agent the
+        host runs an MCP terminal and how to drive it. Public by design - the
+        tunnel URL is the credential, and the endpoint path isn't sensitive.
+        """
+        # Best-effort absolute base URL from the request (works behind the tunnel).
+        host = request.headers.get("host") or request.url.netloc
+        scheme = (
+            "https"
+            if request.headers.get("x-forwarded-proto") == "https" or request.headers.get("cf-ray")
+            else request.url.scheme
+        )
+        base = f"{scheme}://{host}"
+
+        adapter: McpAdapter = app.state.mcp_adapter
+        tools = "\n".join(f"- `{name}` - {desc}" for name, desc in adapter.tool_summaries())
+
+        body = f"""# Porterminal - AI agent instructions
+
+Porterminal is a terminal on this machine. A human uses the web UI at {base}/ ;
+you (an AI agent) control a real shell over the Model Context Protocol (MCP).
+
+## Connect
+
+MCP endpoint (Streamable HTTP): {base}/mcp
+
+Point any MCP client at that URL. Example client config:
+
+    {{
+      "mcpServers": {{
+        "porterminal": {{ "url": "{base}/mcp" }}
+      }}
+    }}
+
+After connecting, call `tools/list` to confirm the tools below.
+
+## Tools
+
+{tools}
+
+Guidance: prefer `run_command` for ordinary commands (clean output + exit code).
+If it returns `status: "waiting"`, the command is interactive - use `read_screen`
+to see the prompt and `send_keys` / `send_signal` to drive it.
+
+## Example
+
+    run_command(command="echo hello")
+    -> {{"status": "completed", "exit_code": 0, "output": "hello"}}
+
+## Notes
+
+- Each MCP connection gets its own persistent shell, shown as a tab the human
+  can watch and take over. It is cleaned up when you disconnect.
+- Security: the URL is the only credential - there is no extra auth, and the
+  shell runs non-elevated (it can't install software that requires admin).
+"""
+        return PlainTextResponse(body, media_type="text/markdown; charset=utf-8")
 
     @app.get("/health")
     async def health():

@@ -29,6 +29,27 @@ _INSTRUCTIONS = (
     "to interrupt. Each connection has its own persistent shell."
 )
 
+# Single source of truth for the agent tool descriptions. The @mcp.tool
+# decorators below AND the /llms.txt discovery page both render from this, so
+# what an agent reads at /llms.txt never drifts from what tools/list advertises.
+AGENT_TOOLS: dict[str, str] = {
+    "run_command": (
+        "Run a shell command in the agent's persistent terminal and return "
+        "{output, exit_code, status}. status='completed' on success; "
+        "status='waiting' means it didn't finish (likely an interactive "
+        "prompt) - use read_screen / send_keys."
+    ),
+    "read_screen": (
+        "Return the current terminal screen as clean text plus cursor "
+        "position. Use for interactive prompts, REPLs, and TUIs."
+    ),
+    "send_keys": (
+        "Send raw keystrokes to the terminal (no automatic Enter; include "
+        "'\\r' to submit). Use to answer prompts or drive TUIs."
+    ),
+    "send_signal": "Send a control signal: 'int' (Ctrl-C) or 'eof' (Ctrl-D).",
+}
+
 
 class McpAdapter:
     """Holds the FastMCP server and a lazily-bound AgentTerminalService."""
@@ -68,6 +89,12 @@ class McpAdapter:
     def session_manager(self):
         return self.mcp.session_manager
 
+    @staticmethod
+    def tool_summaries() -> list[tuple[str, str]]:
+        """(name, description) for each agent tool — the same text tools/list
+        advertises. Rendered into /llms.txt so discovery never drifts."""
+        return list(AGENT_TOOLS.items())
+
     # ------------------------------------------------------------------
 
     def _require(self) -> Any:
@@ -85,35 +112,18 @@ class McpAdapter:
         mcp = self.mcp
         adapter = self
 
-        @mcp.tool(
-            description=(
-                "Run a shell command in the agent's persistent terminal and "
-                "return {output, exit_code, status}. status='completed' on "
-                "success; status='waiting' means it didn't finish (likely an "
-                "interactive prompt) - use read_screen / send_keys."
-            )
-        )
+        @mcp.tool(description=AGENT_TOOLS["run_command"])
         async def run_command(ctx: Context, command: str, timeout: float = 30) -> dict:
             return await adapter._require().run_command(adapter._sid(ctx), command, timeout)
 
-        @mcp.tool(
-            description=(
-                "Return the current terminal screen as clean text plus cursor "
-                "position. Use for interactive prompts, REPLs, and TUIs."
-            )
-        )
+        @mcp.tool(description=AGENT_TOOLS["read_screen"])
         async def read_screen(ctx: Context) -> dict:
             return await adapter._require().read_screen(adapter._sid(ctx))
 
-        @mcp.tool(
-            description=(
-                "Send raw keystrokes to the terminal (no automatic Enter; "
-                "include '\\r' to submit). Use to answer prompts or drive TUIs."
-            )
-        )
+        @mcp.tool(description=AGENT_TOOLS["send_keys"])
         async def send_keys(ctx: Context, text: str) -> dict:
             return await adapter._require().send_keys(adapter._sid(ctx), text)
 
-        @mcp.tool(description="Send a control signal: 'int' (Ctrl-C) or 'eof' (Ctrl-D).")
+        @mcp.tool(description=AGENT_TOOLS["send_signal"])
         async def send_signal(ctx: Context, signal: str) -> dict:
             return await adapter._require().send_signal(adapter._sid(ctx), signal)

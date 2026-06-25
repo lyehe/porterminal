@@ -15,14 +15,14 @@
 
 
 <p align="center">
-  <b>A web terminal you reach from your phone — or hand to an AI agent.</b><br>
-  One command, one URL.
+  <b>Hand a computer to an AI agent, and watch it work live in your browser.</b><br>
+  One command, one URL. (Also a slick terminal for your own phone.)
 </p>
 
 <p align="center">
   <b>1.</b> <code>uvx ptn</code><br>
-  <b>2.</b> Scan the QR from your phone — or give the URL to an AI agent (MCP)<br>
-  <b>3.</b> Drive your terminal from anywhere<br>
+  <b>2.</b> Hand the URL to an AI agent, or scan the QR yourself<br>
+  <b>3.</b> Watch it work in any browser, and take over anytime<br>
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@
 </p>
 
 > [!WARNING]
-> **That URL is full access to this computer.** Anyone — or any AI agent — you hand it to gets a real shell on your machine, no password. That's the whole point, but it's dangerously easy to give an agent more than you meant to. Treat the URL like a secret, only share it with people and agents you trust, and read [Security](#security) before you point it at anything important.
+> **That URL is full access to this computer.** Anyone (or any AI agent) you hand it to gets a real shell on your machine, no password. That's the whole point, but it's dangerously easy to give an agent more than you meant to. Treat the URL like a secret, only share it with people and agents you trust, and read [Security](#security) before you point it at anything important.
 
 ## Why
 
@@ -40,15 +40,17 @@ I wanted to vibe code from bed.
 
 So I built something simpler: **run a command, scan a QR, start typing.**
 
+Then it clicked: the same trick (one command, one URL) is the easiest way to give an AI agent a real terminal on *any* computer. No MCP server to write, no SSH keys, no Docker, no config. Run `uvx ptn`, hand over the URL, and the agent runs commands, reads the screen, and answers prompts on that machine. And because it's a web terminal, you can open the same session in any browser to watch it work live, or grab the keyboard and take over.
+
 ## Features
 
-- **One command, instant access** - No SSH, no port forwarding, no config files. Cloudflare tunnel + QR code.
+- **Hand a computer to an agent, and watch it** - Give an AI agent the URL and it gets a real terminal on the machine (any MCP client: Claude, Cursor, ...). Open the same session in any browser to watch it work live, and grab the keyboard whenever you want. No MCP server to write, no keys, no Docker. The agent learns how from `/llms.txt` and `/.well-known/mcp.json`. See [Agent access (MCP)](#agent-access-mcp).
+- **One command, instant access** - `uvx ptn` and you (or an agent) get a real terminal on this machine. No SSH, no port forwarding, no config files. Cloudflare tunnel + QR code.
 - **Actually usable on mobile** - Touch-optimized with momentum scrolling, pinch-to-zoom, swipe gestures, and modifier keys (Ctrl, Alt).
 - **Full terminal apps** - vim, htop, less, tmux all work correctly with proper alt-screen buffer handling.
-- **Persistent multi-tab sessions** - Sessions survive disconnects. Close the browser, switch networks, reconnect from another device—your shell and running processes are still there. Multiple devices can view the same session simultaneously.
+- **Persistent multi-tab sessions** - Sessions survive disconnects. Close the browser, switch networks, reconnect from another device, and your shell and running processes are still there. You and an agent can share one session: watch it work, or take over.
 - **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish, Nushell, and any shell via `$SHELL`). Auto-detects your shells.
 - **Private by default** - The secret tunnel URL never sits on screen, so it's safe to screen-share or screenshot the QR. Press `c` to copy the URL when you need it.
-- **Agent-ready (MCP)** - The same URL an AI agent can drive: an MCP terminal at `/mcp` lets any MCP client run commands, read the screen, and answer prompts. Agents discover how to use it from `/llms.txt`. See [Agent access (MCP)](#agent-access-mcp).
 
 ## Install
 
@@ -90,13 +92,13 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-u, --check-update` | Check if a newer version is available |
 | `-V, --version` | Show version |
 
-**While running:** with a tunnel active, the connection URL is hidden on screen for privacy — press **`c`** to copy it to your clipboard, or scan the QR to connect. `Ctrl+C` stops the server.
+**While running:** with a tunnel active, the connection URL is hidden on screen for privacy. Press **`c`** to copy it to your clipboard, or scan the QR to connect. `Ctrl+C` stops the server.
 
 ## Agent access (MCP)
 
-The same URL also works for AI agents. Porterminal serves a Model Context Protocol (MCP) terminal at **`<url>/mcp`** (Streamable HTTP) — point any MCP-capable client (Claude, Cursor, etc.) at it and the agent gets its own persistent shell, shown as a 🤖 tab you can watch and take over from your phone.
+The same URL also works for AI agents. Porterminal serves a Model Context Protocol (MCP) terminal at **`<url>/mcp`** (Streamable HTTP). Point any MCP-capable client (Claude, Cursor, etc.) at it and the agent gets its own persistent shell, shown as a 🤖 tab you can watch and take over from your phone.
 
-Hand the agent the tunnel URL. MCP clients can auto-discover the server from **`<url>/.well-known/mcp.json`** (the MCP `server.json` descriptor), and there's a human/agent-readable **`<url>/llms.txt`** with usage — both linked invisibly from the page, so the human UI is unchanged. Example client config:
+Hand the agent the tunnel URL. MCP clients can auto-discover the server from **`<url>/.well-known/mcp.json`** (the MCP `server.json` descriptor), and there's a human/agent-readable **`<url>/llms.txt`** with usage. Both are linked invisibly from the page, so the human UI is unchanged. Example client config:
 
 ```json
 {
@@ -108,7 +110,7 @@ Hand the agent the tunnel URL. MCP clients can auto-discover the server from **`
 
 Tools: `run_command` (clean output + exit code), `read_screen`, `send_keys`, `send_signal` (Ctrl-C / EOF).
 
-> **Security:** like the human terminal, the only protection is the secret tunnel URL — anyone (or any agent) with it gets full, non-elevated shell access. If you need real auth, use a different tool. See [docs/agent-access.md](docs/agent-access.md).
+> **Security:** like the human terminal, the only protection is the secret tunnel URL: anyone (or any agent) with it gets full, non-elevated shell access. If you need real auth, use a different tool. See [docs/agent-access.md](docs/agent-access.md).
 
 ## Mobile Gestures
 
@@ -175,7 +177,7 @@ Config is searched in order: `$PORTERMINAL_CONFIG_PATH`, `./ptn.yaml`, `./.ptn/p
 
 ## Security
 
-**There's no password by default** — the only thing stopping anyone is that they can't guess the random tunnel URL. Anyone (or any AI agent) who gets it has a full shell on your machine. Don't expose anything you wouldn't hand to a stranger, and set a password for anything sensitive:
+**There's no password by default.** The only thing stopping anyone is that they can't guess the random tunnel URL. Anyone (or any AI agent) who gets it has a full shell on your machine. Don't expose anything you wouldn't hand to a stranger, and set a password for anything sensitive:
 
 **From the UI:** Open Settings (gear icon) and use the Security section to set/change password and toggle password requirement. Changes require server restart.
 
@@ -211,7 +213,7 @@ See [docs/security.md](docs/security.md) for details.
 ## Contributing
 
 **This project does not accept external contributions** (pull requests or code
-changes) for security reasons — see [CONTRIBUTING.md](CONTRIBUTING.md). You're
+changes) for security reasons (see [CONTRIBUTING.md](CONTRIBUTING.md)). You're
 welcome to fork and run your own copy under [AGPL-3.0](LICENSE).
 
 Run from source:

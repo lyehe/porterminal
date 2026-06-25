@@ -12,6 +12,7 @@ import socket
 import threading
 import uuid
 
+import httpx
 import pytest
 import uvicorn
 from mcp import ClientSession
@@ -109,3 +110,49 @@ async def test_run_command_reports_nonzero_exit(mcp_url):
             data = _payload(res)
             assert data.get("status") == "completed", data
             assert data.get("exit_code") != 0, data
+
+
+@pytest.fixture
+async def base_url_fast(monkeypatch):
+    """Same server, but with a 1s reaper so disconnect cleanup is testable."""
+    monkeypatch.setenv("PORTERMINAL_AGENT_REAP_INTERVAL", "1")
+    app = create_app()
+    port = _free_port()
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    for _ in range(200):
+        if server.started:
+            break
+        await asyncio.sleep(0.05)
+    else:
+        raise RuntimeError("uvicorn did not start")
+    try:
+        yield f"http://127.0.0.1:{port}"
+    finally:
+        server.should_exit = True
+        thread.join(timeout=10)
+
+
+async def test_agent_session_reaped_on_disconnect(base_url_fast):
+    base = base_url_fast
+
+    async def tab_count() -> int:
+        async with httpx.AsyncClient() as c:
+            return (await c.get(f"{base}/health")).json()["tabs"]
+
+    # Connect, create an agent tab, confirm it exists.
+    async with streamablehttp_client(f"{base}/mcp") as (read, write, _):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            await session.call_tool("run_command", {"command": "echo hi", "timeout": 25})
+            assert await tab_count() == 1
+
+    # Client has now disconnected (context exit sends DELETE). The reaper
+    # should notice the session left the transport and tear the tab down.
+    for _ in range(30):
+        if await tab_count() == 0:
+            break
+        await asyncio.sleep(0.5)
+    assert await tab_count() == 0, "agent tab was not reaped after disconnect"

@@ -45,8 +45,21 @@ class McpAdapter:
         self._register_tools()
 
     def bind(self, service: Any) -> None:
-        """Bind the AgentTerminalService (called during app lifespan startup)."""
+        """Bind the AgentTerminalService and give it a probe over the live MCP
+        session ids, so it can reap sessions whose client has disconnected.
+
+        Reads the transport's private session map (no public hook exists);
+        a disconnected session lingers in the map but flips ``is_terminated``,
+        so we treat only non-terminated sessions as live. Guarded so a future
+        SDK rename degrades to idle-only reaping.
+        """
         self._service = service
+
+        def live_sessions() -> set[str]:
+            instances = getattr(self.session_manager, "_server_instances", {}) or {}
+            return {sid for sid, t in instances.items() if not getattr(t, "is_terminated", False)}
+
+        service.bind_live_probe(live_sessions)
 
     def streamable_http_app(self):
         return self.mcp.streamable_http_app()

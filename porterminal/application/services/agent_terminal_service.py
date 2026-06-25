@@ -85,6 +85,7 @@ class _AgentSession:
     task: asyncio.Task
     shell_id: str
     lock: asyncio.Lock
+    last_used: float = 0.0
 
 
 class AgentTerminalService:
@@ -100,6 +101,8 @@ class AgentTerminalService:
         shell_provider: Callable[[str | None], ShellCommand | None],
         default_dimensions: TerminalDimensions,
         owner_user_id: UserId,
+        reap_interval: float = 20.0,
+        max_idle: float = 900.0,
     ) -> None:
         self._sessions = session_service
         self._tabs = tab_service
@@ -111,6 +114,10 @@ class AgentTerminalService:
         self._owner = owner_user_id
         self._by_mcp: dict[str, _AgentSession] = {}
         self._create_lock = asyncio.Lock()
+        self._reap_interval = reap_interval
+        self._max_idle = max_idle
+        self._live_probe: Callable[[], set[str]] | None = None
+        self._reaper_task: asyncio.Task | None = None
 
     # ------------------------------------------------------------------
     # Session lifecycle
@@ -118,13 +125,16 @@ class AgentTerminalService:
 
     async def ensure_session(self, mcp_session_id: str) -> _AgentSession:
         """Get (or lazily create) the agent's PTY session + tab."""
+        now = asyncio.get_running_loop().time()
         existing = self._by_mcp.get(mcp_session_id)
         if existing is not None:
+            existing.last_used = now
             return existing
 
         async with self._create_lock:
             existing = self._by_mcp.get(mcp_session_id)
             if existing is not None:
+                existing.last_used = now
                 return existing
 
             shell = self._get_shell(None)
@@ -162,6 +172,7 @@ class AgentTerminalService:
                 task=task,
                 shell_id=shell.id,
                 lock=asyncio.Lock(),
+                last_used=now,
             )
             self._by_mcp[mcp_session_id] = rec
 
@@ -189,7 +200,57 @@ class AgentTerminalService:
         return True
 
     async def shutdown(self) -> None:
+        if self._reaper_task is not None:
+            self._reaper_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._reaper_task
+            self._reaper_task = None
         for mcp_id in list(self._by_mcp):
+            await self.close_session(mcp_id)
+
+    # ------------------------------------------------------------------
+    # Reaper: clean up agent sessions whose MCP client has disconnected
+    # ------------------------------------------------------------------
+
+    def bind_live_probe(self, probe: Callable[[], set[str]]) -> None:
+        """Provide a callable returning the MCP session ids still considered
+        live by the transport. The reaper closes any tracked session that has
+        left that set (graceful DELETE or the SDK's own idle termination)."""
+        self._live_probe = probe
+
+    async def start(self) -> None:
+        """Start the background reaper (call once, after the loop is running)."""
+        if self._reaper_task is None:
+            self._reaper_task = asyncio.create_task(self._reaper_loop())
+
+    async def _reaper_loop(self) -> None:
+        while True:
+            await asyncio.sleep(self._reap_interval)
+            try:
+                await self._reap_once()
+            except Exception:
+                logger.exception("Agent reaper error")
+
+    async def _reap_once(self) -> None:
+        live: set[str] | None = None
+        if self._live_probe is not None:
+            try:
+                live = set(self._live_probe())
+            except Exception:
+                live = None
+
+        now = asyncio.get_running_loop().time()
+        # Reap if the transport no longer tracks the session (disconnected) or,
+        # as a backstop if the probe is unavailable, if it has been idle too
+        # long. In stateful mode the id is present in `live` for the whole
+        # connection, so "absent from live" cleanly means disconnected.
+        stale = [
+            mcp_id
+            for mcp_id, rec in list(self._by_mcp.items())
+            if (live is not None and mcp_id not in live) or (now - rec.last_used) > self._max_idle
+        ]
+        for mcp_id in stale:
+            logger.info("Reaping disconnected agent session mcp=%s", mcp_id)
             await self.close_session(mcp_id)
 
     # ------------------------------------------------------------------

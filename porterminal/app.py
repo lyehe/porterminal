@@ -91,6 +91,7 @@ async def lifespan(app: FastAPI):
     # (required by the SDK - it is not started by FastAPI's Mount).
     mcp_adapter: McpAdapter = app.state.mcp_adapter
     mcp_adapter.bind(container.agent_terminal_service)
+    await container.agent_terminal_service.start()
 
     async with mcp_adapter.session_manager.run():
         logger.info("Porterminal server started")

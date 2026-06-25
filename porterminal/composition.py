@@ -1,5 +1,6 @@
 """Composition root - the ONLY place where dependencies are wired."""
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -225,6 +226,7 @@ def create_container(
         shell_provider=get_shell,
         default_dimensions=default_dimensions,
         owner_user_id=UserId("local-user"),
+        reap_interval=float(os.environ.get("PORTERMINAL_AGENT_REAP_INTERVAL", "20")),
     )
 
     return Container(

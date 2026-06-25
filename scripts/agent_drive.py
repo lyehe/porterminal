@@ -58,7 +58,9 @@ async def main() -> None:
                     while elapsed < max_wait:
                         await asyncio.sleep(interval)
                         elapsed += interval
-                        screen = payload(await session.call_tool("read_screen", {})).get("screen", "")
+                        screen = payload(await session.call_tool("read_screen", {})).get(
+                            "screen", ""
+                        )
                         last = next((ln for ln in reversed(screen.splitlines()) if ln.strip()), "")
                         if _PROMPT_RE.search(last):
                             if saw_busy:

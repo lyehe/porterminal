@@ -176,3 +176,27 @@ async def test_agent_session_reaped_on_disconnect(base_url_fast):
             break
         await asyncio.sleep(0.5)
     assert await tab_count() == 0, "agent tab was not reaped after disconnect"
+
+
+async def test_dead_shell_is_reaped_while_connected(base_url_fast):
+    base = base_url_fast
+
+    async def session_count() -> int:
+        async with httpx.AsyncClient() as c:
+            return (await c.get(f"{base}/health")).json()["sessions"]
+
+    # Stay connected the whole time; the agent ends its own shell with `exit`.
+    async with streamablehttp_client(f"{base}/mcp") as (read, write, _):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            await session.call_tool("run_command", {"command": "echo hi", "timeout": 25})
+            assert await session_count() == 1
+
+            # Exit the shell from inside (no disconnect). The PTY dies; the
+            # reaper should reap the dead-PTY session promptly.
+            await session.call_tool("send_keys", {"text": "exit\r"})
+            for _ in range(30):
+                if await session_count() == 0:
+                    break
+                await asyncio.sleep(0.5)
+            assert await session_count() == 0, "dead-PTY agent session was not reaped"

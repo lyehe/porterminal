@@ -237,7 +237,7 @@ Reuse existing patterns (`pytest-asyncio` auto mode, `FakePTY`, `MockConnection`
 | Agent input silently dropped by size/rate guards | Chunk to ≤4096; relaxed rate limit; capture `send_message` errors (§5.2, §11) |
 | `pyte` byte handling (UTF-8 / escape split across reads) | Feed via `pyte.ByteStream` incremental decoder, never per-chunk `decode()` (§5.2) |
 | `pyte` fidelity on complex TUIs; `TERM` mismatch | `read_screen` best-effort; agents mostly use `run_command`; acceptable |
-| Lingering agent shells | **Resolved:** a reaper closes sessions whose transport reports `is_terminated` (client disconnect), with an idle-timeout backstop; phone-close also always works |
+| Lingering agent shells | **Resolved:** a reaper closes sessions on client disconnect (transport `is_terminated`) **or dead PTY** (agent ran `exit`), with an idle-timeout backstop; phone-close always works. No explicit `close_session`/`reset` tool - termination is via `exit` or disconnect, keeping the 4-tool surface minimal (deliberate AX/UX call). |
 
 ---
 

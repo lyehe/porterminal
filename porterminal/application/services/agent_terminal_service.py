@@ -231,6 +231,13 @@ class AgentTerminalService:
             except Exception:
                 logger.exception("Agent reaper error")
 
+    @staticmethod
+    def _pty_dead(rec: _AgentSession) -> bool:
+        try:
+            return not rec.session.pty_handle.is_alive()
+        except Exception:
+            return False
+
     async def _reap_once(self) -> None:
         live: set[str] | None = None
         if self._live_probe is not None:
@@ -240,17 +247,19 @@ class AgentTerminalService:
                 live = None
 
         now = asyncio.get_running_loop().time()
-        # Reap if the transport no longer tracks the session (disconnected) or,
-        # as a backstop if the probe is unavailable, if it has been idle too
-        # long. In stateful mode the id is present in `live` for the whole
-        # connection, so "absent from live" cleanly means disconnected.
+        # Reap a session when: its MCP client has gone (absent from `live` in
+        # stateful mode = disconnected); its shell has exited (dead PTY, e.g.
+        # the agent ran `exit`); or, as a backstop if the probe is unavailable,
+        # it has been idle too long.
         stale = [
             mcp_id
             for mcp_id, rec in list(self._by_mcp.items())
-            if (live is not None and mcp_id not in live) or (now - rec.last_used) > self._max_idle
+            if (live is not None and mcp_id not in live)
+            or self._pty_dead(rec)
+            or (now - rec.last_used) > self._max_idle
         ]
         for mcp_id in stale:
-            logger.info("Reaping disconnected agent session mcp=%s", mcp_id)
+            logger.info("Reaping agent session mcp=%s (disconnected or shell exited)", mcp_id)
             await self.close_session(mcp_id)
 
     # ------------------------------------------------------------------

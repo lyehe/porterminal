@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from porterminal.application.services import (
+    AgentTerminalService,
     ManagementService,
     SessionService,
     TabService,
@@ -31,6 +32,7 @@ class Container:
     tab_service: TabService
     terminal_service: TerminalService
     management_service: ManagementService
+    agent_terminal_service: AgentTerminalService
 
     # Repositories
     session_repository: SessionRepository

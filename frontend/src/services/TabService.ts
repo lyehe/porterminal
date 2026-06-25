@@ -137,7 +137,19 @@ export function createTabService(
         // Create tab buttons
         tabs.forEach((tab, index) => {
             const tabBtn = document.createElement('button');
-            tabBtn.className = 'tab-btn' + (tab.id === activeTabId ? ' active' : '');
+            tabBtn.className = 'tab-btn'
+                + (tab.id === activeTabId ? ' active' : '')
+                + (tab.origin === 'agent' ? ' tab-agent' : '');
+
+            // Agent-driven tabs get a robot badge so you can tell at a glance
+            // which terminals an AI agent is controlling.
+            if (tab.origin === 'agent') {
+                const badge = document.createElement('span');
+                badge.className = 'tab-badge';
+                badge.textContent = '🤖';
+                badge.title = 'Agent-controlled terminal';
+                tabBtn.appendChild(badge);
+            }
 
             const label = document.createElement('span');
             label.className = 'tab-label';
@@ -293,6 +305,7 @@ export function createTabService(
             sessionId: serverTab.session_id,
             heartbeatInterval: null,
             reconnectAttempts: 0,
+            origin: serverTab.origin ?? 'human',
         };
 
         // iOS-specific event handlers (now that tab is defined)

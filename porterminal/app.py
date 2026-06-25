@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI, Query, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import RequestResponseEndpoint
 
@@ -18,7 +18,7 @@ from .composition import create_container
 from .container import Container
 from .domain import UserId
 from .infrastructure.auth import authenticate_connection, validate_auth_message
-from .infrastructure.web import FastAPIWebSocketAdapter
+from .infrastructure.web import FastAPIWebSocketAdapter, McpAdapter
 from .logging_setup import setup_logging_from_env
 from .updater import check_for_updates, get_upgrade_command
 
@@ -86,13 +86,33 @@ async def lifespan(app: FastAPI):
 
     await container.session_service.start()
 
-    logger.info("Porterminal server started")
+    # Wire up agent (MCP) access: bind the service to the adapter mounted in
+    # create_app(), and run the MCP session manager for the app's lifetime
+    # (required by the SDK - it is not started by FastAPI's Mount).
+    mcp_adapter: McpAdapter = app.state.mcp_adapter
+    mcp_adapter.bind(container.agent_terminal_service)
+    await container.agent_terminal_service.start()
 
-    yield
+    async with mcp_adapter.session_manager.run():
+        logger.info("Porterminal server started")
 
-    # Shutdown
-    await container.session_service.stop()
-    logger.info("Porterminal server stopped")
+        yield
+
+        # Shutdown
+        await container.agent_terminal_service.shutdown()
+        await container.session_service.stop()
+        logger.info("Porterminal server stopped")
+
+
+def _request_base_url(request: Request) -> str:
+    """Best-effort absolute base URL from the request (tunnel-aware)."""
+    host = request.headers.get("host") or request.url.netloc
+    scheme = (
+        "https"
+        if request.headers.get("x-forwarded-proto") == "https" or request.headers.get("cf-ray")
+        else request.url.scheme
+    )
+    return f"{scheme}://{host}"
 
 
 def create_app() -> FastAPI:
@@ -116,6 +136,13 @@ def create_app() -> FastAPI:
             response.headers["Expires"] = "0"
         return response
 
+    # Mount the agent (MCP) endpoint at /mcp. The adapter is stashed on app
+    # state so the lifespan can run its session manager and bind the service
+    # at startup (the container, and thus the service, is created in lifespan).
+    mcp_adapter = McpAdapter()
+    app.state.mcp_adapter = mcp_adapter
+    app.mount("/mcp", mcp_adapter.streamable_http_app())
+
     # Mount static files
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -132,12 +159,101 @@ def create_app() -> FastAPI:
                     "Cache-Control": "no-cache, no-store, must-revalidate",
                     "Pragma": "no-cache",
                     "Expires": "0",
+                    # Invisible to humans; points AI agents at machine-readable
+                    # discovery (server.json), the usage page, and the MCP
+                    # endpoint (the human UI is otherwise untouched).
+                    "Link": (
+                        '</.well-known/mcp.json>; rel="alternate"; type="application/json", '
+                        '</llms.txt>; rel="alternate"; type="text/markdown", '
+                        '</mcp>; rel="related"'
+                    ),
                 },
             )
         return JSONResponse(
             {"error": "index.html not found"},
             status_code=404,
         )
+
+    @app.get("/llms.txt", response_class=PlainTextResponse)
+    async def llms_txt(request: Request):
+        """Agent-facing usage instructions (the `llms.txt` convention).
+
+        Invisible to humans (they get the UI at `/`); this tells an AI agent the
+        host runs an MCP terminal and how to drive it. Public by design - the
+        tunnel URL is the credential, and the endpoint path isn't sensitive.
+        """
+        base = _request_base_url(request)
+
+        adapter: McpAdapter = app.state.mcp_adapter
+        tools = "\n".join(f"- `{name}` - {desc}" for name, desc in adapter.tool_summaries())
+
+        body = f"""# Porterminal - AI agent instructions
+
+Porterminal is a terminal on this machine. A human uses the web UI at {base}/ ;
+you (an AI agent) control a real shell over the Model Context Protocol (MCP).
+
+## Connect
+
+MCP endpoint (Streamable HTTP): {base}/mcp
+Machine-readable discovery: {base}/.well-known/mcp.json (MCP server.json)
+
+Point any MCP client at that URL. Example client config:
+
+    {{
+      "mcpServers": {{
+        "porterminal": {{ "url": "{base}/mcp" }}
+      }}
+    }}
+
+After connecting, call `tools/list` to confirm the tools below.
+
+## Tools
+
+{tools}
+
+Guidance: prefer `run_command` for ordinary commands (clean output + exit code).
+If it returns `status: "waiting"`, the command is interactive - use `read_screen`
+to see the prompt and `send_keys` / `send_signal` to drive it.
+
+## Example
+
+    run_command(command="echo hello")
+    -> {{"status": "completed", "exit_code": 0, "output": "hello"}}
+
+## Notes
+
+- Each MCP connection gets its own persistent shell, shown as a tab the human
+  can watch and take over. It is cleaned up when you disconnect.
+- Security: the URL is the only credential - there is no extra auth, and the
+  shell runs non-elevated (it can't install software that requires admin).
+"""
+        return PlainTextResponse(body, media_type="text/markdown; charset=utf-8")
+
+    @app.get("/.well-known/mcp/server.json")
+    @app.get("/.well-known/mcp.json")
+    async def mcp_server_json(request: Request) -> dict:
+        """MCP server descriptor (`server.json`) for client/agent auto-discovery.
+
+        Follows the Model Context Protocol `server.json` schema used by the MCP
+        Registry. Served at both `/.well-known/mcp/server.json` (as Replicate
+        does) and `/.well-known/mcp.json`, because the well-known discovery path
+        is still being finalized (SEPs #1649/#1960). Machine-readable companion
+        to /llms.txt; a client that 404s here falls back to being handed /mcp.
+        """
+        base = _request_base_url(request)
+        return {
+            "$schema": (
+                "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json"
+            ),
+            "name": "io.github.lyehe/porterminal",
+            "title": "Porterminal",
+            "description": (
+                "Web terminal + MCP agent terminal on this machine, exposed via a Cloudflare tunnel."
+            ),
+            "version": __version__,
+            "repository": {"url": "https://github.com/lyehe/porterminal", "source": "github"},
+            "remotes": [{"type": "streamable-http", "url": f"{base}/mcp"}],
+        }
 
     @app.get("/health")
     async def health():

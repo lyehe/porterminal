@@ -277,9 +277,13 @@ Optimizes data transfer:
 
 ## Rate Limiting
 
-Token bucket algorithm:
-- **Rate**: 100 messages/second
-- **Burst**: 500 messages
+Token bucket algorithm (byte-based) on terminal input:
+- **Rate**: 1 KB/s sustained (1000 bytes/s)
+- **Burst**: 16 KB (16384 bytes)
+
+Agent (MCP) sessions override this with an effectively-unlimited config: the
+limiter exists to throttle an unauthenticated human client, not the trusted
+agent path, where it would silently drop bulk input.
 
 ## Session Management
 
@@ -318,6 +322,18 @@ With Cloudflare Access enabled:
 | Linux/macOS | Standard `pty` module |
 
 Shell detection uses platform-specific methods (registry on Windows, `/etc/shells` on Unix).
+
+## Agent (MCP) Access
+
+A third entry point, alongside the two human WebSockets, lets AI agents drive the terminal over the [Model Context Protocol](https://modelcontextprotocol.io):
+
+- **`/mcp`** - a FastMCP **Streamable HTTP** server (`infrastructure/web/mcp_adapter.py`), mounted on the FastAPI app and run from the app lifespan. Tools: `run_command`, `read_screen`, `send_keys`, `send_signal`.
+- **`AgentTerminalService`** (`application/services/agent_terminal_service.py`) maps one MCP session to a dedicated PTY session + 🤖 tab, and reaps it when the client disconnects.
+- **`AgentSessionConnection`** (`infrastructure/web/agent_connection.py`) implements the same `ConnectionPort` the human path uses, bridging request/response MCP tools onto the shared multi-client `TerminalService` (a `pyte` screen powers `read_screen`). Because the agent is "just another client", a human co-views and can take over the agent's shell for free.
+
+**Discovery:** `GET /.well-known/mcp.json` (and `/.well-known/mcp/server.json`) serves the machine-readable MCP `server.json` descriptor (name/version/`remotes`→`/mcp`) that capable clients auto-detect; `GET /llms.txt` serves human/agent-readable usage; and the `/` response carries a `Link:` header (plus an inert `<link rel="alternate">`) pointing at both - all invisible to humans. Tool descriptions live once in `AGENT_TOOLS` (`mcp_adapter.py`) and render into both `tools/list` and `/llms.txt`.
+
+See [agent-access.md](agent-access.md) and the [design spec](superpowers/specs/2026-06-24-agent-terminal-access-design.md).
 
 ## Frontend Architecture
 

@@ -1,11 +1,13 @@
 """Composition root - the ONLY place where dependencies are wired."""
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 
 import yaml
 
 from porterminal.application.services import (
+    AgentTerminalService,
     ManagementService,
     SessionService,
     TabService,
@@ -19,10 +21,12 @@ from porterminal.domain import (
     ShellCommand,
     TabLimitChecker,
     TerminalDimensions,
+    UserId,
 )
 from porterminal.infrastructure.config import ConfigService, ShellDetector
 from porterminal.infrastructure.registry import UserConnectionRegistry
 from porterminal.infrastructure.repositories import InMemorySessionRepository, InMemoryTabRepository
+from porterminal.infrastructure.web import AgentSessionConnection
 
 
 def create_pty_factory(
@@ -200,12 +204,29 @@ def create_container(
                 return shell
         return shells[0] if shells else None
 
+    default_dimensions = TerminalDimensions(default_cols, default_rows)
+
     management_service = ManagementService(
         session_service=session_service,
         tab_service=tab_service,
         connection_registry=connection_registry,
         shell_provider=get_shell,
-        default_dimensions=TerminalDimensions(default_cols, default_rows),
+        default_dimensions=default_dimensions,
+    )
+
+    # Agent (MCP) terminal access. Agent sessions are created under the same
+    # owner identity the phone uses ("local-user" in the default no-auth case)
+    # so they appear as robot-badged tabs on the user's phone.
+    agent_terminal_service = AgentTerminalService(
+        session_service=session_service,
+        tab_service=tab_service,
+        terminal_service=terminal_service,
+        connection_registry=connection_registry,
+        connection_factory=lambda cols, rows: AgentSessionConnection(cols, rows),
+        shell_provider=get_shell,
+        default_dimensions=default_dimensions,
+        owner_user_id=UserId("local-user"),
+        reap_interval=float(os.environ.get("PORTERMINAL_AGENT_REAP_INTERVAL", "20")),
     )
 
     return Container(
@@ -213,6 +234,7 @@ def create_container(
         tab_service=tab_service,
         terminal_service=terminal_service,
         management_service=management_service,
+        agent_terminal_service=agent_terminal_service,
         session_repository=session_repository,
         tab_repository=tab_repository,
         connection_registry=connection_registry,

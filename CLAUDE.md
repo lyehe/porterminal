@@ -54,6 +54,10 @@ Two separate WebSocket connections:
 - `/ws/management` - Control plane: tab create/close/rename, state sync, auth
 - `/ws?tab_id=...&session_id=...` - Data plane: binary terminal I/O, resize
 
+### Agent (MCP) Access
+
+A third entry point for AI agents: `/mcp` (FastMCP Streamable HTTP) exposes `run_command`, `read_screen`, `send_keys`, `send_signal`. `GET /llms.txt` serves agent usage instructions, discoverable from the base URL via a `Link:` header + an inert `<link>` in the page head. Tool descriptions are centralized in `AGENT_TOOLS` (`porterminal/infrastructure/web/mcp_adapter.py`) so `/llms.txt` and `tools/list` never drift. See `docs/agent-access.md`.
+
 ### Key Files
 
 - `porterminal/composition.py` - Dependency injection wiring (composition root)

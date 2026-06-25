@@ -15,14 +15,22 @@
 
 
 <p align="center">
+  <b>A web terminal you reach from your phone — or hand to an AI agent.</b><br>
+  One command, one URL.
+</p>
+
+<p align="center">
   <b>1.</b> <code>uvx ptn</code><br>
-  <b>2.</b> Scan the QR<br>
-  <b>3.</b> Access your terminal from your phone<br>
+  <b>2.</b> Scan the QR from your phone — or give the URL to an AI agent (MCP)<br>
+  <b>3.</b> Drive your terminal from anywhere<br>
 </p>
 
 <p align="center">
   <img src="assets/demo.gif" alt="Porterminal demo" width="320">
 </p>
+
+> [!WARNING]
+> **That URL is full access to this computer.** Anyone — or any AI agent — you hand it to gets a real shell on your machine, no password. That's the whole point, but it's dangerously easy to give an agent more than you meant to. Treat the URL like a secret, only share it with people and agents you trust, and read [Security](#security) before you point it at anything important.
 
 ## Why
 
@@ -40,6 +48,7 @@ So I built something simpler: **run a command, scan a QR, start typing.**
 - **Persistent multi-tab sessions** - Sessions survive disconnects. Close the browser, switch networks, reconnect from another device—your shell and running processes are still there. Multiple devices can view the same session simultaneously.
 - **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish, Nushell, and any shell via `$SHELL`). Auto-detects your shells.
 - **Private by default** - The secret tunnel URL never sits on screen, so it's safe to screen-share or screenshot the QR. Press `c` to copy the URL when you need it.
+- **Agent-ready (MCP)** - The same URL an AI agent can drive: an MCP terminal at `/mcp` lets any MCP client run commands, read the screen, and answer prompts. Agents discover how to use it from `/llms.txt`. See [Agent access (MCP)](#agent-access-mcp).
 
 ## Install
 
@@ -74,12 +83,32 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-sp, --save-password` | Save or clear password in config |
 | `-tp, --toggle-password` | Set password requirement (on/off/toggle) |
 | `-v, --verbose` | Show detailed startup logs |
-| `-i, --init` | Create `.ptn/ptn.yaml` config (`-i ""` for auto-discovery, or `-i URL/PATH`) |
+| `-i, --init` | Create `.ptn/ptn.yaml` with auto-discovered project scripts as buttons |
+| `-if, --init-from URL/PATH` | Create `.ptn/ptn.yaml` from a URL or local file |
 | `-c, --compose` | Enable compose mode by default |
+| `-k, --keep-qr` | Keep the QR code visible after the first connection |
 | `-u, --check-update` | Check if a newer version is available |
 | `-V, --version` | Show version |
 
 **While running:** with a tunnel active, the connection URL is hidden on screen for privacy — press **`c`** to copy it to your clipboard, or scan the QR to connect. `Ctrl+C` stops the server.
+
+## Agent access (MCP)
+
+The same URL also works for AI agents. Porterminal serves a Model Context Protocol (MCP) terminal at **`<url>/mcp`** (Streamable HTTP) — point any MCP-capable client (Claude, Cursor, etc.) at it and the agent gets its own persistent shell, shown as a 🤖 tab you can watch and take over from your phone.
+
+Hand the agent the tunnel URL. MCP clients can auto-discover the server from **`<url>/.well-known/mcp.json`** (the MCP `server.json` descriptor), and there's a human/agent-readable **`<url>/llms.txt`** with usage — both linked invisibly from the page, so the human UI is unchanged. Example client config:
+
+```json
+{
+  "mcpServers": {
+    "porterminal": { "url": "https://<your-tunnel>.trycloudflare.com/mcp" }
+  }
+}
+```
+
+Tools: `run_command` (clean output + exit code), `read_screen`, `send_keys`, `send_signal` (Ctrl-C / EOF).
+
+> **Security:** like the human terminal, the only protection is the secret tunnel URL — anyone (or any agent) with it gets full, non-elevated shell access. If you need real auth, use a different tool. See [docs/agent-access.md](docs/agent-access.md).
 
 ## Mobile Gestures
 
@@ -101,7 +130,7 @@ ptn ~/projects/myapp   # Start in specific folder
 Run `ptn --init` to create a starter config. It auto-discovers project scripts from `package.json`, `pyproject.toml`, or `Makefile` and adds them as buttons:
 
 ```bash
-ptn -i ""
+ptn -i
 # Created: .ptn/ptn.yaml
 # Discovered 3 project script(s): build, dev, test
 ```
@@ -146,7 +175,7 @@ Config is searched in order: `$PORTERMINAL_CONFIG_PATH`, `./ptn.yaml`, `./.ptn/p
 
 ## Security
 
-Protect your terminal with a password:
+**There's no password by default** — the only thing stopping anyone is that they can't guess the random tunnel URL. Anyone (or any AI agent) who gets it has a full shell on your machine. Don't expose anything you wouldn't hand to a stranger, and set a password for anything sensitive:
 
 **From the UI:** Open Settings (gear icon) and use the Security section to set/change password and toggle password requirement. Changes require server restart.
 

@@ -30,7 +30,7 @@
 </p>
 
 > [!WARNING]
-> **The URL is full, unauthenticated access to this computer.** Whoever — or whatever AI agent — you hand it to gets a real shell on your machine. That power is the whole point, and it is *dangerously simple* to give an agent more than you intended. There is no auth by default: treat the URL like a password, share it only with people and agents you trust, and read [Security](#security) before exposing anything sensitive.
+> **That URL is full access to this computer.** Anyone — or any AI agent — you hand it to gets a real shell on your machine, no password. That's the whole point, but it's dangerously easy to give an agent more than you meant to. Treat the URL like a secret, only share it with people and agents you trust, and read [Security](#security) before you point it at anything important.
 
 ## Why
 
@@ -175,7 +175,7 @@ Config is searched in order: `$PORTERMINAL_CONFIG_PATH`, `./ptn.yaml`, `./.ptn/p
 
 ## Security
 
-**By default there is no authentication** — the only thing protecting your machine is that nobody can guess the random tunnel URL. Anyone, or any AI agent, that gets the URL has a full, non-elevated shell. Don't expose anything you wouldn't hand to a stranger, and add a password for anything sensitive:
+**There's no password by default** — the only thing stopping anyone is that they can't guess the random tunnel URL. Anyone (or any AI agent) who gets it has a full shell on your machine. Don't expose anything you wouldn't hand to a stranger, and set a password for anything sensitive:
 
 **From the UI:** Open Settings (gear icon) and use the Security section to set/change password and toggle password requirement. Changes require server restart.
 

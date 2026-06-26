@@ -62,6 +62,11 @@ export function createUpdateOverlay(): UpdateOverlay {
 
     return {
         show(info: UpdateInfo): void {
+            if (!info.updateAvailable) {
+                this.hide();
+                return;
+            }
+
             if (info.updateAvailable) {
                 // Update available state
                 overlay?.classList.remove('up-to-date');
@@ -76,16 +81,6 @@ export function createUpdateOverlay(): UpdateOverlay {
                 if (instructionsEl) instructionsEl.style.display = '';
                 if (commandEl) commandEl.textContent = info.upgradeCommand || '';
                 currentCommand = info.upgradeCommand || '';
-            } else {
-                // Up to date state
-                overlay?.classList.add('up-to-date');
-                if (iconEl) iconEl.textContent = '✓';
-                if (titleEl) titleEl.textContent = 'ptn is up to date';
-                if (currentEl) currentEl.textContent = `v${info.currentVersion}`;
-                if (arrowEl) arrowEl.style.display = 'none';
-                if (latestEl) latestEl.style.display = 'none';
-                if (instructionsEl) instructionsEl.style.display = 'none';
-                currentCommand = '';
             }
             overlay?.classList.remove('hidden');
         },
@@ -95,17 +90,17 @@ export function createUpdateOverlay(): UpdateOverlay {
         },
 
         setup(): void {
-            // Click anywhere on overlay to close
+            // Click anywhere on overlay/content to close. The copy button has
+            // its own handler and keeps the notice open long enough to confirm.
             overlay?.addEventListener('click', () => {
                 overlay?.classList.add('hidden');
             });
 
-            // Prevent closing when clicking on content (except copy button has its own handler)
             content?.addEventListener('click', (e) => {
-                // Only stop propagation if not clicking copy button
-                if (e.target !== copyBtn) {
-                    e.stopPropagation();
+                if (e.target === copyBtn) {
+                    return;
                 }
+                overlay?.classList.add('hidden');
             });
 
             // Copy button

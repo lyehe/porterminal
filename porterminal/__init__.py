@@ -24,6 +24,7 @@ from threading import Event, Thread
 from rich.console import Console
 
 from porterminal.cli import (
+    build_agent_share_text,
     copy_to_clipboard,
     display_startup_screen,
     parse_args,
@@ -327,7 +328,7 @@ def main() -> int:
     connected_event = Event()
     url_visibility_event = Event()  # Set when visibility should change
     url_visible = [True]  # Mutable container for visibility state
-    copy_event = Event()  # Set when the 'c' hotkey copies the URL
+    copy_event = Event()  # Set when a copy hotkey copies sharing text
     copy_feedback: list[str | None] = [None]  # Feedback line, shown until next redraw
 
     def signal_handler(signum: int, frame: object) -> None:
@@ -343,11 +344,21 @@ def main() -> int:
     def handle_copy() -> None:
         # Runs on the key-listener thread. On failure, reveal the URL inline so
         # it's still recoverable even though it's normally hidden.
-        if copy_to_clipboard(display_url):
-            copy_feedback[0] = "[green]✓ URL copied to clipboard[/green]"
+        if copy_to_clipboard(build_agent_share_text(display_url)):
+            copy_feedback[0] = "[green]Copied agent-ready instructions + URL[/green]"
         else:
             copy_feedback[0] = (
-                f"[yellow]⚠ Clipboard unavailable:[/yellow] [cyan]{display_url}[/cyan]"
+                f"[yellow]Clipboard unavailable:[/yellow] [cyan]{display_url}[/cyan]"
+            )
+        copy_event.set()
+
+    def handle_copy_url() -> None:
+        # Bare URL escape hatch for humans/tools that do not want instructions.
+        if copy_to_clipboard(display_url):
+            copy_feedback[0] = "[green]URL copied to clipboard[/green]"
+        else:
+            copy_feedback[0] = (
+                f"[yellow]Clipboard unavailable:[/yellow] [cyan]{display_url}[/cyan]"
             )
         copy_event.set()
 
@@ -362,9 +373,11 @@ def main() -> int:
     if tunnel_process is not None:
         Thread(target=drain_process_output, args=(tunnel_process,), daemon=True).start()
 
-    # Listen for the 'c' hotkey to copy the URL (foreground interactive only)
+    # Listen for copy hotkeys (foreground interactive only).
     listener_thread = (
-        start_key_listener(shutdown_event, {"c": handle_copy}) if interactive else None
+        start_key_listener(shutdown_event, {"c": handle_copy, "u": handle_copy_url})
+        if interactive
+        else None
     )
 
     # qr_hidden = "auto-hide-on-connect is disabled or already handled" - distinct

@@ -88,6 +88,7 @@ class _AgentSession:
     task: asyncio.Task
     shell_id: str
     lock: asyncio.Lock
+    reap_on_disconnect: bool = True
     last_used: float = 0.0
 
 
@@ -126,7 +127,9 @@ class AgentTerminalService:
     # Session lifecycle
     # ------------------------------------------------------------------
 
-    async def ensure_session(self, mcp_session_id: str) -> _AgentSession:
+    async def ensure_session(
+        self, mcp_session_id: str, *, reap_on_disconnect: bool = True
+    ) -> _AgentSession:
         """Get (or lazily create) the agent's PTY session + tab."""
         now = asyncio.get_running_loop().time()
         existing = self._by_mcp.get(mcp_session_id)
@@ -175,6 +178,7 @@ class AgentTerminalService:
                 task=task,
                 shell_id=shell.id,
                 lock=asyncio.Lock(),
+                reap_on_disconnect=reap_on_disconnect,
                 last_used=now,
             )
             self._by_mcp[mcp_session_id] = rec
@@ -263,7 +267,7 @@ class AgentTerminalService:
         stale = [
             mcp_id
             for mcp_id, rec in list(self._by_mcp.items())
-            if (live is not None and mcp_id not in live)
+            if (live is not None and rec.reap_on_disconnect and mcp_id not in live)
             or self._pty_dead(rec)
             or (now - rec.last_used) > self._max_idle
         ]
@@ -276,9 +280,14 @@ class AgentTerminalService:
     # ------------------------------------------------------------------
 
     async def run_command(
-        self, mcp_session_id: str, command: str, timeout: float = _DEFAULT_TIMEOUT
+        self,
+        mcp_session_id: str,
+        command: str,
+        timeout: float = _DEFAULT_TIMEOUT,
+        *,
+        reap_on_disconnect: bool = True,
     ) -> dict:
-        rec = await self.ensure_session(mcp_session_id)
+        rec = await self.ensure_session(mcp_session_id, reap_on_disconnect=reap_on_disconnect)
         timeout = min(max(float(timeout), 1.0), _MAX_TIMEOUT)
 
         async with rec.lock:
@@ -322,8 +331,8 @@ class AgentTerminalService:
                     }
                 await conn.wait_for_output(remaining)
 
-    async def read_screen(self, mcp_session_id: str) -> dict:
-        rec = await self.ensure_session(mcp_session_id)
+    async def read_screen(self, mcp_session_id: str, *, reap_on_disconnect: bool = True) -> dict:
+        rec = await self.ensure_session(mcp_session_id, reap_on_disconnect=reap_on_disconnect)
         # Let any in-flight output finish rendering so we never snapshot
         # mid-draw or return a blank screen right after a send_keys.
         await self._settle(rec.conn, idle=0.15, max_wait=0.6)
@@ -333,13 +342,17 @@ class AgentTerminalService:
             "cursor": {"row": row, "col": col},
         }
 
-    async def send_keys(self, mcp_session_id: str, text: str) -> dict:
-        rec = await self.ensure_session(mcp_session_id)
+    async def send_keys(
+        self, mcp_session_id: str, text: str, *, reap_on_disconnect: bool = True
+    ) -> dict:
+        rec = await self.ensure_session(mcp_session_id, reap_on_disconnect=reap_on_disconnect)
         await rec.conn.push_input(text.encode("utf-8"))
         return {"ok": True}
 
-    async def send_signal(self, mcp_session_id: str, signal: str) -> dict:
-        rec = await self.ensure_session(mcp_session_id)
+    async def send_signal(
+        self, mcp_session_id: str, signal: str, *, reap_on_disconnect: bool = True
+    ) -> dict:
+        rec = await self.ensure_session(mcp_session_id, reap_on_disconnect=reap_on_disconnect)
         byte = {"int": b"\x03", "eof": b"\x04"}.get(signal.lower())
         if byte is None:
             return {"ok": False, "error": f"Unknown signal: {signal}"}

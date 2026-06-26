@@ -44,12 +44,14 @@ import { createDisconnectOverlay } from '@/ui/DisconnectOverlay';
 import { createAuthOverlay } from '@/ui/AuthOverlay';
 import { createConnectionStatus } from '@/ui/ConnectionStatus';
 import { createTextViewOverlay } from '@/ui/TextViewOverlay';
+import { createTerminalScreenMirror } from '@/ui/TerminalScreenMirror';
 import { createUpdateOverlay } from '@/ui/UpdateOverlay';
 import { createSettingsOverlay } from '@/ui/SettingsOverlay';
 import { renderToolbar } from '@/ui/Toolbar';
 
 // Storage
 import { getSavedPassword, savePassword, clearPassword, getDisabledButtons } from '@/utils/storage';
+import { buildAgentShareText, currentBaseUrl } from '@/utils/share';
 
 // Types
 import type { AppConfig, ButtonConfig, ButtonSend, SwipeDirection, Tab } from '@/types';
@@ -186,6 +188,7 @@ async function init(): Promise<void> {
     const disconnectOverlay = createDisconnectOverlay();
     const authOverlay = createAuthOverlay();
     const textViewOverlay = createTextViewOverlay();
+    const terminalScreenMirror = createTerminalScreenMirror();
     const updateOverlay = createUpdateOverlay();
     const settingsOverlay = createSettingsOverlay();
 
@@ -310,6 +313,29 @@ async function init(): Promise<void> {
             },
         }
     );
+
+    const mirrorDisposables = new Map<number, { dispose: () => void }>();
+
+    eventBus.on('tab:created', ({ tab }) => {
+        mirrorDisposables.set(tab.id, tab.term.onRender(() => {
+            if (tab.id === tabService.activeTabId) {
+                terminalScreenMirror.update(tab.term);
+            }
+        }));
+        if (tab.id === tabService.activeTabId || tabService.activeTabId === null) {
+            terminalScreenMirror.update(tab.term);
+        }
+    });
+
+    eventBus.on('tab:switched', ({ tab }) => {
+        terminalScreenMirror.update(tab.term);
+    });
+
+    eventBus.on('tab:closed', ({ tabId }) => {
+        mirrorDisposables.get(tabId)?.dispose();
+        mirrorDisposables.delete(tabId);
+        terminalScreenMirror.update(tabService.activeTab?.term ?? null);
+    });
 
     // Helper to send input to active tab
     const sendToActiveTab = (data: string): void => {
@@ -494,6 +520,9 @@ async function init(): Promise<void> {
 
     // Setup tool buttons
     setupToolButtons(inputHandler);
+
+    // Setup agent share button
+    setupShareAgentButton(clipboardManager);
 
     // Setup shutdown button
     setupShutdownButton(disconnectOverlay);
@@ -819,6 +848,25 @@ function setupTapButton(
 
 function setupPasteButton(doPaste: () => Promise<void>): void {
     setupTapButton('btn-paste', doPaste);
+}
+
+function setupShareAgentButton(clipboardManager: ReturnType<typeof createClipboardManager>): void {
+    setupTapButton('btn-share-agent', () => {
+        const btn = document.getElementById('btn-share-agent');
+        const status = document.getElementById('share-agent-status');
+        const text = buildAgentShareText(currentBaseUrl());
+        const copied = clipboardManager.copy(text, 'agentShare');
+
+        if (status) {
+            status.textContent = copied
+                ? 'Agent share link copied'
+                : 'Agent share link was not copied';
+        }
+        if (btn) {
+            btn.classList.toggle('copied', copied);
+            window.setTimeout(() => btn.classList.remove('copied'), 1500);
+        }
+    }, { preventDefault: false });
 }
 
 function setupToolButtons(

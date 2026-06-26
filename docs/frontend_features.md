@@ -293,7 +293,30 @@ Location: `frontend/src/clipboard/ClipboardManager.ts`
 
 ---
 
-## 15. Typed Event Bus
+## 15. Agent Sharing & Browser Fallback
+
+Locations:
+- `frontend/src/utils/share.ts`
+- `frontend/src/ui/TerminalScreenMirror.ts`
+- `frontend/src/terminal/TerminalText.ts`
+
+The top-right agent share button copies an agent-ready message containing the
+current base URL, `/mcp`, `/api/agent/run`, and `/llms.txt`. It uses
+`ClipboardManager`, so the iOS fallback path works on phones.
+
+The base page also exposes browser-agent guidance and a hidden accessibility
+mirror of the active terminal screen:
+
+- `#agent-instructions` tells agents to prefer `/mcp`, read `/llms.txt`, or use
+  the browser fallback.
+- `#terminal-screen-text` is updated from the active xterm buffer and labeled
+  **Terminal screen** for accessibility snapshots.
+- The xterm helper textarea is labeled **Terminal input** with command-entry
+  instructions.
+
+---
+
+## 16. Typed Event Bus
 
 Location: `frontend/src/core/events.ts`
 
@@ -316,7 +339,7 @@ Features:
 
 ---
 
-## 16. Password Storage
+## 17. Password Storage
 
 Location: `frontend/src/utils/storage.ts`
 

@@ -309,6 +309,7 @@ html, body {
 }
 
 #btn-compose,
+#btn-share-agent,
 #btn-settings,
 #btn-info,
 #btn-textview,
@@ -332,10 +333,16 @@ html, body {
 }
 
 #btn-compose:active,
+#btn-share-agent:active,
 #btn-settings:active,
 #btn-info:active,
 #btn-textview:active {
     color: var(--color-accent);
+}
+
+#btn-share-agent.copied {
+    color: var(--color-success-text);
+    text-shadow: var(--glow-success);
 }
 
 #btn-compose {
@@ -1563,31 +1570,28 @@ html, body {
 /* ========== UPDATE OVERLAY ========== */
 #update-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--overlay-bg);
+    top: 12px;
+    right: 12px;
+    background: transparent;
     z-index: 1002;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    cursor: pointer;
+    padding: 0;
+    cursor: default;
+    pointer-events: none;
 }
 
 #update-content {
     position: relative;
     background: var(--bg-elevated);
     border: 1px solid var(--border-light);
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-lg);
     max-width: 340px;
-    width: 100%;
-    padding: 24px 20px;
+    width: calc(100vw - 24px);
+    padding: 16px;
     box-shadow: var(--shadow-elevated);
     animation: helpAppear var(--transition-fast);
     text-align: center;
-    cursor: default;
+    cursor: pointer;
+    pointer-events: auto;
 }
 
 #update-icon {
@@ -1690,7 +1694,25 @@ html, body {
     margin-top: 8px;
 }
 
+@media (min-width: 420px) {
+    #update-content {
+        width: 340px;
+    }
+}
+
 /* ========== UTILITIES ========== */
+.sr-only {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: pre-wrap !important;
+    border: 0 !important;
+}
+
 .hidden {
     display: none !important;
 }

@@ -15,7 +15,7 @@
 
 
 <p align="center">
-  <b>Hand a computer to an AI agent, and watch it work live in your browser.</b><br>
+  <b>Hand a computer to an agent, full control, and watch it.</b><br>
   One command, one URL. (Also a slick terminal for your own phone.)
 </p>
 
@@ -44,13 +44,13 @@ Then it clicked: the same trick (one command, one URL) is the easiest way to giv
 
 ## Features
 
-- **Hand a computer to an agent, and watch it** - Give an AI agent the URL and it gets a real terminal on the machine (any MCP client: Claude, Cursor, ...). Open the same session in any browser to watch it work live, and grab the keyboard whenever you want. No MCP server to write, no keys, no Docker. The agent learns how from `/llms.txt` and `/.well-known/mcp.json`. See [Agent access (MCP)](#agent-access-mcp).
+- **Hand a computer to an agent, full control, and watch it** - Give an AI agent the URL and it gets a real terminal on the machine via MCP or plain REST. Open the same session in any browser to watch it work live, and grab the keyboard whenever you want. No keys, no Docker. The agent learns how from `/llms.txt` and `/.well-known/mcp.json`. See [Agent access](#agent-access-mcp--rest).
 - **One command, instant access** - `uvx ptn` and you (or an agent) get a real terminal on this machine. No SSH, no port forwarding, no config files. Cloudflare tunnel + QR code.
 - **Actually usable on mobile** - Touch-optimized with momentum scrolling, pinch-to-zoom, swipe gestures, and modifier keys (Ctrl, Alt).
 - **Full terminal apps** - vim, htop, less, tmux all work correctly with proper alt-screen buffer handling.
 - **Persistent multi-tab sessions** - Sessions survive disconnects. Close the browser, switch networks, reconnect from another device, and your shell and running processes are still there. You and an agent can share one session: watch it work, or take over.
 - **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish, Nushell, and any shell via `$SHELL`). Auto-detects your shells.
-- **Private by default** - The secret tunnel URL never sits on screen, so it's safe to screen-share or screenshot the QR. Press `c` to copy the URL when you need it.
+- **Private by default** - The secret tunnel URL never sits on screen, so it's safe to screen-share or screenshot the QR. Press `c` to copy agent-ready sharing instructions, or `u` for the bare URL.
 
 ## Install
 
@@ -92,13 +92,13 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-u, --check-update` | Check if a newer version is available |
 | `-V, --version` | Show version |
 
-**While running:** with a tunnel active, the connection URL is hidden on screen for privacy. Press **`c`** to copy it to your clipboard, or scan the QR to connect. `Ctrl+C` stops the server.
+**While running:** with a tunnel active, the connection URL is hidden on screen for privacy. Press **`c`** to copy a short agent-ready share message containing the URL, `/mcp`, `/api/agent/run`, and `/llms.txt`; press **`u`** to copy only the bare URL; or scan the QR to connect. `Ctrl+C` stops the server.
 
-## Agent access (MCP)
+## Agent access (MCP + REST)
 
-The same URL also works for AI agents. Porterminal serves a Model Context Protocol (MCP) terminal at **`<url>/mcp`** (Streamable HTTP). Point any MCP-capable client (Claude, Cursor, etc.) at it and the agent gets its own persistent shell, shown as a 🤖 tab you can watch and take over from your phone.
+The same URL also works for AI agents. MCP-capable clients can use **`<url>/mcp`** (Streamable HTTP) for native typed tools. Agents that cannot register an MCP server can use the REST fallback at **`<url>/api/agent/run`** with ordinary HTTP requests. Either path creates a persistent agent shell, shown as a 🤖 tab you can watch and take over from your phone.
 
-Hand the agent the tunnel URL. MCP clients can auto-discover the server from **`<url>/.well-known/mcp.json`** (the MCP `server.json` descriptor), and there's a human/agent-readable **`<url>/llms.txt`** with usage. Both are linked invisibly from the page, so the human UI is unchanged. Example client config:
+Hand the agent the tunnel URL. MCP clients can auto-discover the server from **`<url>/.well-known/mcp.json`** (the MCP `server.json` descriptor), and there's a human/agent-readable **`<url>/llms.txt`** with usage. The base page also includes accessibility-visible hints for browser-driving agents, while the human UI stays compact. Example client config:
 
 ```json
 {
@@ -108,7 +108,19 @@ Hand the agent the tunnel URL. MCP clients can auto-discover the server from **`
 }
 ```
 
-Tools: `run_command` (clean output + exit code), `read_screen`, `send_keys`, `send_signal` (Ctrl-C / EOF).
+MCP tools: `run_command` (clean output + exit code), `read_screen`, `send_keys`, `send_signal` (Ctrl-C / EOF).
+
+REST fallback:
+
+```bash
+curl -s -X POST https://<your-tunnel>.trycloudflare.com/api/agent/run \
+  -H "content-type: application/json" \
+  -d '{"command":"echo hello","timeout":30}'
+```
+
+The response includes a `session_id`; reuse it with `/api/agent/screen`, `/api/agent/keys`, `/api/agent/signal`, and `DELETE /api/agent/session`.
+
+When you open Porterminal on your phone, the top-right copy button copies the same agent-ready share text. Browser-only agents also get a fallback on the base page: a DOM-readable **Terminal screen** mirror and a clearly labeled **Terminal input**.
 
 > **Security:** like the human terminal, the only protection is the secret tunnel URL: anyone (or any agent) with it gets full, non-elevated shell access. If you need real auth, use a different tool. See [docs/agent-access.md](docs/agent-access.md).
 

@@ -60,7 +60,7 @@ function configureTerminalTextarea(textarea: HTMLTextAreaElement): void {
     textarea.setAttribute('inputmode', 'text');
     textarea.setAttribute('enterkeyhint', 'send');
     textarea.setAttribute('role', 'textbox');
-    textarea.setAttribute('aria-label', 'Terminal input');
+    textarea.setAttribute('aria-label', 'Terminal input. Type commands here and press Enter.');
     textarea.setAttribute('aria-multiline', 'false');
     textarea.removeAttribute('aria-hidden');
 

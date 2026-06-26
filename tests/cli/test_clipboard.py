@@ -4,6 +4,7 @@ import subprocess
 
 from porterminal.cli import clipboard
 from porterminal.cli.clipboard import copy_to_clipboard
+from porterminal.cli.share import build_agent_share_text
 
 
 class TestCopyToClipboard:
@@ -85,3 +86,25 @@ class TestCopyToClipboard:
         monkeypatch.setattr(clipboard.subprocess, "run", fake_run)
 
         assert copy_to_clipboard("text") is False
+
+
+class TestAgentShareText:
+    """Tests for the agent-ready text copied by the `c` hotkey."""
+
+    def test_includes_base_url_mcp_and_llms(self):
+        url = "https://example.trycloudflare.com"
+        text = build_agent_share_text(url)
+
+        assert "Use this Porterminal link to control the remote computer:" in text
+        assert url in text
+        assert f"{url}/mcp" in text
+        assert f"{url}/api/agent/run" in text
+        assert f"{url}/llms.txt" in text
+        assert "AI agents: prefer MCP" in text
+
+    def test_trims_trailing_slash_before_endpoint_paths(self):
+        text = build_agent_share_text("https://example.trycloudflare.com/")
+
+        assert "https://example.trycloudflare.com/mcp" in text
+        assert "https://example.trycloudflare.com/api/agent/run" in text
+        assert "https://example.trycloudflare.com//mcp" not in text

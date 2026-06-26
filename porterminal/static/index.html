@@ -5,42 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Terminal">
+    <meta name="apple-mobile-web-app-title" content="Porterminal">
     <meta name="theme-color" content="#1e1e1e">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="application-name" content="Terminal">
+    <meta name="application-name" content="Porterminal">
     <meta name="msapplication-TileColor" content="#1e1e1e">
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="format-detection" content="telephone=no">
-    <title>Terminal</title>
+    <title>Porterminal Remote Computer</title>
 
     <!-- Icons (PWA disabled - not useful for tunnel-based access) -->
     <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
 
     <!-- AI agents: this host runs an MCP terminal at /mcp. Usage: /llms.txt -->
     <link rel="alternate" type="text/markdown" href="/llms.txt" title="AI agent instructions">
-  <script type="module" crossorigin src="/static/assets/app-Cbf-RCc9.js"></script>
-  <link rel="stylesheet" crossorigin href="/static/assets/app-Bssty2fY.css">
+  <script type="module" crossorigin src="/static/assets/app-COdhoFif.js"></script>
+  <link rel="stylesheet" crossorigin href="/static/assets/app-DzUJe-4Z.css">
 </head>
 <body>
     <div id="app">
+        <div id="agent-instructions" class="sr-only">
+            Porterminal remote computer. AI agents should use /mcp for reliable terminal control.
+            If MCP is unavailable, use /api/agent/run. Read /llms.txt for instructions.
+            Browser fallback: read Terminal screen and type commands into Terminal input.
+        </div>
+
         <!-- Tab Bar with Shell Selector -->
         <div id="tab-bar">
             <span id="connection-dot"></span>
-            <button id="btn-textview" title="Plain Text View">TXT</button>
+            <button id="btn-textview" title="Plain Text View" aria-label="Open plain text terminal screen">TXT</button>
             <!-- Tabs rendered by JS -->
             <div id="shell-selector">
-                <select id="shell-select"><option>...</option></select>
-                <button id="btn-compose" title="Compose Mode">▤</button>
-                <button id="btn-settings" title="Settings">☰</button>
-                <button id="btn-info" title="Help">ⓘ</button>
-                <button id="btn-shutdown" title="Shutdown">⏻</button>
+                <select id="shell-select" aria-label="Shell selector"><option>...</option></select>
+                <button id="btn-compose" title="Compose Mode" aria-label="Compose command before sending to terminal">▤</button>
+                <button id="btn-share-agent" title="Copy agent share link" aria-label="Copy agent share link">⎘</button>
+                <span id="share-agent-status" class="sr-only" aria-live="polite"></span>
+                <button id="btn-settings" title="Settings" aria-label="Open settings">☰</button>
+                <button id="btn-info" title="Help" aria-label="Open help">ⓘ</button>
+                <button id="btn-shutdown" title="Shutdown" aria-label="Shutdown server and tunnel">⏻</button>
             </div>
         </div>
 
         <!-- Terminal Area -->
         <div id="terminal-container">
             <div id="terminal"></div>
+            <pre id="terminal-screen-text" class="sr-only" role="log" aria-label="Terminal screen" aria-live="polite"></pre>
         </div>
 
         <!-- Compose Input (hidden by default) -->
@@ -49,7 +58,7 @@
                 <textarea id="compose-textarea" rows="1"></textarea>
                 <span id="compose-placeholder" class="rainbow-text">Compose...</span>
             </div>
-            <button id="compose-send" title="Send to terminal">➤</button>
+            <button id="compose-send" title="Send to terminal" aria-label="Send composed text to terminal">➤</button>
         </div>
 
         <!-- Bottom Toolbar - Two rows -->

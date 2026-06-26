@@ -323,15 +323,18 @@ With Cloudflare Access enabled:
 
 Shell detection uses platform-specific methods (registry on Windows, `/etc/shells` on Unix).
 
-## Agent (MCP) Access
+## Agent Access (MCP + REST)
 
-A third entry point, alongside the two human WebSockets, lets AI agents drive the terminal over the [Model Context Protocol](https://modelcontextprotocol.io):
+Agent routes, alongside the two human WebSockets, let AI agents drive the terminal over the [Model Context Protocol](https://modelcontextprotocol.io) or a plain REST fallback:
 
 - **`/mcp`** - a FastMCP **Streamable HTTP** server (`infrastructure/web/mcp_adapter.py`), mounted on the FastAPI app and run from the app lifespan. Tools: `run_command`, `read_screen`, `send_keys`, `send_signal`.
-- **`AgentTerminalService`** (`application/services/agent_terminal_service.py`) maps one MCP session to a dedicated PTY session + 🤖 tab, and reaps it when the client disconnects.
+- **`/api/agent/*`** - REST endpoints for agents that can make HTTP requests but cannot register an MCP server: `run`, `screen`, `keys`, `signal`, and `session` close.
+- **`AgentTerminalService`** (`application/services/agent_terminal_service.py`) maps one MCP session or REST `session_id` to a dedicated PTY session + 🤖 tab. MCP sessions reap on client disconnect; REST sessions reap on explicit close, shell exit, or idle cleanup.
 - **`AgentSessionConnection`** (`infrastructure/web/agent_connection.py`) implements the same `ConnectionPort` the human path uses, bridging request/response MCP tools onto the shared multi-client `TerminalService` (a `pyte` screen powers `read_screen`). Because the agent is "just another client", a human co-views and can take over the agent's shell for free.
 
-**Discovery:** `GET /.well-known/mcp.json` (and `/.well-known/mcp/server.json`) serves the machine-readable MCP `server.json` descriptor (name/version/`remotes`→`/mcp`) that capable clients auto-detect; `GET /llms.txt` serves human/agent-readable usage; and the `/` response carries a `Link:` header (plus an inert `<link rel="alternate">`) pointing at both - all invisible to humans. Tool descriptions live once in `AGENT_TOOLS` (`mcp_adapter.py`) and render into both `tools/list` and `/llms.txt`.
+**Discovery:** `GET /.well-known/mcp.json` (and `/.well-known/mcp/server.json`) serves the machine-readable MCP `server.json` descriptor (name/version/`remotes` -> `/mcp`) that capable clients auto-detect; `GET /llms.txt` serves human/agent-readable usage for MCP, REST, and browser fallback; and the `/` response carries a `Link:` header plus an inert `<link rel="alternate">`. The base page also includes accessibility-visible agent guidance, a DOM mirror labeled **Terminal screen**, and a labeled **Terminal input** fallback for browser-driving agents. Tool descriptions live once in `AGENT_TOOLS` (`mcp_adapter.py`) and render into both `tools/list` and `/llms.txt`.
+
+**Sharing:** the CLI `c` hotkey and the top-right web share button copy an agent-ready message containing the base URL, `/mcp`, `/api/agent/run`, and `/llms.txt`; the CLI `u` hotkey copies the bare URL.
 
 See [agent-access.md](agent-access.md) and the [design spec](superpowers/specs/2026-06-24-agent-terminal-access-design.md).
 

@@ -17,10 +17,11 @@ class TestCopyModeRendering:
     """In copy mode the plaintext URL must never be printed."""
 
     def test_copy_mode_hides_url_and_shows_hint(self):
-        """copy_mode hides the URL and shows the 'press c to copy' hint."""
+        """copy_mode hides the URL and shows the agent-share hotkey hint."""
         out = _render(copy_mode=True)
         assert _TOKEN not in out
-        assert "copy URL" in out
+        assert "copy agent instructions" in out
+        assert "URL only" in out
 
     def test_without_copy_mode_shows_url(self):
         """Default (background / non-interactive) still prints the URL."""

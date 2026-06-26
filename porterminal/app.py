@@ -5,12 +5,14 @@ import ctypes
 import logging
 import os
 import signal
+import uuid
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from starlette.middleware.base import RequestResponseEndpoint
 
 from . import __version__
@@ -115,6 +117,37 @@ def _request_base_url(request: Request) -> str:
     return f"{scheme}://{host}"
 
 
+class AgentRunRequest(BaseModel):
+    command: str
+    timeout: float = 30
+    session_id: str | None = None
+
+
+class AgentKeysRequest(BaseModel):
+    session_id: str
+    text: str
+
+
+class AgentSignalRequest(BaseModel):
+    session_id: str
+    signal: str
+
+
+def _new_rest_agent_session_id() -> str:
+    return f"rest-{uuid.uuid4().hex}"
+
+
+def _valid_rest_agent_session_id(session_id: str | None) -> bool:
+    return bool(session_id and session_id.startswith("rest-"))
+
+
+def _bad_agent_session_id() -> JSONResponse:
+    return JSONResponse(
+        {"error": "session_id must come from a prior REST agent API response"},
+        status_code=400,
+    )
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
@@ -165,7 +198,8 @@ def create_app() -> FastAPI:
                     "Link": (
                         '</.well-known/mcp.json>; rel="alternate"; type="application/json", '
                         '</llms.txt>; rel="alternate"; type="text/markdown", '
-                        '</mcp>; rel="related"'
+                        '</mcp>; rel="related", '
+                        '</api/agent/run>; rel="related"'
                     ),
                 },
             )
@@ -190,7 +224,7 @@ def create_app() -> FastAPI:
         body = f"""# Porterminal - AI agent instructions
 
 Porterminal is a terminal on this machine. A human uses the web UI at {base}/ ;
-you (an AI agent) control a real shell over the Model Context Protocol (MCP).
+you (an AI agent) can control a real shell over MCP or the REST fallback API.
 
 ## Connect
 
@@ -215,6 +249,31 @@ Guidance: prefer `run_command` for ordinary commands (clean output + exit code).
 If it returns `status: "waiting"`, the command is interactive - use `read_screen`
 to see the prompt and `send_keys` / `send_signal` to drive it.
 
+## REST fallback
+
+Use this if your host cannot register/connect an MCP server but can make HTTP
+requests. First call `run` without a session id; reuse the returned `session_id`
+for subsequent calls:
+
+    POST {base}/api/agent/run
+    {{"command": "echo hello", "timeout": 30}}
+    -> {{"session_id": "rest-...", "status": "completed", "exit_code": 0, "output": "hello"}}
+
+    GET  {base}/api/agent/screen?session_id=rest-...
+    POST {base}/api/agent/keys    {{"session_id": "rest-...", "text": "answer\\r"}}
+    POST {base}/api/agent/signal  {{"session_id": "rest-...", "signal": "int"}}
+    DELETE {base}/api/agent/session?session_id=rest-...
+
+REST uses the same visible agent tab and shell backend as MCP. The `session_id`
+must come from a prior REST response.
+
+## Browser fallback
+
+If your environment cannot use MCP or REST, open {base}/ in a browser. Read the
+element named "Terminal screen", type commands into "Terminal input", and press
+Enter. This fallback is less reliable, but it is intentionally exposed as
+ordinary page text for browser-driving agents.
+
 ## Example
 
     run_command(command="echo hello")
@@ -222,8 +281,9 @@ to see the prompt and `send_keys` / `send_signal` to drive it.
 
 ## Notes
 
-- Each MCP connection gets its own persistent shell, shown as a tab the human
-  can watch and take over. It is cleaned up when you disconnect.
+- Each MCP or REST agent session gets its own persistent shell, shown as a tab
+  the human can watch and take over. MCP sessions are cleaned up when you
+  disconnect; REST sessions close on DELETE, shell exit, or idle cleanup.
 - Security: the URL is the only credential - there is no extra auth, and the
   shell runs non-elevated (it can't install software that requires admin).
 """
@@ -254,6 +314,82 @@ to see the prompt and `send_keys` / `send_signal` to drive it.
             "repository": {"url": "https://github.com/lyehe/porterminal", "source": "github"},
             "remotes": [{"type": "streamable-http", "url": f"{base}/mcp"}],
         }
+
+    @app.post("/api/agent/run")
+    async def agent_rest_run(body: AgentRunRequest):
+        """Run a command through the REST fallback agent API.
+
+        This is the low-friction path for agents that can make HTTP requests
+        but cannot register/connect an MCP client. It reuses the same agent
+        terminal service as /mcp, with server-minted REST session ids.
+        """
+        command = body.command.strip()
+        if not command:
+            return JSONResponse({"error": "command is required"}, status_code=400)
+
+        session_id = body.session_id or _new_rest_agent_session_id()
+        if not _valid_rest_agent_session_id(session_id):
+            return _bad_agent_session_id()
+
+        container: Container = app.state.container
+        result = await container.agent_terminal_service.run_command(
+            session_id,
+            command,
+            body.timeout,
+            reap_on_disconnect=False,
+        )
+        return {"session_id": session_id, **result}
+
+    @app.get("/api/agent/screen")
+    async def agent_rest_screen(session_id: str = Query(...)):
+        """Read the current rendered screen for a REST agent session."""
+        if not _valid_rest_agent_session_id(session_id):
+            return _bad_agent_session_id()
+
+        container: Container = app.state.container
+        result = await container.agent_terminal_service.read_screen(
+            session_id,
+            reap_on_disconnect=False,
+        )
+        return {"session_id": session_id, **result}
+
+    @app.post("/api/agent/keys")
+    async def agent_rest_keys(body: AgentKeysRequest):
+        """Send raw keystrokes to a REST agent session."""
+        if not _valid_rest_agent_session_id(body.session_id):
+            return _bad_agent_session_id()
+
+        container: Container = app.state.container
+        result = await container.agent_terminal_service.send_keys(
+            body.session_id,
+            body.text,
+            reap_on_disconnect=False,
+        )
+        return {"session_id": body.session_id, **result}
+
+    @app.post("/api/agent/signal")
+    async def agent_rest_signal(body: AgentSignalRequest):
+        """Send a control signal to a REST agent session."""
+        if not _valid_rest_agent_session_id(body.session_id):
+            return _bad_agent_session_id()
+
+        container: Container = app.state.container
+        result = await container.agent_terminal_service.send_signal(
+            body.session_id,
+            body.signal,
+            reap_on_disconnect=False,
+        )
+        return {"session_id": body.session_id, **result}
+
+    @app.delete("/api/agent/session")
+    async def agent_rest_close(session_id: str = Query(...)):
+        """Close a REST agent session and its visible agent tab."""
+        if not _valid_rest_agent_session_id(session_id):
+            return _bad_agent_session_id()
+
+        container: Container = app.state.container
+        closed = await container.agent_terminal_service.close_session(session_id)
+        return {"session_id": session_id, "closed": closed}
 
     @app.get("/health")
     async def health():

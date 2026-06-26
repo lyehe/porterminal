@@ -209,7 +209,9 @@ def display_startup_screen(
     # URL line. In copy mode the plaintext URL is never shown - the user copies
     # it with the 'c' hotkey - so the line is a hint or transient feedback.
     if copy_mode:
-        display_url = copy_status or "[dim]Press 'c' to copy URL[/dim]"
+        display_url = copy_status or (
+            "[dim]Press 'c' to copy agent instructions + URL; 'u' for URL only[/dim]"
+        )
     elif show_url:
         display_url = f"[bold cyan]{url}[/bold cyan]"
     else:

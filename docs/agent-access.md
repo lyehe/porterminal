@@ -32,9 +32,9 @@ unfurlers, and scanners.)
 
 ## Share from the CLI or phone
 
-In the foreground CLI, press **`c`** to copy an agent-ready share message with
-the base URL, the `/mcp` endpoint, the REST `/api/agent/run` endpoint, and
-`/llms.txt`. Press **`u`** to copy only the bare URL.
+In the foreground CLI, press **`c`** to copy agent instructions and URL,
+including the base URL, the `/mcp` endpoint, the REST `/api/agent/run`
+endpoint, and `/llms.txt`. Press **`u`** to copy the URL only.
 
 In the web terminal, the top-right copy button copies the same agent-ready share
 message using the current browser URL. This is the phone-friendly path when you
@@ -87,6 +87,12 @@ Endpoints:
 | `POST /api/agent/keys` | Send raw keystrokes. Body: `{ "session_id": "rest-...", "text": "answer\\r" }`. |
 | `POST /api/agent/signal` | Send `int` (Ctrl-C) or `eof`. |
 | `DELETE /api/agent/session?session_id=rest-...` | Close the REST agent shell and visible tab. |
+
+When calling REST from a local shell that pretty-prints objects, inspect the raw
+response fields for long output. For example, PowerShell table formatting can
+show `output` with an ellipsis even though the REST response still contains the
+full string. For structured or exact values, make the remote command print
+JSON/plain text, or parse the response's `output` field directly.
 
 ## Browser fallback
 

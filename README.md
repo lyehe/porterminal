@@ -50,7 +50,7 @@ Then it clicked: the same trick (one command, one URL) is the easiest way to giv
 - **Full terminal apps** - vim, htop, less, tmux all work correctly with proper alt-screen buffer handling.
 - **Persistent multi-tab sessions** - Sessions survive disconnects. Close the browser, switch networks, reconnect from another device, and your shell and running processes are still there. You and an agent can share one session: watch it work, or take over.
 - **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish, Nushell, and any shell via `$SHELL`). Auto-detects your shells.
-- **Private by default** - The secret tunnel URL never sits on screen, so it's safe to screen-share or screenshot the QR. Press `c` to copy agent-ready sharing instructions, or `u` for the bare URL.
+- **Private by default** - The secret tunnel URL never sits on screen, so it's safe to screen-share or screenshot the QR. Press `c` to copy agent instructions and URL, or `u` to copy the URL only.
 
 ## Install
 
@@ -92,7 +92,7 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-u, --check-update` | Check if a newer version is available |
 | `-V, --version` | Show version |
 
-**While running:** with a tunnel active, the connection URL is hidden on screen for privacy. Press **`c`** to copy a short agent-ready share message containing the URL, `/mcp`, `/api/agent/run`, and `/llms.txt`; press **`u`** to copy only the bare URL; or scan the QR to connect. `Ctrl+C` stops the server.
+**While running:** with a tunnel active, the connection URL is hidden on screen for privacy. Press **`c`** to copy agent instructions and URL, including `/mcp`, `/api/agent/run`, and `/llms.txt`; press **`u`** to copy the URL only; or scan the QR to connect. `Ctrl+C` stops the server.
 
 ## Agent access (MCP + REST)
 

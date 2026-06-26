@@ -123,6 +123,7 @@ async def test_llms_txt_and_discovery_hints(mcp_url):
         assert "/mcp" in body
         assert "/api/agent/run" in body
         assert "REST fallback" in body
+        assert "visually truncated" in body
         assert "Browser fallback" in body
         assert "Terminal screen" in body
         assert "Terminal input" in body

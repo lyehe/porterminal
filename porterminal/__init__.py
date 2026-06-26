@@ -345,7 +345,7 @@ def main() -> int:
         # Runs on the key-listener thread. On failure, reveal the URL inline so
         # it's still recoverable even though it's normally hidden.
         if copy_to_clipboard(build_agent_share_text(display_url)):
-            copy_feedback[0] = "[green]Copied agent-ready instructions + URL[/green]"
+            copy_feedback[0] = "[green]Copied agent instructions and URL[/green]"
         else:
             copy_feedback[0] = f"[yellow]Clipboard unavailable:[/yellow] [cyan]{display_url}[/cyan]"
         copy_event.set()

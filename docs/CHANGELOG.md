@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-26
+
+### Changed
+
+- **Startup copy hints** - Split the CLI copy instructions into separate `c`
+  and `u` lines so they stay readable beside the QR code.
+- **Agent REST guidance** - `/llms.txt` now warns agents that local shell
+  table rendering can visually truncate long REST `output` fields.
+
+### Documentation
+
+- Aligned README, architecture, and agent-access copy around the same "agent
+  instructions and URL" wording used by the CLI.
+
+### Maintenance
+
+- Ignored local `porterminal/third_party/` checkouts so scratch vendor clones do
+  not pollute `git status`.
+
 ## [0.5.3] - 2026-01-20
 
 ### Fixed
@@ -405,7 +424,8 @@ This release focuses on mobile experience improvements and robust shell support.
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/lyehe/porterminal/compare/v1.0.1...v1.0.2
 [0.5.0]: https://github.com/lyehe/porterminal/compare/v0.4.8...v0.5.0
 [0.4.8]: https://github.com/lyehe/porterminal/compare/v0.4.1...v0.4.8
 [0.4.1]: https://github.com/lyehe/porterminal/compare/v0.4.0...v0.4.1

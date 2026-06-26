@@ -33,6 +33,9 @@ TAGLINE_TERMINAL = r"""
  █  ██▄ █▀▄ █ ▀ █ █ █ ▀█ █▀█ █▄▄
 """.strip()
 
+COPY_AGENT_HINT = "Press 'c': copy agent instructions and URL"
+COPY_URL_HINT = "Press 'u': copy URL only"
+
 
 def _apply_gradient(lines: list[str], colors: list[str]) -> list[str]:
     """Apply color gradient to text lines."""
@@ -188,12 +191,11 @@ def display_startup_screen(
         is_tunnel: Whether tunnel mode is active.
         cwd: Current working directory to display.
         show_url: If True, show the QR code. If False, mask it with a spiral.
-        copy_mode: If True, the plaintext URL is never printed; the URL line
-            shows a "press c to copy" hint instead (the user copies it with the
-            'c' hotkey). The QR still follows ``show_url``.
-        copy_status: Optional line (e.g. a copy confirmation) shown in place of
-            the default hint, until the next redraw. Only used when ``copy_mode``
-            is True.
+        copy_mode: If True, the plaintext URL is never printed; the URL area
+            shows copy hotkey hints instead. The QR still follows ``show_url``.
+        copy_status: Optional message (e.g. a copy confirmation) shown in place
+            of the default hints until the next redraw. Only used when
+            ``copy_mode`` is True.
     """
     console.clear()
 
@@ -206,16 +208,14 @@ def display_startup_screen(
     else:
         right_panel = get_qr_placeholder(url)
 
-    # URL line. In copy mode the plaintext URL is never shown - the user copies
-    # it with the 'c' hotkey - so the line is a hint or transient feedback.
+    # URL area. In copy mode the plaintext URL is never shown - the user copies
+    # it with a hotkey - so this is a hint or transient feedback.
     if copy_mode:
-        display_url = copy_status or (
-            "[dim]Press 'c' to copy agent instructions + URL; 'u' for URL only[/dim]"
-        )
+        url_area = copy_status or (f"[dim]{COPY_AGENT_HINT}[/dim]\n[dim]{COPY_URL_HINT}[/dim]")
     elif show_url:
-        display_url = f"[bold cyan]{url}[/bold cyan]"
+        url_area = f"[bold cyan]{url}[/bold cyan]"
     else:
-        display_url = "[dim]Show URL via Settings (top right)[/dim]"
+        url_area = "[dim]Show URL via Settings (top right)[/dim]"
 
     # Status indicator
     if is_tunnel:
@@ -250,7 +250,7 @@ def display_startup_screen(
         f"[dim]v{__version__}[/dim]",
         "",
         status,
-        display_url,
+        url_area,
     ]
     if cwd:
         left_lines.append(f"[dim]{cwd}[/dim]")

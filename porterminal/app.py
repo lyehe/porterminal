@@ -267,6 +267,11 @@ for subsequent calls:
 REST uses the same visible agent tab and shell backend as MCP. The `session_id`
 must come from a prior REST response.
 
+If your HTTP client or local shell pretty-prints the REST response as a table,
+long `output` fields may be visually truncated with an ellipsis. Treat that as
+client-side display clipping: inspect the raw `output` field, or make the remote
+command print JSON/plain text before relying on exact values.
+
 ## Browser fallback
 
 If your environment cannot use MCP or REST, open {base}/ in a browser. Read the

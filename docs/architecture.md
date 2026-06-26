@@ -334,7 +334,7 @@ Agent routes, alongside the two human WebSockets, let AI agents drive the termin
 
 **Discovery:** `GET /.well-known/mcp.json` (and `/.well-known/mcp/server.json`) serves the machine-readable MCP `server.json` descriptor (name/version/`remotes` -> `/mcp`) that capable clients auto-detect; `GET /llms.txt` serves human/agent-readable usage for MCP, REST, and browser fallback; and the `/` response carries a `Link:` header plus an inert `<link rel="alternate">`. The base page also includes accessibility-visible agent guidance, a DOM mirror labeled **Terminal screen**, and a labeled **Terminal input** fallback for browser-driving agents. Tool descriptions live once in `AGENT_TOOLS` (`mcp_adapter.py`) and render into both `tools/list` and `/llms.txt`.
 
-**Sharing:** the CLI `c` hotkey and the top-right web share button copy an agent-ready message containing the base URL, `/mcp`, `/api/agent/run`, and `/llms.txt`; the CLI `u` hotkey copies the bare URL.
+**Sharing:** the CLI `c` hotkey and the top-right web share button copy agent instructions and URL, including the base URL, `/mcp`, `/api/agent/run`, and `/llms.txt`; the CLI `u` hotkey copies the URL only.
 
 See [agent-access.md](agent-access.md) and the [design spec](superpowers/specs/2026-06-24-agent-terminal-access-design.md).
 

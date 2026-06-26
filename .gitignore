@@ -70,6 +70,9 @@ config.local.yaml
 # Build cache
 porterminal/static/.vite/
 
+# Local third-party checkouts
+porterminal/third_party/
+
 # Generated version file (hatch-vcs)
 porterminal/_version.py
 

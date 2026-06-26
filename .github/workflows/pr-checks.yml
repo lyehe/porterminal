@@ -28,10 +28,10 @@ jobs:
         run: uv sync --frozen
 
       - name: Lint with ruff
-        run: uv run ruff check .
+        run: uv run --frozen ruff check .
 
       - name: Check formatting
-        run: uv run ruff format --check .
+        run: uv run --frozen ruff format --check .
 
   test:
     name: Test (${{ matrix.os }})
@@ -64,7 +64,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Run tests
-        run: uv run pytest
+        run: uv run --frozen pytest
 
   frontend:
     name: Frontend Build

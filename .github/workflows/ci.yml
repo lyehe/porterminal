@@ -46,16 +46,16 @@ jobs:
         run: uv sync --frozen
 
       - name: Lint with ruff
-        run: uv run ruff check .
+        run: uv run --frozen ruff check .
 
       - name: Check formatting
-        run: uv run ruff format --check .
+        run: uv run --frozen ruff format --check .
 
       - name: Run tests
-        run: uv run pytest
+        run: uv run --frozen pytest
 
       - name: Build package
         run: uv build
 
       - name: Verify CLI works
-        run: uv run ptn --help
+        run: uv run --frozen ptn --help

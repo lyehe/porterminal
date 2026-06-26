@@ -5,9 +5,15 @@
 ```bash
 git clone https://github.com/lyehe/porterminal
 cd porterminal
-uv sync
-uv run ptn
+uv sync --frozen
+uv run --frozen ptn
 ```
+
+Use `--frozen` for normal local setup and checks (`uv sync --frozen`,
+`uv run --frozen pytest`, `uv run --frozen ruff check .`). The package version
+is generated from Git tags by `hatch-vcs`, so bare `uv sync` or `uv run ...` may
+rewrite only the editable project's version line in `uv.lock` when the current
+commit changes.
 
 ## Frontend Development
 

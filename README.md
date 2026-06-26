@@ -233,8 +233,8 @@ Run from source:
 ```bash
 git clone https://github.com/lyehe/porterminal
 cd porterminal
-uv sync
-uv run ptn
+uv sync --frozen
+uv run --frozen ptn
 ```
 
 ## License

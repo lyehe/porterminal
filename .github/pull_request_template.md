@@ -8,7 +8,7 @@
 - [ ] Refactor
 
 ## Checklist
-- [ ] Tests pass (`uv run pytest`)
-- [ ] Linting passes (`uv run ruff check .`)
+- [ ] Tests pass (`uv run --frozen pytest`)
+- [ ] Linting passes (`uv run --frozen ruff check .`)
 - [ ] Frontend builds (`npm run build` in frontend/)
 - [ ] CHANGELOG updated (if user-facing)

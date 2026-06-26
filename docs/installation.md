@@ -21,8 +21,8 @@ uvx ptn
 ```bash
 git clone https://github.com/lyehe/porterminal.git
 cd porterminal
-uv sync
-uv run ptn
+uv sync --frozen
+uv run --frozen ptn
 ```
 
 ## Prerequisites

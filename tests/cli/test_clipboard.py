@@ -100,7 +100,9 @@ class TestAgentShareText:
         assert f"{url}/mcp" in text
         assert f"{url}/api/agent/run" in text
         assert f"{url}/llms.txt" in text
-        assert "AI agents: prefer MCP" in text
+        assert "Agent instructions:" in text
+        assert "do not ask the user to configure MCP" in text
+        assert 'ask one short question: "What should I run?"' in text
 
     def test_trims_trailing_slash_before_endpoint_paths(self):
         text = build_agent_share_text("https://example.trycloudflare.com/")

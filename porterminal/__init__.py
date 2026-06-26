@@ -347,9 +347,7 @@ def main() -> int:
         if copy_to_clipboard(build_agent_share_text(display_url)):
             copy_feedback[0] = "[green]Copied agent-ready instructions + URL[/green]"
         else:
-            copy_feedback[0] = (
-                f"[yellow]Clipboard unavailable:[/yellow] [cyan]{display_url}[/cyan]"
-            )
+            copy_feedback[0] = f"[yellow]Clipboard unavailable:[/yellow] [cyan]{display_url}[/cyan]"
         copy_event.set()
 
     def handle_copy_url() -> None:
@@ -357,9 +355,7 @@ def main() -> int:
         if copy_to_clipboard(display_url):
             copy_feedback[0] = "[green]URL copied to clipboard[/green]"
         else:
-            copy_feedback[0] = (
-                f"[yellow]Clipboard unavailable:[/yellow] [cyan]{display_url}[/cyan]"
-            )
+            copy_feedback[0] = f"[yellow]Clipboard unavailable:[/yellow] [cyan]{display_url}[/cyan]"
         copy_event.set()
 
     # Drain process output silently in background (only when not verbose)

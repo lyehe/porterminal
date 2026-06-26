@@ -34,9 +34,9 @@
 
 ## Why
 
-I want to control my swarm anywhere.
+I need something dangerously easy to remote access a computer.
 
-**ngrok** requires registration and the free tier sucks. **Cloudflare Quick Tunnel** works great but is hard to use directly on the phone. **Termius** requires complicated setup: port forwarding, firewall rules, key management... Tried **Claude Code web**, but it can't access my local hardware and environment. Also tried **Happy**, but it's too bulky and updates lag behind.
+**ngrok** requires registration and the free tier sucks. **Cloudflare Tunnel** is excellent plumbing, but by itself it only gives you a tunnel, not a phone-friendly terminal. **Tailscale** is great when you own both ends, but it still means joining devices to a private network. **Termius** requires complicated setup: port forwarding, firewall rules, key management...
 
 So I built something simpler: **run a command, scan a QR, start typing.**
 

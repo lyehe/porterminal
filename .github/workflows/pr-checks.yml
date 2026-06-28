@@ -63,6 +63,9 @@ jobs:
         # every commit, so --locked would fail on every build.
         run: uv sync --frozen
 
+      - name: Run clipboard compatibility tests
+        run: uv run --frozen pytest tests/cli/test_clipboard.py
+
       - name: Run tests
         run: uv run --frozen pytest
 

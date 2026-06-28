@@ -51,6 +51,9 @@ jobs:
       - name: Check formatting
         run: uv run --frozen ruff format --check .
 
+      - name: Run clipboard compatibility tests
+        run: uv run --frozen pytest tests/cli/test_clipboard.py
+
       - name: Run tests
         run: uv run --frozen pytest
 

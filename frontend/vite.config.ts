@@ -1,7 +1,7 @@
 import { defineConfig, Plugin } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { readdirSync, unlinkSync, existsSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'fs';
 
 const frontendDir = fileURLToPath(new URL('.', import.meta.url));
 
@@ -23,10 +23,24 @@ function cleanOldAssets(): Plugin {
   };
 }
 
+/** Keep committed build output identical on Windows, macOS, and Linux. */
+function normalizeGeneratedHtml(): Plugin {
+  const outputFile = resolve(frontendDir, '../porterminal/static/index.html');
+  return {
+    name: 'normalize-generated-html',
+    closeBundle() {
+      if (!existsSync(outputFile)) return;
+      const contents = readFileSync(outputFile, 'utf8');
+      const normalized = contents.replace(/\r+\n/g, '\n').replace(/\r/g, '\n');
+      if (contents !== normalized) writeFileSync(outputFile, normalized, 'utf8');
+    },
+  };
+}
+
 export default defineConfig(({ command }) => ({
     root: '.',
     base: '/static/',
-    plugins: command === 'build' ? [cleanOldAssets()] : [],
+    plugins: command === 'build' ? [cleanOldAssets(), normalizeGeneratedHtml()] : [],
 
   resolve: {
     alias: {

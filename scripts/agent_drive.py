@@ -15,7 +15,7 @@ import re
 import sys
 
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 # A bare PowerShell prompt at the end of the screen = the command finished.
 _PROMPT_RE = re.compile(r"PS .*?>\s*$")
@@ -39,7 +39,7 @@ def payload(result) -> dict:
 
 async def main() -> None:
     steps = json.loads(sys.stdin.read())
-    async with streamablehttp_client(URL) as (read, write, _):
+    async with streamable_http_client(URL) as (read, write):
         async with ClientSession(read, write) as session:
             init = await session.initialize()
             print(f"# connected: {init.serverInfo.name} (session shell is persistent)\n")

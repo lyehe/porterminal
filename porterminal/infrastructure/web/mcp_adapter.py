@@ -1,9 +1,9 @@
 """MCP adapter - exposes agent terminal control over Streamable HTTP.
 
-Builds a FastMCP server with four tools that delegate to
+Builds an MCP server with four tools that delegate to
 ``AgentTerminalService``. Mounted on the main FastAPI app at ``/mcp``.
 
-Wiring notes (verified against mcp==1.28.x):
+Wiring notes (verified against mcp==2.x):
 - ``streamable_http_app()`` returns a Starlette app to ``Mount("/mcp", ...)``;
   ``streamable_http_path="/"`` so the endpoint is exactly ``/mcp``.
 - ``json_response=True`` -> request/response JSON (no long-lived SSE), which
@@ -17,7 +17,7 @@ Wiring notes (verified against mcp==1.28.x):
 import logging
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 
 logger = logging.getLogger(__name__)
 
@@ -55,16 +55,13 @@ AGENT_TOOLS: dict[str, str] = {
 
 
 class McpAdapter:
-    """Holds the FastMCP server and a lazily-bound AgentTerminalService."""
+    """Holds the MCP server and a lazily-bound AgentTerminalService."""
 
     def __init__(self) -> None:
         self._service: Any | None = None
-        self.mcp = FastMCP(
+        self.mcp = MCPServer(
             name="porterminal",
             instructions=_INSTRUCTIONS,
-            json_response=True,
-            stateless_http=False,
-            streamable_http_path="/",
         )
         self._register_tools()
 
@@ -86,7 +83,11 @@ class McpAdapter:
         service.bind_live_probe(live_sessions)
 
     def streamable_http_app(self):
-        return self.mcp.streamable_http_app()
+        return self.mcp.streamable_http_app(
+            streamable_http_path="/",
+            json_response=True,
+            stateless_http=False,
+        )
 
     @property
     def session_manager(self):
@@ -107,8 +108,8 @@ class McpAdapter:
 
     @staticmethod
     def _sid(ctx: Context) -> str:
-        req = getattr(ctx.request_context, "request", None)
-        sid = req.headers.get("mcp-session-id") if req is not None else None
+        headers = ctx.headers
+        sid = headers.get("mcp-session-id") if headers is not None else None
         return sid or f"mcp-{id(ctx.session)}"
 
     def _register_tools(self) -> None:

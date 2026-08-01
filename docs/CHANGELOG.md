@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-07-31
+
+### Fixed
+
+- **Fresh tool installs** - Migrated the server and client integrations to the
+  MCP 2.x API so `uvx ptn` and newly upgraded tool environments no longer fail
+  at startup after resolving MCP 2.0.
+
 ## [1.0.2] - 2026-06-26
 
 ### Changed
@@ -424,7 +432,8 @@ This release focuses on mobile experience improvements and robust shell support.
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/lyehe/porterminal/compare/v1.0.4...v1.0.5
 [1.0.2]: https://github.com/lyehe/porterminal/compare/v1.0.1...v1.0.2
 [0.5.0]: https://github.com/lyehe/porterminal/compare/v0.4.8...v0.5.0
 [0.4.8]: https://github.com/lyehe/porterminal/compare/v0.4.1...v0.4.8

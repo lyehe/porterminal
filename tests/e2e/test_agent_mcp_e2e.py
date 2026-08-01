@@ -16,7 +16,7 @@ import httpx
 import pytest
 import uvicorn
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 from porterminal.app import create_app
 
@@ -67,7 +67,7 @@ async def mcp_url():
 
 
 async def test_agent_discovers_tools_and_controls_terminal(mcp_url):
-    async with streamablehttp_client(mcp_url) as (read, write, _):
+    async with streamable_http_client(mcp_url) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -100,7 +100,7 @@ async def test_agent_discovers_tools_and_controls_terminal(mcp_url):
 
 
 async def test_run_command_reports_nonzero_exit(mcp_url):
-    async with streamablehttp_client(mcp_url) as (read, write, _):
+    async with streamable_http_client(mcp_url) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
             # `exit 3` style differs per shell; use a portable failing command.
@@ -188,7 +188,7 @@ async def test_agent_session_reaped_on_disconnect(base_url_fast):
             return (await c.get(f"{base}/health")).json()["tabs"]
 
     # Connect, create an agent tab, confirm it exists.
-    async with streamablehttp_client(f"{base}/mcp") as (read, write, _):
+    async with streamable_http_client(f"{base}/mcp") as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
             await session.call_tool("run_command", {"command": "echo hi", "timeout": 25})
@@ -211,7 +211,7 @@ async def test_dead_shell_is_reaped_while_connected(base_url_fast):
             return (await c.get(f"{base}/health")).json()["sessions"]
 
     # Stay connected the whole time; the agent ends its own shell with `exit`.
-    async with streamablehttp_client(f"{base}/mcp") as (read, write, _):
+    async with streamable_http_client(f"{base}/mcp") as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
             await session.call_tool("run_command", {"command": "echo hi", "timeout": 25})

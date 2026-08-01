@@ -23,16 +23,19 @@ uv run ruff format .            # Format
 # Frontend (in frontend/)
 npm install                     # Install deps
 npm run dev                     # Dev server with HMR (port 5173)
+npm run test:run                # Unit/service tests
+npm run test:typecheck          # Type-check frontend tests
+npm run test:browser            # Chromium smoke test
 npm run build                   # TypeScript check + build to porterminal/static/
 npm run watch                   # Build with watch mode
 npx tsc --noEmit                # Type check only (no build)
 ```
 
-**CLI options:** `ptn -n` (no tunnel), `ptn -b` (background), `ptn -p` (password), `ptn -sp` (save password), `ptn -tp` (toggle password), `ptn -v` (verbose), `ptn -i` (init config), `ptn -u` (update), `ptn -c` (check update)
+**CLI options:** `ptn -n` (no tunnel), `ptn -b` (background), `ptn -p` (password), `ptn -sp` (save password), `ptn -tp` (toggle password), `ptn -v` (verbose), `ptn -i` (init config), `ptn -u` (check update), `ptn -c` (compose mode)
 
 **Config:** Search order: `$PORTERMINAL_CONFIG_PATH` → `./ptn.yaml` → `./.ptn/ptn.yaml` → `~/.ptn/ptn.yaml`
 
-**Release:** `git tag v0.x.x -m "Release" && git push origin v0.x.x` (triggers CI publish)
+**Release:** `git tag v1.x.x -m "Release" && git push origin v1.x.x` (verification, PyPI publish, then GitHub Release)
 
 **Important:** After frontend changes, run `npm run build` in `frontend/` - the backend serves from `porterminal/static/`.
 
@@ -62,8 +65,10 @@ A third entry point for AI agents: `/mcp` (FastMCP Streamable HTTP) exposes `run
 
 - `porterminal/composition.py` - Dependency injection wiring (composition root)
 - `porterminal/container.py` - DI container with all services
-- `porterminal/app.py` - FastAPI application factory
-- `frontend/src/main.ts` - Frontend bootstrap and service wiring
+- `porterminal/app.py` - FastAPI lifecycle and route composition
+- `porterminal/infrastructure/web/routes/` - HTTP/WebSocket route groups
+- `frontend/src/main.ts` - Frontend bootstrap
+- `frontend/src/bootstrap/` - Lifecycle and UI-controller wiring
 
 ### Frontend Patterns
 

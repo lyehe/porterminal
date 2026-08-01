@@ -68,6 +68,10 @@ version-file = "porterminal/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["porterminal"]
+artifacts = [
+    "/porterminal/static/assets/*.js",
+    "/porterminal/static/assets/*.css",
+]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -76,12 +80,17 @@ include = [
     "LICENSE",
     "pyproject.toml",
 ]
+artifacts = [
+    "/porterminal/static/assets/*.js",
+    "/porterminal/static/assets/*.css",
+]
 
 [tool.uv]
 dev-dependencies = [
     "watchfiles>=0.21.0",
     "httpx>=0.28.0",
     "pre-commit>=4.0.0",
+    "pyright>=1.1.400",
     "ruff>=0.8.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
@@ -101,3 +110,18 @@ ignore = ["E501", "E402"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+include = [
+    "porterminal/domain",
+    "porterminal/application",
+    "porterminal/config.py",
+    "porterminal/container.py",
+    "porterminal/composition.py",
+    "porterminal/infrastructure/config",
+    "scripts/verify_distribution.py",
+]
+exclude = ["porterminal/static", "porterminal/_version.py"]
+reportMissingTypeStubs = "none"

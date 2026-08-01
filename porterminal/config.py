@@ -1,14 +1,33 @@
-"""Configuration loading and validation using Pydantic."""
+"""Configuration discovery, validation, and persistence.
 
+``ConfigStore`` is the single file-system boundary for configuration.  The
+compatibility functions at the bottom intentionally delegate to it so CLI,
+ASGI, and runtime settings all follow the same search and validation rules.
+"""
+
+import copy
 import os
 import shutil
+import tempfile
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, Protocol
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
+from porterminal.domain import ShellCommand
 from porterminal.domain.values import MAX_COLS, MAX_ROWS, MIN_COLS, MIN_ROWS
-from porterminal.infrastructure.config import ShellDetector
+
+RawConfig = dict[str, Any]
+
+
+class ShellDetectorPort(Protocol):
+    """Small configuration-facing contract for platform shell detection."""
+
+    def detect_shells(self) -> list[ShellCommand]: ...
+
+    def get_default_shell_id(self) -> str: ...
 
 
 class ServerConfig(BaseModel):
@@ -104,6 +123,147 @@ class Config(BaseModel):
     ui: UIConfig = Field(default_factory=UIConfig)
 
 
+class ConfigStore:
+    """Locate, validate, and atomically persist Porterminal configuration."""
+
+    def __init__(
+        self,
+        config_path: Path | str | None = None,
+        *,
+        cwd: Path | None = None,
+        default_path: Path | None = None,
+        shell_detector: ShellDetectorPort | None = None,
+    ) -> None:
+        self._explicit_path = Path(config_path).expanduser() if config_path is not None else None
+        self._cwd = cwd or Path.cwd()
+        self._default_path = default_path or Path.home() / ".ptn" / "ptn.yaml"
+        self._shell_detector = shell_detector
+
+    def resolve_path(self) -> Path | None:
+        """Return the configured or first existing path in search order."""
+        if self._explicit_path is not None:
+            return self._explicit_path
+
+        if env_path := os.environ.get("PORTERMINAL_CONFIG_PATH"):
+            return Path(env_path).expanduser()
+
+        candidates = [
+            self._cwd / "ptn.yaml",
+            self._cwd / ".ptn" / "ptn.yaml",
+            Path.home() / ".ptn" / "ptn.yaml",
+        ]
+        return next((path for path in candidates if path.exists()), None)
+
+    def path_for_write(self) -> Path:
+        """Return an existing config path or the caller's explicit fallback."""
+        return self.resolve_path() or self._default_path
+
+    def read_raw(self) -> RawConfig:
+        """Read YAML as a mapping without discarding unknown fields."""
+        path = self.resolve_path()
+        if path is None or not path.exists():
+            return {}
+
+        with path.open(encoding="utf-8") as config_file:
+            data = yaml.safe_load(config_file) or {}
+        if not isinstance(data, dict):
+            raise ValueError(f"Configuration root must be a mapping: {path}")
+        return data
+
+    def load(self) -> Config:
+        """Load a validated runtime configuration with usable shells."""
+        return self._validate(self.read_raw())
+
+    def save_raw(self, data: RawConfig) -> None:
+        """Validate known fields and atomically save while preserving extras."""
+        self._validate(data)
+        path = self.path_for_write()
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary:
+                yaml.safe_dump(
+                    data,
+                    temporary,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,
+                )
+                temporary.flush()
+                os.fsync(temporary.fileno())
+                temporary_path = Path(temporary.name)
+            os.replace(temporary_path, path)
+        finally:
+            if temporary_path is not None and temporary_path.exists():
+                temporary_path.unlink()
+
+    def update(self, mutation: Callable[[RawConfig], None]) -> RawConfig:
+        """Apply and persist a validated mutation, returning a defensive copy."""
+        data = copy.deepcopy(self.read_raw())
+        mutation(data)
+        self.save_raw(data)
+        return copy.deepcopy(data)
+
+    def _detector(self) -> ShellDetectorPort:
+        if self._shell_detector is None:
+            from porterminal.infrastructure.config.shell_detector import ShellDetector
+
+            self._shell_detector = ShellDetector()
+        return self._shell_detector
+
+    def _validate(self, raw: RawConfig) -> Config:
+        """Validate a normalized copy; never add detected shells to persisted YAML."""
+        data = copy.deepcopy(raw)
+        terminal_data = data.setdefault("terminal", {})
+        if not isinstance(terminal_data, dict):
+            return Config.model_validate(data)
+
+        shells_data = terminal_data.get("shells", [])
+        valid_shells: list[RawConfig] = []
+        if isinstance(shells_data, list):
+            for shell in shells_data:
+                if not isinstance(shell, dict):
+                    continue
+                command = shell.get("command", "")
+                if isinstance(command, str) and (shutil.which(command) or Path(command).exists()):
+                    valid_shells.append(shell)
+
+        detector = self._detector()
+        if not valid_shells:
+            valid_shells = [
+                {
+                    "id": shell.id,
+                    "name": shell.name,
+                    "command": shell.command,
+                    "args": list(shell.args),
+                }
+                for shell in detector.detect_shells()
+            ]
+        terminal_data["shells"] = valid_shells
+
+        shell_ids = [
+            shell.get("id") or str(shell.get("name", "")).lower() for shell in valid_shells
+        ]
+        default_shell = terminal_data.get("default_shell", "")
+        if not default_shell or default_shell not in shell_ids:
+            detected_default = detector.get_default_shell_id()
+            terminal_data["default_shell"] = (
+                detected_default
+                if detected_default in shell_ids
+                else (str(valid_shells[0].get("id", "")) if valid_shells else "")
+            )
+
+        return Config.model_validate(data)
+
+
 def find_config_file(cwd: Path | None = None) -> Path | None:
     """Find config file in standard locations.
 
@@ -113,76 +273,12 @@ def find_config_file(cwd: Path | None = None) -> Path | None:
     3. .ptn/ptn.yaml in cwd
     4. ~/.ptn/ptn.yaml (user home directory)
     """
-    # Check env var first
-    if env_path := os.environ.get("PORTERMINAL_CONFIG_PATH"):
-        return Path(env_path)
-
-    base = cwd or Path.cwd()
-
-    # Search order: cwd first, then home
-    candidates = [
-        base / "ptn.yaml",
-        base / ".ptn" / "ptn.yaml",
-        Path.home() / ".ptn" / "ptn.yaml",
-    ]
-
-    for path in candidates:
-        if path.exists():
-            return path
-
-    return None  # No config found, use defaults
+    return ConfigStore(cwd=cwd).resolve_path()
 
 
 def load_config(config_path: Path | str | None = None) -> Config:
     """Load configuration from YAML file."""
-    if config_path is None:
-        config_path = find_config_file()
-
-    detector = ShellDetector()
-
-    if config_path is None or not Path(config_path).exists():
-        data = {}
-    else:
-        with open(config_path, encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-
-    # Auto-detect shells if not specified or empty
-    terminal_data = data.get("terminal", {})
-    shells_data = terminal_data.get("shells", [])
-
-    # Filter out shells that don't exist on this system
-    valid_shells = []
-    for shell in shells_data:
-        try:
-            # Validate the shell exists
-            cmd = shell.get("command", "")
-            if shutil.which(cmd) or Path(cmd).exists():
-                valid_shells.append(shell)
-        except Exception:
-            pass
-
-    # If no valid shells from config, auto-detect using ShellDetector
-    if not valid_shells:
-        detected = detector.detect_shells()
-        terminal_data["shells"] = [
-            {"id": s.id, "name": s.name, "command": s.command, "args": list(s.args)}
-            for s in detected
-        ]
-    else:
-        terminal_data["shells"] = valid_shells
-
-    # Auto-detect default shell if not specified or invalid
-    default_shell = terminal_data.get("default_shell", "")
-    shell_ids = [s.get("id") or s.get("name", "").lower() for s in terminal_data.get("shells", [])]
-    if not default_shell or default_shell not in shell_ids:
-        terminal_data["default_shell"] = detector.get_default_shell_id()
-        # Make sure the default shell is in the list
-        if terminal_data["default_shell"] not in shell_ids and terminal_data.get("shells"):
-            terminal_data["default_shell"] = terminal_data["shells"][0].get("id", "")
-
-    data["terminal"] = terminal_data
-
-    return Config.model_validate(data)
+    return ConfigStore(config_path=config_path).load()
 
 
 # Global config instance (loaded on import)

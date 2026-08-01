@@ -135,10 +135,12 @@ def _init_config(source: str | None = None) -> None:
     import yaml
 
     from porterminal.cli.script_discovery import discover_scripts
+    from porterminal.config import ConfigStore
 
     cwd = Path.cwd()
     config_dir = cwd / ".ptn"
     config_file = config_dir / "ptn.yaml"
+    store = ConfigStore(config_path=config_file, cwd=cwd, default_path=config_file)
 
     # If source is provided, fetch/copy it
     if source:
@@ -150,9 +152,12 @@ def _init_config(source: str | None = None) -> None:
                 console.print(f"[dim]Downloading config from[/dim] [cyan]{source}[/cyan]...")
                 with urlopen(source, timeout=10) as response:
                     content = response.read().decode("utf-8")
-                config_file.write_text(content)
+                data = yaml.safe_load(content) or {}
+                if not isinstance(data, dict):
+                    raise ValueError("Configuration root must be a mapping")
+                store.save_raw(data)
                 console.print(f"[green]✓[/green] Created: [cyan]{config_file}[/cyan]")
-            except (URLError, OSError, TimeoutError) as e:
+            except (URLError, OSError, TimeoutError, ValueError, yaml.YAMLError) as e:
                 console.print(f"[red]Error:[/red] Failed to download config: {e}")
                 return
         else:
@@ -163,12 +168,15 @@ def _init_config(source: str | None = None) -> None:
                 return
             try:
                 content = source_path.read_text(encoding="utf-8")
-                config_file.write_text(content)
+                data = yaml.safe_load(content) or {}
+                if not isinstance(data, dict):
+                    raise ValueError("Configuration root must be a mapping")
+                store.save_raw(data)
                 console.print(
                     f"[green]✓[/green] Created: [cyan]{config_file}[/cyan] "
                     f"[dim](from {source_path})[/dim]"
                 )
-            except OSError as e:
+            except (OSError, ValueError, yaml.YAMLError) as e:
                 console.print(f"[red]Error:[/red] Failed to read config: {e}")
                 return
         return
@@ -191,12 +199,7 @@ def _init_config(source: str | None = None) -> None:
     if discovered:
         config["buttons"].extend(discovered)
 
-    config_dir.mkdir(exist_ok=True)
-
-    # Write YAML with comment header
-    header = "# ptn configuration file\n# Docs: https://github.com/lyehe/porterminal\n\n"
-    yaml_content = yaml.safe_dump(config, default_flow_style=False, sort_keys=False)
-    config_file.write_text(header + yaml_content)
+    store.save_raw(config)
 
     console.print(f"[green]✓[/green] Created: [cyan]{config_file}[/cyan]")
     if discovered:
@@ -210,31 +213,18 @@ def _get_or_create_config() -> tuple[Path, dict]:
     Returns:
         Tuple of (config_path, config_data).
     """
-    import yaml
+    from porterminal.config import ConfigStore
 
-    from porterminal.config import find_config_file
-
-    config_path = find_config_file()
-    if config_path is None:
-        config_dir = Path.cwd() / ".ptn"
-        config_path = config_dir / "ptn.yaml"
-        config_dir.mkdir(exist_ok=True)
-
-    if config_path.exists():
-        with open(config_path, encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-    else:
-        data = {}
-
-    return config_path, data
+    cwd = Path.cwd()
+    store = ConfigStore(cwd=cwd, default_path=cwd / ".ptn" / "ptn.yaml")
+    return store.path_for_write(), store.read_raw()
 
 
 def _save_config(config_path: Path, data: dict) -> None:
     """Save config data to file."""
-    import yaml
+    from porterminal.config import ConfigStore
 
-    with open(config_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(data, f, default_flow_style=False, sort_keys=False)
+    ConfigStore(config_path=config_path).save_raw(data)
 
 
 def _set_password_requirement(value: bool | None) -> None:

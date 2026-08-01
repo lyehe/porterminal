@@ -10,7 +10,9 @@ If you're alone, the URL itself is sufficient protection. The tunnel URL is rand
 
 ## Password Protection
 
-Password protection adds authentication to prevent unauthorized access.
+Password protection authenticates the browser's management and terminal
+WebSocket connections. Agent MCP and REST access intentionally continues to use
+the tunnel URL as its credential; see [Agent Access](agent-access.md#security--limits).
 
 ### Enabling Password Protection
 
@@ -18,13 +20,14 @@ Password protection adds authentication to prevent unauthorized access.
 ```bash
 ptn -p
 ```
-You'll be prompted to enter a password. This password is required for all connecting devices.
+You'll be prompted to enter a password. It is required for all connecting browser devices.
 
-**Enable by default:**
+**Toggle the default requirement:**
 ```bash
-ptn -dp
+ptn -tp
 ```
-This toggles `security.require_password` in your config file. Run again to disable.
+
+Use `ptn -sp` to save or clear a password hash in the configuration file.
 
 **Via config file:**
 ```yaml
@@ -58,19 +61,21 @@ security:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Password is Per-Session
+### Password Storage and Lifetime
 
-The password is **disposable** - it exists only for the current server session:
+`ptn -p` creates a disposable session password. `ptn -sp` deliberately saves a
+bcrypt hash so password protection can start without prompting:
 
 | Location | What's Stored | Lifetime |
 |----------|---------------|----------|
-| Server memory | bcrypt hash | Until server stops (never saved to disk) |
+| Server memory | bcrypt hash | Until server stops |
+| Config file | bcrypt hash, when saved with `ptn -sp` | Until changed or cleared |
 | Browser localStorage | Plaintext password | Until cleared or auth fails |
 
 **Key points:**
-- Server restart = new password required
-- Password is never written to any file
-- Each session can have a different password
+- `ptn -p` prompts for a new session password
+- `ptn -sp` stores only a bcrypt hash, never the plaintext password
+- A saved hash can be cleared by entering an empty password with `ptn -sp`
 - Browser remembers password for convenience (per-origin)
 
 ### Retry Limits
@@ -114,11 +119,10 @@ This means someone has your URL (likely social engineering - they saw your scree
 
 ### With Password Protection
 
-- URL provides access to the login prompt only
-- Password required to access terminal
+- Browser WebSockets require the password before terminal access
 - Password validated against bcrypt hash (server-side)
 - Failed attempts are rate-limited per connection
-- Password is disposable - changes each server session
+- MCP and `/api/agent/*` retain the documented URL-as-credential model
 
 ### Without Password Protection
 

@@ -69,6 +69,8 @@ config.local.yaml
 
 # Build cache
 porterminal/static/.vite/
+frontend/playwright-report/
+frontend/test-results/
 
 # Local third-party checkouts
 porterminal/third_party/

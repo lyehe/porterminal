@@ -169,7 +169,7 @@ def fake_pty(default_dimensions):
 def create_fake_pty_factory(fake_pty_instance: FakePTY):
     """Create a PTY factory that returns the given fake PTY."""
 
-    def factory(shell, dimensions, env, cwd=None):
+    def factory(shell, dimensions, cwd=None):
         fake_pty_instance._dimensions = dimensions
         fake_pty_instance.spawn()
         return fake_pty_instance

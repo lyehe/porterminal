@@ -12,6 +12,25 @@
 import '@xterm/xterm/css/xterm.css';
 import './styles/index.css';
 
+import { setupLifecycleHandlers } from '@/bootstrap/lifecycle';
+import { wireTerminalScreenMirror } from '@/bootstrap/screenMirror';
+import {
+    applyButtonVisibility,
+    renderCustomButtons,
+    rerenderToolbarButtons,
+    setupBackspaceButton,
+    setupEscapeButton,
+    setupHelpButton,
+    setupModifierButtons,
+    setupPasteButton,
+    setupSettingsButton,
+    setupShareAgentButton,
+    setupShutdownButton,
+    setupTextViewButton,
+    setupToolButtons,
+    updateModifierButton,
+} from '@/bootstrap/toolbar';
+
 // Core
 import { createEventBus } from '@/core/events';
 
@@ -50,11 +69,10 @@ import { createSettingsOverlay } from '@/ui/SettingsOverlay';
 import { renderToolbar } from '@/ui/Toolbar';
 
 // Storage
-import { getSavedPassword, savePassword, clearPassword, getDisabledButtons } from '@/utils/storage';
-import { buildAgentShareText, currentBaseUrl } from '@/utils/share';
+import { getSavedPassword, savePassword, clearPassword } from '@/utils/storage';
 
 // Types
-import type { AppConfig, ButtonConfig, ButtonSend, SwipeDirection, Tab } from '@/types';
+import type { SwipeDirection, Tab } from '@/types';
 import type { TabService } from '@/services/TabService';
 
 /**
@@ -89,88 +107,6 @@ const CONFIG = {
 };
 
 /**
- * Create a toolbar row element
- */
-function createToolbarRow(toolbar: HTMLElement, id: string): HTMLElement {
-    const row = document.createElement('div');
-    row.className = 'toolbar-row hidden';
-    row.id = id;
-    toolbar.appendChild(row);
-    return row;
-}
-
-/**
- * Create a custom button element with encoded send data
- */
-function createCustomButton(btn: { label: string; send: ButtonSend }): HTMLButtonElement {
-    const button = document.createElement('button');
-    button.className = 'tool-btn';
-    button.textContent = btn.label;
-    const send = btn.send || '';
-    const sendArray = Array.isArray(send) ? send : [send];
-    const encoded = sendArray.map(item =>
-        typeof item === 'number' ? item : item
-            .replace(/\r/g, '{CR}')
-            .replace(/\n/g, '{LF}')
-            .replace(/\x1b/g, '{ESC}')
-    );
-    button.dataset.send = JSON.stringify(encoded);
-    return button;
-}
-
-/**
- * Render custom buttons from config into toolbar rows
- */
-function renderCustomButtons(buttons: AppConfig['buttons']): void {
-    if (!buttons?.length) return;
-
-    const toolbar = document.getElementById('toolbar');
-    if (!toolbar) return;
-
-    // Group buttons by row number
-    const buttonsByRow = new Map<number, typeof buttons>();
-    for (const btn of buttons) {
-        const row = btn.row ?? 1;
-        if (!buttonsByRow.has(row)) {
-            buttonsByRow.set(row, []);
-        }
-        buttonsByRow.get(row)!.push(btn);
-    }
-
-    // Create/get toolbar rows and add buttons (row 1 = toolbar-row3, row 2 = toolbar-row4, etc.)
-    for (const rowNum of [...buttonsByRow.keys()].sort((a, b) => a - b)) {
-        const toolbarRowId = `toolbar-row${rowNum + 2}`;
-        const toolbarRow = document.getElementById(toolbarRowId)
-            ?? createToolbarRow(toolbar, toolbarRowId);
-
-        for (const btn of buttonsByRow.get(rowNum)!) {
-            toolbarRow.appendChild(createCustomButton(btn));
-        }
-        toolbarRow.classList.remove('hidden');
-    }
-}
-
-/**
- * Re-render toolbar buttons after add/remove
- */
-function rerenderToolbarButtons(
-    buttons: ButtonConfig[],
-    inputHandler: ReturnType<typeof createInputHandler>
-): void {
-    const toolbar = document.getElementById('toolbar');
-    if (!toolbar) return;
-
-    // Remove existing custom button rows (row3+)
-    toolbar.querySelectorAll('[id^="toolbar-row"]:not(#toolbar-row1):not(#toolbar-row2)')
-        .forEach(row => row.remove());
-
-    // Render new buttons
-    renderCustomButtons(buttons);
-    applyButtonVisibility();
-    setupToolButtons(inputHandler);
-}
-
-/**
  * Initialize the application
  */
 async function init(): Promise<void> {
@@ -200,8 +136,9 @@ async function init(): Promise<void> {
 
     // Create input components
     const keyMapper = createKeyMapper();
-    const modifierManager = createModifierManager(eventBus, (modifier) => {
-        updateModifierButton(modifier);
+    const modifierManager = createModifierManager(eventBus);
+    eventBus.on('modifier:changed', ({ modifier, state }) => {
+        updateModifierButton(modifier, state);
     });
 
     // Forward declaration for tabService
@@ -314,28 +251,7 @@ async function init(): Promise<void> {
         }
     );
 
-    const mirrorDisposables = new Map<number, { dispose: () => void }>();
-
-    eventBus.on('tab:created', ({ tab }) => {
-        mirrorDisposables.set(tab.id, tab.term.onRender(() => {
-            if (tab.id === tabService.activeTabId) {
-                terminalScreenMirror.update(tab.term);
-            }
-        }));
-        if (tab.id === tabService.activeTabId || tabService.activeTabId === null) {
-            terminalScreenMirror.update(tab.term);
-        }
-    });
-
-    eventBus.on('tab:switched', ({ tab }) => {
-        terminalScreenMirror.update(tab.term);
-    });
-
-    eventBus.on('tab:closed', ({ tabId }) => {
-        mirrorDisposables.get(tabId)?.dispose();
-        mirrorDisposables.delete(tabId);
-        terminalScreenMirror.update(tabService.activeTab?.term ?? null);
-    });
+    wireTerminalScreenMirror(eventBus, tabService, terminalScreenMirror);
 
     // Helper to send input to active tab
     const sendToActiveTab = (data: string): void => {
@@ -602,52 +518,13 @@ async function init(): Promise<void> {
         resizeManager.cancelResize(tabId);
     });
 
-    // Handle visibility change - sync first, then reconnect
-    document.addEventListener('visibilitychange', async () => {
-        if (document.visibilityState === 'visible') {
-            modifierManager.reset();
-
-            try {
-                // 1. Reconnect management WebSocket and wait for state sync
-                if (!managementService.isConnected()) {
-                    await managementService.connect();
-                    // After connect() resolves, applyStateSync has been called
-                    // tabService.tabs now reflects server state
-                }
-
-                // 2. Connect data plane for synced tabs only
-                for (const tab of tabService.tabs) {
-                    if (!connectionService.isConnected(tab)) {
-                        connectionService.connect(tab, true);
-                    }
-                }
-            } catch (e) {
-                console.error('Failed to reconnect:', e);
-                disconnectOverlay.show();
-            }
-        } else {
-            modifierManager.reset();
-        }
+    setupLifecycleHandlers({
+        modifierManager,
+        managementService,
+        connectionService,
+        tabService,
+        disconnectOverlay,
     });
-
-    // Handle window blur
-    window.addEventListener('blur', () => {
-        modifierManager.reset();
-    });
-
-    // Handle visual viewport (mobile keyboard) - adjust app size for iOS
-    // Terminal refit is handled by ResizeObserver on terminal-container
-    if (window.visualViewport) {
-        const app = document.getElementById('app');
-        const updateAppSize = () => {
-            if (app) {
-                app.style.height = `${window.visualViewport!.height}px`;
-                app.style.transform = `translateY(${window.visualViewport!.offsetTop}px)`;
-            }
-        };
-        window.visualViewport.addEventListener('resize', updateAppSize);
-        window.visualViewport.addEventListener('scroll', updateAppSize);
-    }
 
     // Focus terminal on container click
     document.getElementById('terminal-container')?.addEventListener('click', focusTerminalIfNotComposing);
@@ -681,360 +558,6 @@ async function init(): Promise<void> {
     }
 
     console.log('Porterminal initialized (backend-driven)');
-}
-
-// Helper functions for button setup
-
-function updateModifierButton(modifier: string): void {
-    const btn = document.getElementById(`btn-${modifier}`);
-    if (!btn) return;
-
-    const modifierManager = (window as unknown as { _modifierManager?: ReturnType<typeof createModifierManager> })._modifierManager;
-    if (!modifierManager) return;
-
-    btn.classList.remove('sticky', 'locked');
-    const state = modifierManager.getState(modifier as 'ctrl' | 'alt' | 'shift');
-    if (state === 'sticky') {
-        btn.classList.add('sticky');
-    } else if (state === 'locked') {
-        btn.classList.add('locked');
-    }
-}
-
-function setupModifierButtons(modifierManager: ReturnType<typeof createModifierManager>): void {
-    (window as unknown as { _modifierManager?: ReturnType<typeof createModifierManager> })._modifierManager = modifierManager;
-
-    for (const mod of ['ctrl', 'alt', 'shift'] as const) {
-        const btn = document.getElementById(`btn-${mod}`);
-        if (!btn) continue;
-
-        let touchUsed = false;
-
-        btn.addEventListener('touchstart', (e) => {
-            touchUsed = true;
-            e.preventDefault();
-        }, { passive: false });
-
-        btn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            modifierManager.handleTap(mod);
-        }, { passive: false });
-
-        btn.addEventListener('click', () => {
-            if (!touchUsed) {
-                modifierManager.handleTap(mod);
-            }
-            touchUsed = false;
-        });
-    }
-}
-
-function setupEscapeButton(inputHandler: ReturnType<typeof createInputHandler>): void {
-    const btn = document.getElementById('btn-escape');
-    if (!btn) return;
-
-    let touchUsed = false;
-    let lastTapTime = 0;
-    const DOUBLE_TAP_MS = 300;
-
-    const handleTap = () => {
-        const now = Date.now();
-        if (now - lastTapTime < DOUBLE_TAP_MS) {
-            inputHandler.sendInput('\x1b\x1b');
-        } else {
-            inputHandler.sendInput('\x1b');
-        }
-        lastTapTime = now;
-    };
-
-    btn.addEventListener('touchstart', (e) => {
-        touchUsed = true;
-        e.preventDefault();
-    }, { passive: false });
-
-    btn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        handleTap();
-    }, { passive: false });
-
-    btn.addEventListener('click', () => {
-        if (!touchUsed) {
-            handleTap();
-        }
-        touchUsed = false;
-    });
-}
-
-function setupBackspaceButton(sendBackspace: () => void): void {
-    const btn = document.getElementById('btn-backspace');
-    if (!btn) return;
-
-    const INITIAL_DELAY = 400;
-    const REPEAT_INTERVAL = 50;
-
-    let repeatTimer: ReturnType<typeof setInterval> | null = null;
-    let initialTimer: ReturnType<typeof setTimeout> | null = null;
-    let isActive = false;
-
-    const startRepeat = () => {
-        if (isActive) return;
-        isActive = true;
-        sendBackspace();
-
-        initialTimer = setTimeout(() => {
-            repeatTimer = setInterval(sendBackspace, REPEAT_INTERVAL);
-        }, INITIAL_DELAY);
-    };
-
-    const stopRepeat = () => {
-        isActive = false;
-        if (initialTimer) {
-            clearTimeout(initialTimer);
-            initialTimer = null;
-        }
-        if (repeatTimer) {
-            clearInterval(repeatTimer);
-            repeatTimer = null;
-        }
-    };
-
-    btn.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        startRepeat();
-    }, { passive: false });
-
-    btn.addEventListener('pointerup', (e) => {
-        e.preventDefault();
-        stopRepeat();
-    }, { passive: false });
-
-    btn.addEventListener('pointercancel', stopRepeat);
-    btn.addEventListener('pointerleave', stopRepeat);
-    btn.addEventListener('contextmenu', (e) => e.preventDefault());
-}
-
-/**
- * Setup a button with touch/click handling that prevents double-triggering.
- * NOT suitable for: hold-to-repeat, custom event types, or state machines.
- */
-function setupTapButton(
-    buttonId: string,
-    onAction: () => void | Promise<void>,
-    options: { preventDefault?: boolean } = {}
-): void {
-    const btn = document.getElementById(buttonId);
-    if (!btn) return;
-
-    let touchUsed = false;
-    const { preventDefault = true } = options;
-
-    btn.addEventListener('touchstart', (e) => {
-        touchUsed = true;
-        if (preventDefault) e.preventDefault();
-    }, { passive: !preventDefault });
-
-    btn.addEventListener('touchend', (e) => {
-        if (preventDefault) e.preventDefault();
-        void onAction();
-    }, { passive: !preventDefault });
-
-    btn.addEventListener('click', () => {
-        if (!touchUsed) {
-            void onAction();
-        }
-        touchUsed = false;
-    });
-}
-
-function setupPasteButton(doPaste: () => Promise<void>): void {
-    setupTapButton('btn-paste', doPaste);
-}
-
-function setupShareAgentButton(clipboardManager: ReturnType<typeof createClipboardManager>): void {
-    setupTapButton('btn-share-agent', () => {
-        const btn = document.getElementById('btn-share-agent');
-        const status = document.getElementById('share-agent-status');
-        const text = buildAgentShareText(currentBaseUrl());
-        const copied = clipboardManager.copy(text, 'agentShare');
-
-        if (status) {
-            status.textContent = copied
-                ? 'Agent share link copied'
-                : 'Agent share link was not copied';
-        }
-        if (btn) {
-            btn.classList.toggle('copied', copied);
-            window.setTimeout(() => btn.classList.remove('copied'), 1500);
-        }
-    }, { preventDefault: false });
-}
-
-function setupToolButtons(
-    inputHandler: ReturnType<typeof createInputHandler>
-): void {
-    let touchUsed = false;
-
-    document.querySelectorAll('.tool-btn').forEach(btn => {
-        const el = btn as HTMLButtonElement;
-        if (el.dataset.bound) return;
-        el.dataset.bound = 'true';
-
-        if (el.id === 'btn-ctrl' || el.id === 'btn-alt' ||
-            el.id === 'btn-escape' || el.id === 'btn-paste' ||
-            el.id === 'btn-backspace' || el.id === 'btn-shutdown') {
-            return;
-        }
-
-        const action = async () => {
-            if (el.dataset.key) {
-                inputHandler.handleKeyButton(el.dataset.key);
-            } else if (el.dataset.send) {
-                // Parse JSON array of strings/numbers
-                const items: Array<string | number> = JSON.parse(el.dataset.send);
-                for (const item of items) {
-                    if (typeof item === 'number') {
-                        // Number = wait ms
-                        await new Promise(r => setTimeout(r, item));
-                    } else {
-                        // String = decode and send
-                        const decoded = item
-                            .replace(/\{CR\}/g, '\r')
-                            .replace(/\{LF\}/g, '\n')
-                            .replace(/\{ESC\}/g, '\x1b');
-                        inputHandler.sendInput(decoded);
-                    }
-                }
-                // Don't call focusTerminal() - soft keyboard buttons should
-                // respect the current native keyboard state (iOS fix)
-            }
-        };
-
-        let touchInside = false;
-
-        el.addEventListener('touchstart', (e) => {
-            touchUsed = true;
-            touchInside = true;
-            e.preventDefault();
-        }, { passive: false });
-
-        el.addEventListener('touchmove', (e) => {
-            if (!touchInside) return;
-            const touch = e.touches[0];
-            if (!touch) return;
-            const rect = el.getBoundingClientRect();
-            if (touch.clientX < rect.left || touch.clientX > rect.right ||
-                touch.clientY < rect.top || touch.clientY > rect.bottom) {
-                touchInside = false;
-            }
-        }, { passive: true });
-
-        el.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            if (touchInside) {
-                action();
-            }
-            touchInside = false;
-        }, { passive: false });
-
-        el.addEventListener('click', () => {
-            if (!touchUsed) {
-                action();
-            }
-            touchUsed = false;
-        });
-    });
-}
-
-function setupShutdownButton(disconnectOverlay: ReturnType<typeof createDisconnectOverlay>): void {
-    const btn = document.getElementById('btn-shutdown');
-    if (!btn) return;
-
-    btn.addEventListener('click', async () => {
-        // Hide keyboard on mobile
-        (document.activeElement as HTMLElement)?.blur();
-
-        if (confirm('Shutdown server and tunnel?\n\nThis will terminate all sessions.')) {
-            try {
-                const response = await fetch('/api/shutdown', { method: 'POST' });
-                if (response.ok) {
-                    disconnectOverlay.setText('Server Shutdown');
-                    disconnectOverlay.show();
-                }
-            } catch (e) {
-                console.error('Shutdown failed:', e);
-            }
-        }
-    });
-}
-
-function setupHelpButton(): void {
-    const btn = document.getElementById('btn-info');
-    const overlay = document.getElementById('help-overlay');
-    const closeBtn = document.getElementById('help-close');
-
-    if (!btn || !overlay) return;
-
-    const show = () => overlay.classList.remove('hidden');
-    const hide = () => overlay.classList.add('hidden');
-
-    btn.addEventListener('click', show);
-    closeBtn?.addEventListener('click', hide);
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) hide();
-    });
-}
-
-function setupSettingsButton(
-    settingsOverlay: ReturnType<typeof createSettingsOverlay>,
-    getConfig: () => AppConfig
-): void {
-    const btn = document.getElementById('btn-settings');
-    if (!btn) return;
-
-    btn.addEventListener('click', () => {
-        settingsOverlay.show(getConfig());
-    });
-}
-
-/**
- * Apply button visibility from localStorage
- * Hides buttons whose labels are in the disabled list
- */
-function applyButtonVisibility(): void {
-    const disabledButtons = getDisabledButtons();
-    // Find all custom buttons (they have data-send attribute)
-    document.querySelectorAll('.tool-btn[data-send]').forEach(btn => {
-        const el = btn as HTMLElement;
-        const label = el.textContent?.trim() || '';
-        el.style.display = disabledButtons.includes(label) ? 'none' : '';
-    });
-}
-
-function setupTextViewButton(
-    textViewOverlay: ReturnType<typeof createTextViewOverlay>,
-    getTerminal: () => import('@xterm/xterm').Terminal | null,
-    refreshTerminal: () => void
-): void {
-    setupTapButton('btn-textview', () => {
-        const term = getTerminal();
-        if (term) {
-            textViewOverlay.show(term);
-        }
-    }, { preventDefault: false });
-
-    // Force terminal refresh when overlay closes to repaint from buffer
-    const closeBtn = document.getElementById('textview-close');
-    const overlay = document.getElementById('textview-overlay');
-
-    const onClose = () => {
-        textViewOverlay.hide();
-        refreshTerminal();
-    };
-
-    closeBtn?.addEventListener('click', onClose);
-    overlay?.addEventListener('click', (e) => {
-        if (e.target === overlay) onClose();
-    });
 }
 
 // Start the app

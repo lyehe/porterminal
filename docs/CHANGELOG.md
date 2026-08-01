@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-08-01
+
+### Added
+
+- **Release verification** - Added a reusable cross-platform workflow that runs
+  linting, formatting, type checks, backend and frontend tests, a real-browser
+  smoke test, and an isolated install of the built wheel before publication.
+- **Regression coverage** - Added tests for configuration persistence, route
+  contracts, terminal connection behavior, input gestures, and management UI
+  state.
+
+### Changed
+
+- **Configuration ownership** - Centralized discovery, validation, and atomic
+  persistence in `ConfigStore`, while preserving unknown configuration fields.
+- **Application boundaries** - Split backend routes and frontend bootstrap
+  responsibilities into focused modules and introduced a typed PTY factory
+  boundary.
+- **Frontend toolchain** - Updated the build and test dependencies, eliminated
+  known npm audit findings, and split terminal assets into a dedicated chunk.
+
+### Fixed
+
+- **ASGI composition** - Creates one environment-aware dependency container at
+  startup, reuses injected containers, and reliably unwinds partially started
+  services when startup fails.
+- **Packaged frontend** - Development and browser-test servers no longer delete
+  production bundles, and distribution verification rejects missing referenced
+  assets or a server that cannot answer its installed `/health` endpoint.
+
 ## [1.0.5] - 2026-07-31
 
 ### Fixed

@@ -172,10 +172,13 @@ When enabled, the server prompts for a password at startup. Clients must authent
 ptn -p
 ```
 
-**Enable by default (toggle in config):**
+**Toggle the default requirement:**
 ```bash
-ptn -dp
+ptn -tp
 ```
+
+Run it again to disable the requirement. Use `ptn -sp` to save or clear a
+bcrypt password hash.
 
 See [security.md](security.md) for details on how authentication works.
 

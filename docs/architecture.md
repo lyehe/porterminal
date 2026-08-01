@@ -8,7 +8,7 @@ Porterminal uses hexagonal (ports & adapters) architecture for clean separation 
 porterminal/
 ├── __init__.py              # Entry point with CLI and main()
 ├── app.py                   # FastAPI application factory
-├── config.py                # Configuration loading
+├── config.py                # ConfigStore discovery, validation, atomic persistence
 ├── composition.py           # Dependency injection composition root
 ├── container.py             # DI container definition
 ├── asgi.py                  # ASGI application
@@ -46,10 +46,12 @@ porterminal/
 │   │   └── management_service.py # WebSocket management (control plane)
 │   └── ports/
 │       ├── connection_port.py    # Network connection interface
-│       └── connection_registry_port.py
+│       ├── connection_registry_port.py
+│       └── pty_factory.py         # Shared PTY creation contract
 │
 ├── infrastructure/          # External adapters & implementations
 │   ├── web/
+│   │   ├── routes/               # HTTP/WebSocket route groups
 │   │   └── websocket_adapter.py  # FastAPI WebSocket → ConnectionPort
 │   ├── repositories/
 │   │   ├── in_memory_session.py  # Session storage
@@ -57,6 +59,7 @@ porterminal/
 │   ├── registry/
 │   │   └── user_connection_registry.py  # Connection tracking
 │   ├── config/
+│   │   ├── config_service.py    # Async runtime config operations
 │   │   └── shell_detector.py    # Detect available shells
 │   ├── auth.py              # Authentication helpers
 │   ├── cloudflared.py       # Tunnel management
@@ -78,6 +81,7 @@ porterminal/
 frontend/                    # Source frontend (TypeScript/Vite)
 ├── src/
 │   ├── main.ts              # Application bootstrap & wiring
+│   ├── bootstrap/           # Lifecycle, screen mirror, and toolbar wiring
 │   ├── core/events.ts       # Event bus
 │   ├── services/            # High-level service layer
 │   │   ├── ConfigService.ts     # Fetch shell config

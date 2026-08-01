@@ -23,6 +23,9 @@ The frontend is a TypeScript/Vite application in `frontend/`:
 cd frontend
 npm install
 npm run dev    # Development server
+npm run test:run       # Unit/service tests
+npm run test:typecheck # Type-check test code
+npm run test:browser   # Chromium smoke test
 npm run build  # Build to porterminal/static/
 ```
 
@@ -62,32 +65,37 @@ Versioning uses `hatch-vcs` - version is derived from git tags (single source of
 ### Creating a Release
 
 ```bash
-git tag v0.1.9 -m "Release v0.1.9"
-git push origin v0.1.9
+git tag v1.0.6 -m "Release v1.0.6"
+git push origin v1.0.6
 ```
 
 That's it. No manual steps required.
 
 ### Automation Chain
 
-1. **Tag push** triggers `.github/workflows/release.yml`
-2. **GitHub Release** is auto-created with generated release notes
-3. **Release event** triggers `.github/workflows/publish.yml`
-4. **PyPI publish** via trusted publishing (OIDC) - no tokens needed
+1. **Tag push** triggers `.github/workflows/publish.yml`
+2. The reusable verifier runs the backend matrix, Pyright, frontend tests,
+   Chromium smoke test, packaged-asset check, and a fresh wheel installation
+   that must boot successfully and answer its health check
+3. The verified distributions publish to PyPI through trusted publishing (OIDC)
+4. A GitHub Release is created with generated release notes after PyPI succeeds
 
 ### Workflows
 
 | Workflow | Trigger | Action |
 |----------|---------|--------|
-| `ci.yml` | Push to master, PRs | Build & test on all platforms |
-| `release.yml` | Tag push (`v*`) | Create GitHub Release |
-| `publish.yml` | Release published | Build & publish to PyPI |
+| `verify.yml` | Called by other workflows | Reusable backend, frontend, and distribution verification |
+| `ci.yml` | Push to master, PRs | Invoke the reusable verifier |
+| `publish.yml` | Tag push (`v*`) | Verify, publish to PyPI, then create the GitHub Release |
 
-## Manual Build & Publish
+## Manual Build Verification
 
 For local testing or manual release:
 
 ```bash
-uv build              # Creates dist/
-uv publish            # Publishes to PyPI (requires credentials)
+uv build
+python scripts/verify_distribution.py --python 3.12
 ```
+
+Publishing is intentionally performed by the tagged workflow so it cannot
+bypass the same checks used by CI.

@@ -1,9 +1,9 @@
 """Dependency container - holds all wired dependencies."""
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from porterminal.application.ports import PTYFactory
 from porterminal.application.services import (
     AgentTerminalService,
     ManagementService,
@@ -11,7 +11,7 @@ from porterminal.application.services import (
     TabService,
     TerminalService,
 )
-from porterminal.domain import PTYPort, ShellCommand, TerminalDimensions
+from porterminal.domain import ShellCommand
 from porterminal.domain.ports import SessionRepository, TabRepository
 
 if TYPE_CHECKING:
@@ -45,7 +45,7 @@ class Container:
     config_service: "ConfigService"
 
     # Factories
-    pty_factory: Callable[[ShellCommand, TerminalDimensions, dict[str, str], str | None], PTYPort]
+    pty_factory: PTYFactory
 
     # Configuration
     available_shells: list[ShellCommand]

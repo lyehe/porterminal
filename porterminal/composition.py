@@ -1,11 +1,9 @@
 """Composition root - the ONLY place where dependencies are wired."""
 
 import os
-from collections.abc import Callable
 from pathlib import Path
 
-import yaml
-
+from porterminal.application.ports import PTYFactory
 from porterminal.application.services import (
     AgentTerminalService,
     ManagementService,
@@ -13,7 +11,7 @@ from porterminal.application.services import (
     TabService,
     TerminalService,
 )
-from porterminal.config import find_config_file
+from porterminal.config import ConfigStore
 from porterminal.container import Container
 from porterminal.domain import (
     PTYPort,
@@ -23,7 +21,7 @@ from porterminal.domain import (
     TerminalDimensions,
     UserId,
 )
-from porterminal.infrastructure.config import ConfigService, ShellDetector
+from porterminal.infrastructure.config import ConfigService
 from porterminal.infrastructure.registry import UserConnectionRegistry
 from porterminal.infrastructure.repositories import InMemorySessionRepository, InMemoryTabRepository
 from porterminal.infrastructure.web import AgentSessionConnection
@@ -31,7 +29,7 @@ from porterminal.infrastructure.web import AgentSessionConnection
 
 def create_pty_factory(
     cwd: str | None = None,
-) -> Callable[[ShellCommand, TerminalDimensions, str | None], PTYPort]:
+) -> PTYFactory:
     """Create a PTY factory function.
 
     This bridges the domain PTYPort interface with the existing
@@ -77,7 +75,7 @@ def create_pty_factory(
     return factory
 
 
-class PTYManagerAdapter:
+class PTYManagerAdapter(PTYPort):
     """Adapts SecurePTYManager to PTYPort interface."""
 
     def __init__(self, manager, dimensions: TerminalDimensions) -> None:
@@ -129,44 +127,22 @@ def create_container(
     Returns:
         Fully wired dependency container.
     """
-    # Load configuration
-    if config_path is None:
-        config_path = find_config_file()
+    config_store = ConfigStore(config_path=config_path)
+    config = config_store.load()
 
-    config_data: dict = {}
-    if config_path is not None and Path(config_path).exists():
-        with open(config_path, encoding="utf-8") as f:
-            config_data = yaml.safe_load(f) or {}
-
-    # Detect shells
-    detector = ShellDetector()
-    shells = detector.detect_shells()
-
-    # Get config values with defaults
-    server_data = config_data.get("server", {})
-    terminal_data = config_data.get("terminal", {})
-    security_data = config_data.get("security", {})
-    ui_data = config_data.get("ui", {})
-
-    server_host = server_data.get("host", "127.0.0.1")
-    server_port = server_data.get("port", 8000)
-    default_cols = terminal_data.get("cols", 120)
-    default_rows = terminal_data.get("rows", 30)
-    default_shell_id = terminal_data.get("default_shell") or detector.get_default_shell_id()
-    buttons = config_data.get("buttons", [])
-    max_auth_attempts = security_data.get("max_auth_attempts", 5)
+    shells = [ShellCommand.from_dict(shell.model_dump()) for shell in config.terminal.shells]
+    server_host = config.server.host
+    server_port = config.server.port
+    default_cols = config.terminal.cols
+    default_rows = config.terminal.rows
+    default_shell_id = config.terminal.default_shell
+    buttons = [button.model_dump() for button in config.buttons]
+    max_auth_attempts = config.security.max_auth_attempts
 
     # UI defaults: CLI override > config file > default (False)
     compose_mode_default = (
-        compose_mode_override
-        if compose_mode_override is not None
-        else ui_data.get("compose_mode", False)
+        compose_mode_override if compose_mode_override is not None else config.ui.compose_mode
     )
-
-    # Use configured shells if provided, otherwise use detected
-    configured_shells = terminal_data.get("shells", [])
-    if configured_shells:
-        shells = [ShellCommand.from_dict(s) for s in configured_shells]
 
     # Create repositories
     session_repository = InMemorySessionRepository()
@@ -176,7 +152,7 @@ def create_container(
     connection_registry = UserConnectionRegistry()
 
     # Create config service for runtime settings
-    config_service = ConfigService()
+    config_service = ConfigService(config_store)
 
     # Create PTY factory
     pty_factory = create_pty_factory(cwd)

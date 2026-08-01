@@ -209,9 +209,7 @@ ptn -sp
 # Password: [press Enter]
 
 # Set or toggle password requirement
-ptn -tp on       # Enable
-ptn -tp off      # Disable
-ptn -tp toggle   # Toggle current state
+ptn -tp          # Toggle on/off
 ```
 
 See [docs/security.md](docs/security.md) for details.

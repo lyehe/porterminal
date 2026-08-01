@@ -2,41 +2,10 @@
 
 import asyncio
 import logging
-import os
-from pathlib import Path
 
-import yaml
+from porterminal.config import ConfigStore, RawConfig
 
 logger = logging.getLogger(__name__)
-
-
-def _find_config_file() -> Path | None:
-    """Find config file in standard locations.
-
-    Search order:
-    1. PORTERMINAL_CONFIG_PATH env var (if set)
-    2. ptn.yaml in cwd
-    3. .ptn/ptn.yaml in cwd
-    4. ~/.ptn/ptn.yaml (user home directory)
-    """
-    # Check env var first
-    if env_path := os.environ.get("PORTERMINAL_CONFIG_PATH"):
-        return Path(env_path)
-
-    base = Path.cwd()
-
-    # Search order: cwd first, then home
-    candidates = [
-        base / "ptn.yaml",
-        base / ".ptn" / "ptn.yaml",
-        Path.home() / ".ptn" / "ptn.yaml",
-    ]
-
-    for path in candidates:
-        if path.exists():
-            return path
-
-    return None
 
 
 class ConfigService:
@@ -46,41 +15,17 @@ class ConfigService:
     async methods for settings management.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, store: ConfigStore | None = None) -> None:
         self._lock = asyncio.Lock()
+        self._store = store or ConfigStore()
 
-    def _get_config_path(self) -> Path:
-        """Get or create config file path.
+    async def _read(self) -> RawConfig:
+        """Read without blocking the event loop."""
+        return await asyncio.to_thread(self._store.read_raw)
 
-        If no config file exists, creates one at ~/.ptn/ptn.yaml
-        """
-        path = _find_config_file()
-        if path is not None:
-            return path
-
-        # Create default config location
-        default_path = Path.home() / ".ptn" / "ptn.yaml"
-        default_path.parent.mkdir(parents=True, exist_ok=True)
-        if not default_path.exists():
-            default_path.write_text("# Porterminal configuration\n", encoding="utf-8")
-        return default_path
-
-    def _load_config(self, path: Path) -> dict:
-        """Load config from file."""
-        if not path.exists():
-            return {}
-        try:
-            with open(path, encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
-        except Exception as e:
-            logger.warning("Failed to load config from %s: %s", path, e)
-            return {}
-
-    def _save_config(self, path: Path, data: dict) -> None:
-        """Save config to file."""
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            yaml.safe_dump(data, f, default_flow_style=False, allow_unicode=True)
+    async def _write(self, data: RawConfig) -> None:
+        """Validate and atomically write without blocking the event loop."""
+        await asyncio.to_thread(self._store.save_raw, data)
 
     def _extract_settings(self, data: dict) -> dict:
         """Extract settings dict from raw config data."""
@@ -99,8 +44,7 @@ class ConfigService:
         - password_protected: bool (from security.password_hash being set)
         """
         async with self._lock:
-            path = self._get_config_path()
-            data = self._load_config(path)
+            data = await self._read()
             return self._extract_settings(data)
 
     async def update_settings(self, updates: dict) -> tuple[dict, bool]:
@@ -120,8 +64,7 @@ class ConfigService:
         Use `ptn -tp` CLI command to change password.
         """
         async with self._lock:
-            path = self._get_config_path()
-            data = self._load_config(path)
+            data = await self._read()
 
             # Update UI settings
             if "compose_mode" in updates:
@@ -133,7 +76,7 @@ class ConfigService:
                     updates["notify_on_startup"]
                 )
 
-            self._save_config(path, data)
+            await self._write(data)
             logger.info("Config updated: %s", updates)
 
             return self._extract_settings(data), False
@@ -141,8 +84,7 @@ class ConfigService:
     async def get_buttons(self) -> list[dict]:
         """Get current button configuration."""
         async with self._lock:
-            path = self._get_config_path()
-            data = self._load_config(path)
+            data = await self._read()
             return data.get("buttons", [])
 
     async def add_button(self, label: str, send: str, row: int = 1) -> list[dict]:
@@ -157,8 +99,7 @@ class ConfigService:
             raise ValueError("Row must be between 1 and 10")
 
         async with self._lock:
-            path = self._get_config_path()
-            data = self._load_config(path)
+            data = await self._read()
             buttons = data.get("buttons", [])
 
             # Check duplicate (case-insensitive)
@@ -167,7 +108,7 @@ class ConfigService:
 
             buttons.append({"label": label, "send": send, "row": row})
             data["buttons"] = buttons
-            self._save_config(path, data)
+            await self._write(data)
             logger.info("Button added: %s", label)
             return buttons
 
@@ -177,8 +118,7 @@ class ConfigService:
         Raises ValueError if not found.
         """
         async with self._lock:
-            path = self._get_config_path()
-            data = self._load_config(path)
+            data = await self._read()
             buttons = data.get("buttons", [])
 
             new_buttons = [b for b in buttons if b.get("label", "").lower() != label.lower()]
@@ -186,7 +126,7 @@ class ConfigService:
                 raise ValueError(f"Button '{label}' not found")
 
             data["buttons"] = new_buttons
-            self._save_config(path, data)
+            await self._write(data)
             logger.info("Button removed: %s", label)
             return new_buttons
 
@@ -204,14 +144,13 @@ class ConfigService:
         import bcrypt
 
         async with self._lock:
-            path = self._get_config_path()
-            data = self._load_config(path)
+            data = await self._read()
 
             password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
             data.setdefault("security", {})["password_hash"] = password_hash
             data["security"]["require_password"] = True
 
-            self._save_config(path, data)
+            await self._write(data)
             logger.info("Password set in config")
             return self._extract_settings(data)
 
@@ -224,13 +163,12 @@ class ConfigService:
         Note: Server restart required for change to take effect.
         """
         async with self._lock:
-            path = self._get_config_path()
-            data = self._load_config(path)
+            data = await self._read()
 
             data.setdefault("security", {})["password_hash"] = ""
             data["security"]["require_password"] = False
 
-            self._save_config(path, data)
+            await self._write(data)
             logger.info("Password cleared from config")
             return self._extract_settings(data)
 
@@ -247,12 +185,11 @@ class ConfigService:
         prompted at startup. Server restart required for change to take effect.
         """
         async with self._lock:
-            path = self._get_config_path()
-            data = self._load_config(path)
+            data = await self._read()
 
             data.setdefault("security", {})["require_password"] = require
 
-            self._save_config(path, data)
+            await self._write(data)
             logger.info("Password requirement set to: %s", require)
             return self._extract_settings(data)
 
@@ -266,8 +203,7 @@ class ConfigService:
             - currently_protected: bool - Whether current session has password protection
         """
         async with self._lock:
-            path = self._get_config_path()
-            data = self._load_config(path)
+            data = await self._read()
 
             security = data.get("security", {})
             return {

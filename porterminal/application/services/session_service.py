@@ -6,6 +6,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
+from porterminal.application.ports import PTYFactory
 from porterminal.domain import (
     PTYPort,
     Session,
@@ -29,7 +30,7 @@ class SessionService:
     def __init__(
         self,
         repository: SessionRepository[PTYPort],
-        pty_factory: Callable[[ShellCommand, TerminalDimensions, str | None], PTYPort],
+        pty_factory: PTYFactory,
         limit_checker: SessionLimitChecker | None = None,
         working_directory: str | None = None,
     ) -> None:

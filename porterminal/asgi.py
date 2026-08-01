@@ -7,10 +7,6 @@ Usage:
     uvicorn porterminal.asgi:create_app_from_env --factory
 """
 
-import os
-
-from porterminal.composition import create_container
-
 
 def create_app_from_env():
     """Create FastAPI app from environment variables.
@@ -19,6 +15,8 @@ def create_app_from_env():
     Environment variables:
         PORTERMINAL_CONFIG_PATH: Path to config file (overrides search)
         PORTERMINAL_CWD: Working directory for PTY sessions
+        PORTERMINAL_PASSWORD_HASH: Active password hash supplied by the CLI
+        PORTERMINAL_COMPOSE_MODE: Optional compose-mode override
 
     Config search order (when env var not set):
         1. ptn.yaml in cwd
@@ -27,17 +25,7 @@ def create_app_from_env():
     """
     from porterminal.app import create_app
 
-    cwd = os.environ.get("PORTERMINAL_CWD")
-
-    # config_path=None uses find_config_file() to search standard locations
-    container = create_container(config_path=None, cwd=cwd)
-
-    # Create app with container
-    # Note: The current app.py doesn't accept container yet,
-    # so we just create the default app and store container in state
-    app = create_app()
-
-    # Store container in app state for handlers to access
-    app.state.container = container
-
-    return app
+    # The application lifespan performs environment-aware composition exactly
+    # once. Tests and embedders can still inject a precomposed container through
+    # porterminal.app.create_app(container).
+    return create_app()

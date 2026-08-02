@@ -65,11 +65,11 @@ Versioning uses `hatch-vcs` - version is derived from git tags (single source of
 ### Creating a Release
 
 ```bash
-git tag v1.0.6 -m "Release v1.0.6"
-git push origin v1.0.6
+git tag vX.Y.Z -m "Release vX.Y.Z"
+git push origin vX.Y.Z
 ```
 
-That's it. No manual steps required.
+Replace `X.Y.Z` with the release version. No manual version file needs editing.
 
 ### Automation Chain
 

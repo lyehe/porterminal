@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-08-02
+
 ### Changed
 
 - **CLI package boundary** - Moved runtime orchestration behind the existing
@@ -30,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Binary installation floors** - Raised the `pywinpty` and `PyYAML` minimums
   to releases with wheels for both supported Python versions, avoiding
   unexpected local Rust/C extension builds in fresh installs.
+- **Configuration client** - Consolidated password-management response handling
+  behind one typed request path without changing its API calls or UI results.
 
 ### Security
 
@@ -493,7 +497,9 @@ This release focuses on mobile experience improvements and robust shell support.
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v1.0.7...HEAD
+[1.0.7]: https://github.com/lyehe/porterminal/compare/v1.0.6...v1.0.7
+[1.0.6]: https://github.com/lyehe/porterminal/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/lyehe/porterminal/compare/v1.0.4...v1.0.5
 [1.0.2]: https://github.com/lyehe/porterminal/compare/v1.0.1...v1.0.2
 [0.5.0]: https://github.com/lyehe/porterminal/compare/v0.4.8...v0.5.0

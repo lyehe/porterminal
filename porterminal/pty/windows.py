@@ -3,25 +3,25 @@
 import logging
 import select
 import time
+from importlib import import_module
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Import pywinpty - only available on Windows
+# Load pywinpty dynamically so non-Windows type checks do not require the
+# platform-specific package.
+WinPtyProcess: Any | None
 try:
-    from winpty import PtyProcess as WinPtyProcess
-
-    HAS_WINPTY = True
-except ImportError:
-    WinPtyProcess = None  # type: ignore[misc, assignment]
-    HAS_WINPTY = False
+    WinPtyProcess = getattr(import_module("winpty"), "PtyProcess")
+except (AttributeError, ImportError):
+    WinPtyProcess = None
 
 
 class WindowsPTYBackend:
     """Windows PTY implementation using pywinpty."""
 
     def __init__(self) -> None:
-        if not HAS_WINPTY:
+        if WinPtyProcess is None:
             raise RuntimeError("pywinpty is not installed")
         self._pty: Any | None = None
         self._rows: int = 30

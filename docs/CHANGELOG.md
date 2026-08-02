@@ -41,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   peer instead of spoofable Cloudflare headers. Uvicorn proxy-header rewriting
   is disabled so only the local server or its loopback Cloudflare tunnel origin
   can reach the administrative shutdown path.
+- **Patched dependency lock** - Refreshed Starlette, python-dotenv, Pygments,
+  Click, filelock, virtualenv, pytest, and the compatible FastAPI release to
+  versions that resolve all dependency advisories reported before publication;
+  raised the FastAPI, Starlette, and pytest floors so minimum-version installs
+  cannot reintroduce the affected releases.
 
 ## [1.0.6] - 2026-08-01
 

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createConfigService } from '@/services/ConfigService';
+import {
+    createConfigService,
+    type ConfigService,
+    type PasswordResult,
+} from '@/services/ConfigService';
 
 
 function response(status: number, payload: unknown): Response {
@@ -10,6 +14,40 @@ function response(status: number, payload: unknown): Response {
         json: vi.fn().mockResolvedValue(payload),
     } as unknown as Response;
 }
+
+const passwordRequests: Array<{
+    name: string;
+    invoke: (service: ConfigService) => Promise<PasswordResult>;
+    url: string;
+    options: RequestInit;
+}> = [
+    {
+        name: 'sets a password',
+        invoke: (service) => service.setPassword('secret'),
+        url: '/api/password',
+        options: {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: 'secret' }),
+        },
+    },
+    {
+        name: 'clears a password',
+        invoke: (service) => service.clearPassword(),
+        url: '/api/password',
+        options: { method: 'DELETE' },
+    },
+    {
+        name: 'changes the password requirement',
+        invoke: (service) => service.setRequirePassword(false),
+        url: '/api/password/require',
+        options: {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ require: false }),
+        },
+    },
+];
 
 
 describe('config service', () => {
@@ -63,6 +101,42 @@ describe('config service', () => {
         expect(result).toEqual({
             success: false,
             error: 'row: Input should be less than or equal to 10',
+        });
+    });
+
+    it.each(passwordRequests)(
+        '$name through the shared response contract',
+        async ({ invoke, url, options }) => {
+            const payload = {
+                settings: {
+                    compose_mode: false,
+                    notify_on_startup: true,
+                    password_protected: true,
+                },
+                requires_restart: true,
+                message: 'Restart required',
+            };
+            const fetchMock = vi.fn().mockResolvedValue(response(200, payload));
+            vi.stubGlobal('fetch', fetchMock);
+
+            const result = await invoke(createConfigService());
+
+            expect(fetchMock).toHaveBeenCalledWith(url, options);
+            expect(result).toEqual({ success: true, ...payload });
+        },
+    );
+
+    it('uses structured validation errors for password requests', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(422, {
+            detail: [{ loc: ['body', 'password'], msg: 'String should have at least 1 character' }],
+        })));
+
+        const result = await createConfigService().setPassword('secret');
+
+        expect(result).toEqual({
+            success: false,
+            requires_restart: false,
+            error: 'password: String should have at least 1 character',
         });
     });
 });

@@ -10,14 +10,16 @@ export interface SettingsUpdate {
     notify_on_startup?: boolean;
 }
 
+interface PersistedSettings {
+    compose_mode: boolean;
+    notify_on_startup: boolean;
+    password_protected: boolean;
+}
+
 export interface SettingsUpdateResult {
     success: boolean;
     requires_restart: boolean;
-    settings?: {
-        compose_mode: boolean;
-        notify_on_startup: boolean;
-        password_protected: boolean;
-    };
+    settings?: PersistedSettings;
     error?: string;
 }
 
@@ -36,11 +38,7 @@ export interface PasswordStatus {
 export interface PasswordResult {
     success: boolean;
     requires_restart: boolean;
-    settings?: {
-        compose_mode: boolean;
-        notify_on_startup: boolean;
-        password_protected: boolean;
-    };
+    settings?: PersistedSettings;
     message?: string;
     error?: string;
 }
@@ -67,6 +65,12 @@ export interface ConfigService {
 interface ApiErrorPayload {
     error?: unknown;
     detail?: unknown;
+}
+
+interface PasswordResponse extends ApiErrorPayload {
+    requires_restart: boolean;
+    settings?: PersistedSettings;
+    message?: string;
 }
 
 function apiError(payload: ApiErrorPayload, status: number): string {
@@ -102,6 +106,32 @@ async function buttonRequest(url: string, options: RequestInit): Promise<ButtonR
         return { success: true, buttons: data.buttons };
     } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    }
+}
+
+async function passwordRequest(url: string, options: RequestInit): Promise<PasswordResult> {
+    try {
+        const response = await fetch(url, options);
+        const data = await response.json() as PasswordResponse;
+        if (!response.ok) {
+            return {
+                success: false,
+                requires_restart: false,
+                error: apiError(data, response.status),
+            };
+        }
+        return {
+            success: true,
+            requires_restart: data.requires_restart,
+            settings: data.settings,
+            message: data.message,
+        };
+    } catch (e) {
+        return {
+            success: false,
+            requires_restart: false,
+            error: e instanceof Error ? e.message : 'Unknown error',
+        };
     }
 }
 
@@ -189,89 +219,23 @@ export function createConfigService(): ConfigService {
         },
 
         async setPassword(password: string): Promise<PasswordResult> {
-            try {
-                const response = await fetch('/api/password', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password }),
-                });
-                const data = await response.json();
-                if (!response.ok) {
-                    return {
-                        success: false,
-                        requires_restart: false,
-                        error: apiError(data as ApiErrorPayload, response.status),
-                    };
-                }
-                return {
-                    success: true,
-                    requires_restart: data.requires_restart,
-                    settings: data.settings,
-                    message: data.message,
-                };
-            } catch (e) {
-                return {
-                    success: false,
-                    requires_restart: false,
-                    error: e instanceof Error ? e.message : 'Unknown error',
-                };
-            }
+            return passwordRequest('/api/password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password }),
+            });
         },
 
         async clearPassword(): Promise<PasswordResult> {
-            try {
-                const response = await fetch('/api/password', { method: 'DELETE' });
-                const data = await response.json();
-                if (!response.ok) {
-                    return {
-                        success: false,
-                        requires_restart: false,
-                        error: apiError(data as ApiErrorPayload, response.status),
-                    };
-                }
-                return {
-                    success: true,
-                    requires_restart: data.requires_restart,
-                    settings: data.settings,
-                    message: data.message,
-                };
-            } catch (e) {
-                return {
-                    success: false,
-                    requires_restart: false,
-                    error: e instanceof Error ? e.message : 'Unknown error',
-                };
-            }
+            return passwordRequest('/api/password', { method: 'DELETE' });
         },
 
         async setRequirePassword(require: boolean): Promise<PasswordResult> {
-            try {
-                const response = await fetch('/api/password/require', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ require }),
-                });
-                const data = await response.json();
-                if (!response.ok) {
-                    return {
-                        success: false,
-                        requires_restart: false,
-                        error: apiError(data as ApiErrorPayload, response.status),
-                    };
-                }
-                return {
-                    success: true,
-                    requires_restart: data.requires_restart,
-                    settings: data.settings,
-                    message: data.message,
-                };
-            } catch (e) {
-                return {
-                    success: false,
-                    requires_restart: false,
-                    error: e instanceof Error ? e.message : 'Unknown error',
-                };
-            }
+            return passwordRequest('/api/password/require', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ require }),
+            });
         },
     };
 }

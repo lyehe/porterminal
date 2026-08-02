@@ -45,7 +45,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/lyehe/porterminal"
 Repository = "https://github.com/lyehe/porterminal"
-Documentation = "https://github.com/lyehe/porterminal/tree/main/docs"
+Documentation = "https://github.com/lyehe/porterminal/tree/master/docs"
 Issues = "https://github.com/lyehe/porterminal/issues"
 
 [project.scripts]
@@ -115,12 +115,16 @@ quote-style = "double"
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 include = [
+    "porterminal/__init__.py",
+    "porterminal/app.py",
     "porterminal/domain",
     "porterminal/application",
     "porterminal/config.py",
     "porterminal/container.py",
     "porterminal/composition.py",
     "porterminal/infrastructure/config",
+    "porterminal/infrastructure/web",
+    "porterminal/updater.py",
     "scripts/verify_distribution.py",
 ]
 exclude = ["porterminal/static", "porterminal/_version.py"]

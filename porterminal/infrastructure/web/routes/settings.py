@@ -31,7 +31,10 @@ async def list_tabs(request: Request):
 async def get_client_config(request: Request):
     """Get shells, buttons, UI defaults, and version information."""
     container = get_container(request)
-    update_available, latest_version = check_for_updates(use_cache=True)
+    update_available, latest_version = await asyncio.to_thread(
+        check_for_updates,
+        use_cache=True,
+    )
     settings = await container.config_service.get_settings()
 
     return {

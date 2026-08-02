@@ -1,5 +1,7 @@
 """Characterization tests for the application's public route contract."""
 
+import asyncio
+import threading
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
@@ -10,6 +12,7 @@ import porterminal.app as app_module
 from porterminal.app import create_app
 from porterminal.composition import create_container
 from porterminal.container import Container
+from porterminal.infrastructure.web.routes import settings as settings_routes
 from porterminal.infrastructure.web.routes import websocket_router
 
 
@@ -77,6 +80,60 @@ async def test_discovery_health_and_validation_responses(tmp_path):
     assert health.json() == {"status": "healthy", "sessions": 0, "tabs": 0, "connections": 0}
     assert invalid_session.status_code == 400
     assert reload_response.status_code == 501
+
+
+@pytest.mark.asyncio
+async def test_config_route_preserves_update_response_contract(tmp_path, monkeypatch):
+    container = create_container(config_path=tmp_path / "missing.yaml")
+    app = create_app(container)
+    transport = httpx.ASGITransport(app=app)
+    monkeypatch.setattr(
+        settings_routes,
+        "check_for_updates",
+        lambda *, use_cache: (use_cache, "9.9.9"),
+    )
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/config")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["update_available"] is True
+    assert payload["latest_version"] == "9.9.9"
+    assert payload["upgrade_command"]
+
+
+@pytest.mark.asyncio
+async def test_config_route_does_not_block_event_loop_during_update_check(
+    tmp_path,
+    monkeypatch,
+):
+    container = create_container(config_path=tmp_path / "missing.yaml")
+    app = create_app(container)
+    transport = httpx.ASGITransport(app=app)
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_update_check(*, use_cache):
+        assert use_cache is True
+        started.set()
+        assert release.wait(timeout=2)
+        return False, None
+
+    monkeypatch.setattr(settings_routes, "check_for_updates", slow_update_check)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        request = asyncio.create_task(client.get("/api/config"))
+        try:
+            assert await asyncio.to_thread(started.wait, 1)
+            await asyncio.sleep(0)
+            assert not request.done()
+        finally:
+            release.set()
+        response = await request
+
+    assert response.status_code == 200
+    assert response.json()["update_available"] is False
 
 
 def test_environment_composition_preserves_cli_overrides(monkeypatch):

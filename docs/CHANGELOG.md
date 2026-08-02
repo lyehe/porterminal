@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **CLI package boundary** - Moved runtime orchestration behind the existing
+  `porterminal.main` entry point so importing package metadata no longer loads
+  the CLI, tunnel, repository, and process-management stack.
+- **Responsive update checks** - Runs the existing cached PyPI update lookup
+  outside the ASGI event loop without changing its response contract.
+- **Refactor safeguards** - Added public entry-point and update-route
+  characterization tests and expanded Pyright coverage across the package root,
+  application factory, updater, and web adapters.
+
 ## [1.0.6] - 2026-08-01
 
 ### Added

@@ -6,7 +6,7 @@ Porterminal uses hexagonal (ports & adapters) architecture for clean separation 
 
 ```
 porterminal/
-├── __init__.py              # Entry point with CLI and main()
+├── __init__.py              # Package metadata and lazy CLI entry point
 ├── app.py                   # FastAPI application factory
 ├── config.py                # ConfigStore discovery, validation, atomic persistence
 ├── composition.py           # Dependency injection composition root
@@ -73,6 +73,7 @@ porterminal/
 │   └── unix.py              # Unix/Linux/macOS (pty module)
 │
 ├── cli/                     # Command-line interface
+│   ├── main.py              # Runtime orchestration and process supervision
 │   ├── args.py              # Argument parsing
 │   └── display.py           # Startup screen & QR code
 │
@@ -331,7 +332,7 @@ Shell detection uses platform-specific methods (registry on Windows, `/etc/shell
 
 Agent routes, alongside the two human WebSockets, let AI agents drive the terminal over the [Model Context Protocol](https://modelcontextprotocol.io) or a plain REST fallback:
 
-- **`/mcp`** - a FastMCP **Streamable HTTP** server (`infrastructure/web/mcp_adapter.py`), mounted on the FastAPI app and run from the app lifespan. Tools: `run_command`, `read_screen`, `send_keys`, `send_signal`.
+- **`/mcp`** - an MCPServer **Streamable HTTP** server (`infrastructure/web/mcp_adapter.py`), mounted on the FastAPI app and run from the app lifespan. Tools: `run_command`, `read_screen`, `send_keys`, `send_signal`.
 - **`/api/agent/*`** - REST endpoints for agents that can make HTTP requests but cannot register an MCP server: `run`, `screen`, `keys`, `signal`, and `session` close.
 - **`AgentTerminalService`** (`application/services/agent_terminal_service.py`) maps one MCP session or REST `session_id` to a dedicated PTY session + 🤖 tab. MCP sessions reap on client disconnect; REST sessions reap on explicit close, shell exit, or idle cleanup.
 - **`AgentSessionConnection`** (`infrastructure/web/agent_connection.py`) implements the same `ConnectionPort` the human path uses, bridging request/response MCP tools onto the shared multi-client `TerminalService` (a `pyte` screen powers `read_screen`). Because the agent is "just another client", a human co-views and can take over the agent's shell for free.

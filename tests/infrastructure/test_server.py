@@ -26,4 +26,5 @@ def test_start_server_uses_environment_aware_asgi_factory(monkeypatch):
         "--host",
     ]
     assert "porterminal.app:app" not in captured["command"]
+    assert "--no-proxy-headers" in captured["command"]
     assert captured["kwargs"]["stdout"] is server.subprocess.PIPE

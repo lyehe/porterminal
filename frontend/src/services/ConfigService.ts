@@ -64,13 +64,40 @@ export interface ConfigService {
     setRequirePassword(require: boolean): Promise<PasswordResult>;
 }
 
+interface ApiErrorPayload {
+    error?: unknown;
+    detail?: unknown;
+}
+
+function apiError(payload: ApiErrorPayload, status: number): string {
+    if (typeof payload.error === 'string' && payload.error) {
+        return payload.error;
+    }
+    if (typeof payload.detail === 'string' && payload.detail) {
+        return payload.detail;
+    }
+    if (Array.isArray(payload.detail)) {
+        const messages = payload.detail.flatMap((item: unknown) => {
+            if (!item || typeof item !== 'object') return [];
+            const detail = item as { loc?: unknown; msg?: unknown };
+            if (typeof detail.msg !== 'string') return [];
+            const location = Array.isArray(detail.loc)
+                ? detail.loc.filter((part) => part !== 'body').join('.')
+                : '';
+            return [location ? `${location}: ${detail.msg}` : detail.msg];
+        });
+        if (messages.length > 0) return messages.join('; ');
+    }
+    return `Request failed (${status})`;
+}
+
 /** Helper for button API requests */
 async function buttonRequest(url: string, options: RequestInit): Promise<ButtonResult> {
     try {
         const response = await fetch(url, options);
         const data = await response.json();
         if (!response.ok) {
-            return { success: false, error: data.error };
+            return { success: false, error: apiError(data as ApiErrorPayload, response.status) };
         }
         return { success: true, buttons: data.buttons };
     } catch (e) {
@@ -111,11 +138,11 @@ export function createConfigService(): ConfigService {
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
+                    const errorData = await response.json().catch(() => ({})) as ApiErrorPayload;
                     return {
                         success: false,
                         requires_restart: false,
-                        error: errorData.error || `Failed: ${response.status}`,
+                        error: apiError(errorData, response.status),
                     };
                 }
 
@@ -170,7 +197,11 @@ export function createConfigService(): ConfigService {
                 });
                 const data = await response.json();
                 if (!response.ok) {
-                    return { success: false, requires_restart: false, error: data.error };
+                    return {
+                        success: false,
+                        requires_restart: false,
+                        error: apiError(data as ApiErrorPayload, response.status),
+                    };
                 }
                 return {
                     success: true,
@@ -192,7 +223,11 @@ export function createConfigService(): ConfigService {
                 const response = await fetch('/api/password', { method: 'DELETE' });
                 const data = await response.json();
                 if (!response.ok) {
-                    return { success: false, requires_restart: false, error: data.error };
+                    return {
+                        success: false,
+                        requires_restart: false,
+                        error: apiError(data as ApiErrorPayload, response.status),
+                    };
                 }
                 return {
                     success: true,
@@ -218,7 +253,11 @@ export function createConfigService(): ConfigService {
                 });
                 const data = await response.json();
                 if (!response.ok) {
-                    return { success: false, requires_restart: false, error: data.error };
+                    return {
+                        success: false,
+                        requires_restart: false,
+                        error: apiError(data as ApiErrorPayload, response.status),
+                    };
                 }
                 return {
                     success: true,

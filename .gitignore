@@ -51,7 +51,9 @@ logs/
 # Testing
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
+frontend/coverage/
 
 # Build
 *.manifest

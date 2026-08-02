@@ -7,6 +7,7 @@ import signal
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from porterminal import __version__
 from porterminal.domain import UserId
@@ -16,6 +17,33 @@ from .common import get_container
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+class _StrictRequest(BaseModel):
+    """Reject coercion and unknown fields on state-changing API requests."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class SettingsUpdateRequest(_StrictRequest):
+    # Defaults describe the effective settings while ``exclude_unset=True``
+    # below preserves PATCH-like behavior for omitted fields.
+    compose_mode: bool = False
+    notify_on_startup: bool = True
+
+
+class ButtonCreateRequest(_StrictRequest):
+    label: str = Field(min_length=1)
+    send: str = Field(min_length=1)
+    row: int = Field(default=1, ge=1, le=10)
+
+
+class PasswordSetRequest(_StrictRequest):
+    password: str = Field(min_length=1)
+
+
+class PasswordRequirementRequest(_StrictRequest):
+    require: bool
 
 
 @router.get("/api/tabs")
@@ -67,43 +95,20 @@ async def get_settings(request: Request):
 
 
 @router.post("/api/settings")
-async def update_settings(request: Request):
+async def update_settings(body: SettingsUpdateRequest, request: Request):
     """Update compose-mode and update-notification settings."""
     container = get_container(request)
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
-
-    allowed_keys = {"compose_mode", "notify_on_startup"}
-    invalid_keys = set(body.keys()) - allowed_keys
-    if invalid_keys:
-        return JSONResponse(
-            {"error": f"Invalid settings keys: {invalid_keys}"},
-            status_code=400,
-        )
-
-    settings, requires_restart = await container.config_service.update_settings(body)
+    updates: dict[str, bool] = body.model_dump(exclude_unset=True)
+    settings, requires_restart = await container.config_service.update_settings(updates)
     return {"settings": settings, "requires_restart": requires_restart}
 
 
 @router.post("/api/buttons")
-async def add_button(request: Request):
+async def add_button(body: ButtonCreateRequest, request: Request):
     """Add a custom terminal button."""
     container = get_container(request)
     try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
-
-    label = body.get("label")
-    send = body.get("send")
-    row = body.get("row", 1)
-    if not label or not send:
-        return JSONResponse({"error": "label and send required"}, status_code=400)
-
-    try:
-        buttons = await container.config_service.add_button(label, send, row)
+        buttons = await container.config_service.add_button(body.label, body.send, body.row)
         return {"buttons": buttons}
     except ValueError as error:
         return JSONResponse({"error": str(error)}, status_code=400)
@@ -129,19 +134,10 @@ async def get_password_status(request: Request):
 
 
 @router.post("/api/password")
-async def set_password(request: Request):
+async def set_password(body: PasswordSetRequest, request: Request):
     """Save a password; restart is required before it becomes active."""
     container = get_container(request)
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
-
-    password = body.get("password")
-    if not password or not isinstance(password, str):
-        return JSONResponse({"error": "password required"}, status_code=400)
-
-    settings = await container.config_service.set_password(password)
+    settings = await container.config_service.set_password(body.password)
     return {
         "settings": settings,
         "requires_restart": True,
@@ -161,43 +157,35 @@ async def clear_password(request: Request):
 
 
 @router.post("/api/password/require")
-async def set_require_password(request: Request):
+async def set_require_password(body: PasswordRequirementRequest, request: Request):
     """Persist whether startup should require a password."""
     container = get_container(request)
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
-
-    require = body.get("require")
-    if require is None or not isinstance(require, bool):
-        return JSONResponse({"error": "require (boolean) required"}, status_code=400)
-
-    settings = await container.config_service.set_require_password(require)
+    settings = await container.config_service.set_require_password(body.require)
     return {
         "settings": settings,
         "requires_restart": True,
-        "message": f"Password requirement {'enabled' if require else 'disabled'}. "
+        "message": f"Password requirement {'enabled' if body.require else 'disabled'}. "
         "Restart server for changes to take effect.",
     }
 
 
+def _schedule_shutdown() -> None:
+    asyncio.get_running_loop().call_later(0.5, lambda: os.kill(os.getpid(), signal.SIGTERM))
+
+
 @router.post("/api/shutdown")
 async def shutdown_server(request: Request):
-    """Shut down when requested locally or through Cloudflare."""
+    """Shut down only when the direct network peer is loopback."""
     client_host = request.client.host if request.client else None
     is_localhost = client_host in ("127.0.0.1", "::1", "localhost")
-    is_cloudflare_tunnel = request.headers.get("cf-ray") is not None
-    cf_user = request.headers.get("cf-access-authenticated-user-email")
 
-    if not is_localhost and not is_cloudflare_tunnel and not cf_user:
+    if not is_localhost:
         logger.warning("Unauthorized shutdown attempt from %s", client_host)
         return JSONResponse(
-            {"error": "Unauthorized - must be localhost or via Cloudflare Tunnel"},
+            {"error": "Unauthorized - shutdown is restricted to the local machine"},
             status_code=403,
         )
 
-    source = cf_user or ("tunnel" if is_cloudflare_tunnel else client_host)
-    logger.info("Shutdown requested via API by %s", source)
-    asyncio.get_running_loop().call_later(0.5, lambda: os.kill(os.getpid(), signal.SIGTERM))
+    logger.info("Shutdown requested via API by %s", client_host)
+    _schedule_shutdown()
     return {"status": "ok", "message": "Server shutting down..."}

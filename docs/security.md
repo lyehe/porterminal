@@ -129,12 +129,26 @@ This means someone has your URL (likely social engineering - they saw your scree
 - URL is the only authentication
 - Anyone with the link has full terminal access
 
+### Administrative Shutdown Boundary
+
+`POST /api/shutdown` accepts requests only when the server's direct TCP peer is
+loopback. Porterminal disables Uvicorn's proxy-header rewriting for this check,
+so forwarded headers such as `CF-Ray`, `CF-Access-Authenticated-User-Email`, and
+`X-Forwarded-For` cannot turn a remote direct request into a local one.
+
+The bundled Cloudflare Quick Tunnel connects to Porterminal through
+`127.0.0.1`, so the existing browser shutdown control continues to work through
+the tunnel. If you put Porterminal behind a different reverse proxy, run that
+proxy on the same machine and connect it to Porterminal over loopback; a proxy
+whose origin connection comes from a non-loopback address receives HTTP 403.
+
 ## Best Practices
 
 1. **Use password** (`-p`) if your screen can be exposed to others
 2. **Stop the server** when not in use (`Ctrl+C`)
 3. **Use `--no-tunnel`** for local network only
 4. **Don't run as admin/root** - server warns if elevated
+5. **Keep the origin private** when relying on Cloudflare Access identity headers
 
 ## Troubleshooting
 

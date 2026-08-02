@@ -56,6 +56,31 @@ def test_public_route_inventory_is_stable():
     assert websocket_paths == {"/ws/management", "/ws"}
 
 
+def test_state_changing_request_schemas_are_strict_and_non_nullable():
+    schemas = create_app().openapi()["components"]["schemas"]
+
+    expected_properties = {
+        "SettingsUpdateRequest": {
+            "compose_mode": "boolean",
+            "notify_on_startup": "boolean",
+        },
+        "ButtonCreateRequest": {
+            "label": "string",
+            "send": "string",
+            "row": "integer",
+        },
+        "PasswordSetRequest": {"password": "string"},
+        "PasswordRequirementRequest": {"require": "boolean"},
+    }
+
+    for schema_name, properties in expected_properties.items():
+        schema = schemas[schema_name]
+        assert schema["additionalProperties"] is False
+        assert {
+            field_name: schema["properties"][field_name]["type"] for field_name in properties
+        } == properties
+
+
 @pytest.mark.asyncio
 async def test_discovery_health_and_validation_responses(tmp_path):
     container = create_container(config_path=tmp_path / "missing.yaml")
@@ -134,6 +159,102 @@ async def test_config_route_does_not_block_event_loop_during_update_check(
 
     assert response.status_code == 200
     assert response.json()["update_available"] is False
+
+
+@pytest.mark.asyncio
+async def test_settings_routes_reject_malformed_and_coercive_json(tmp_path):
+    container = create_container(config_path=tmp_path / "settings.yaml")
+    app = create_app(container)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+
+    cases = [
+        ("/api/settings", []),
+        ("/api/settings", {"compose_mode": "false"}),
+        ("/api/settings", {"compose_mode": None}),
+        ("/api/settings", {"unknown": True}),
+        ("/api/buttons", 1),
+        ("/api/buttons", {}),
+        ("/api/buttons", {"label": "Run", "send": "echo ok", "row": True}),
+        ("/api/password", []),
+        ("/api/password", {}),
+        ("/api/password/require", {}),
+        ("/api/password/require", {"require": "false"}),
+    ]
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        responses = [await client.post(path, json=body) for path, body in cases]
+        responses.append(
+            await client.post(
+                "/api/settings",
+                content="{",
+                headers={"content-type": "application/json"},
+            )
+        )
+
+    assert [response.status_code for response in responses] == [422] * len(responses)
+    assert all("detail" in response.json() for response in responses)
+
+
+@pytest.mark.asyncio
+async def test_settings_routes_preserve_valid_boolean_values(tmp_path):
+    container = create_container(config_path=tmp_path / "settings.yaml")
+    app = create_app(container)
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        enabled = await client.post(
+            "/api/settings",
+            json={"compose_mode": True, "notify_on_startup": False},
+        )
+        disabled = await client.post("/api/settings", json={"compose_mode": False})
+        unchanged = await client.post("/api/settings", json={})
+
+    assert enabled.status_code == 200
+    assert enabled.json()["settings"]["notify_on_startup"] is False
+    assert disabled.status_code == 200
+    assert disabled.json()["settings"]["compose_mode"] is False
+    assert unchanged.status_code == 200
+    assert unchanged.json()["settings"]["compose_mode"] is False
+
+
+@pytest.mark.asyncio
+async def test_shutdown_rejects_spoofed_cloudflare_headers_from_remote_peer(
+    tmp_path,
+    monkeypatch,
+):
+    container = create_container(config_path=tmp_path / "settings.yaml")
+    app = create_app(container)
+    scheduled = MagicMock()
+    monkeypatch.setattr(settings_routes, "_schedule_shutdown", scheduled)
+    remote = httpx.ASGITransport(app=app, client=("203.0.113.10", 4567))
+
+    async with httpx.AsyncClient(transport=remote, base_url="http://test") as client:
+        response = await client.post(
+            "/api/shutdown",
+            headers={
+                "cf-ray": "spoofed",
+                "cf-access-authenticated-user-email": "attacker@example.test",
+                "x-forwarded-for": "127.0.0.1",
+            },
+        )
+
+    assert response.status_code == 403
+    scheduled.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_shutdown_allows_a_direct_loopback_peer(tmp_path, monkeypatch):
+    container = create_container(config_path=tmp_path / "settings.yaml")
+    app = create_app(container)
+    scheduled = MagicMock()
+    monkeypatch.setattr(settings_routes, "_schedule_shutdown", scheduled)
+    loopback = httpx.ASGITransport(app=app, client=("127.0.0.1", 4567))
+
+    async with httpx.AsyncClient(transport=loopback, base_url="http://test") as client:
+        response = await client.post("/api/shutdown")
+
+    assert response.status_code == 200
+    scheduled.assert_called_once_with()
 
 
 def test_environment_composition_preserves_cli_overrides(monkeypatch):

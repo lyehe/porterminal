@@ -31,8 +31,11 @@ classifiers = [
 dependencies = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
-    "pywinpty>=2.0.0; sys_platform == 'win32'",
-    "pyyaml>=6.0",
+    # 2.0.15 is the first release with wheels for every advertised Python
+    # version (3.12 and 3.13), avoiding an unexpected local Rust build.
+    "pywinpty>=2.0.15; sys_platform == 'win32'",
+    # 6.0.2 adds prebuilt CPython 3.13 wheels on supported platforms.
+    "pyyaml>=6.0.2",
     "pydantic>=2.0",
     "rich>=13.0",
     "qrcode>=7.4",
@@ -94,6 +97,7 @@ dev-dependencies = [
     "ruff>=0.8.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
 ]
 
 [tool.pytest.ini_options]
@@ -115,17 +119,15 @@ quote-style = "double"
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 include = [
-    "porterminal/__init__.py",
-    "porterminal/app.py",
-    "porterminal/domain",
-    "porterminal/application",
-    "porterminal/config.py",
-    "porterminal/container.py",
-    "porterminal/composition.py",
-    "porterminal/infrastructure/config",
-    "porterminal/infrastructure/web",
-    "porterminal/updater.py",
+    "porterminal",
     "scripts/verify_distribution.py",
 ]
 exclude = ["porterminal/static", "porterminal/_version.py"]
 reportMissingTypeStubs = "none"
+
+[tool.coverage.run]
+branch = true
+source = ["porterminal"]
+
+[tool.coverage.report]
+show_missing = true

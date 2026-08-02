@@ -3,6 +3,7 @@
 import ctypes
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
@@ -27,8 +28,11 @@ logger = logging.getLogger(__name__)
 
 def is_admin() -> bool:
     """Check whether the Windows process is elevated."""
+    if sys.platform != "win32":
+        return False
     try:
-        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        windll = getattr(ctypes, "windll", None)
+        return windll is not None and windll.shell32.IsUserAnAdmin() != 0
     except Exception:
         return False
 

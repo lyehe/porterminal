@@ -6,7 +6,10 @@ import re
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
+from collections.abc import Callable
+from typing import Any
 
 from rich.console import Console
 
@@ -51,7 +54,7 @@ def wait_for_server(host: str, port: int, timeout: int = 30) -> bool:
     return False
 
 
-def start_server(host: str, port: int, *, verbose: bool = False) -> subprocess.Popen:
+def start_server(host: str, port: int, *, verbose: bool = False) -> subprocess.Popen[Any]:
     """Start the uvicorn server.
 
     Args:
@@ -75,11 +78,15 @@ def start_server(host: str, port: int, *, verbose: bool = False) -> subprocess.P
         "--log-level",
         "debug" if verbose else "warning",
         "--no-access-log",  # Disable access logging
+        # Preserve the direct TCP peer for loopback-only administration checks.
+        # Cloudflare still supplies its public scheme/host headers to routes that
+        # need URL generation, but cannot rewrite the authorization peer address.
+        "--no-proxy-headers",
     ]
 
     # On Windows, use CREATE_NEW_PROCESS_GROUP to prevent Ctrl+C from propagating
     # to the child process - we handle cleanup ourselves
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
     if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
 
@@ -98,7 +105,7 @@ def start_server(host: str, port: int, *, verbose: bool = False) -> subprocess.P
     return process
 
 
-def start_cloudflared(port: int) -> tuple[subprocess.Popen, str | None]:
+def start_cloudflared(port: int) -> tuple[subprocess.Popen[str], str | None]:
     """Start cloudflared tunnel and return the URL.
 
     Args:
@@ -129,7 +136,7 @@ def start_cloudflared(port: int) -> tuple[subprocess.Popen, str | None]:
     env["TUNNEL_CONFIG"] = os.devnull
 
     # On Windows, use CREATE_NEW_PROCESS_GROUP to prevent Ctrl+C from propagating
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
     if sys.platform == "win32":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
 
@@ -148,7 +155,10 @@ def start_cloudflared(port: int) -> tuple[subprocess.Popen, str | None]:
     url = None
 
     # Read output until we find the URL
-    for line in iter(process.stdout.readline, ""):
+    stdout = process.stdout
+    if stdout is None:
+        return process, None
+    for line in iter(stdout.readline, ""):
         if process.poll() is not None:
             break
 
@@ -165,9 +175,9 @@ def start_cloudflared(port: int) -> tuple[subprocess.Popen, str | None]:
 
 
 def drain_process_output(
-    process: subprocess.Popen,
-    on_connected: callable = None,
-    on_url_visibility: callable = None,
+    process: subprocess.Popen[Any],
+    on_connected: Callable[[], None] | None = None,
+    on_url_visibility: Callable[[bool], None] | None = None,
 ) -> None:
     """Drain process output silently (only print errors and security warnings).
 
@@ -177,8 +187,11 @@ def drain_process_output(
         on_url_visibility: Optional callback when URL visibility changes (receives bool).
     """
     connected_signaled = False
+    stdout = process.stdout
+    if stdout is None:
+        return
     try:
-        for line in iter(process.stdout.readline, ""):
+        for line in iter(stdout.readline, ""):
             if not line:
                 break
             line = line.strip()

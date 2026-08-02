@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable
+from importlib import import_module
 from threading import Event, Thread
+from typing import Any, cast
 
 Handlers = dict[str, Callable[[], None]]
 
@@ -55,9 +57,9 @@ def _dispatch(ch: str, handlers: Handlers) -> None:
 
 
 def _listen_windows(shutdown_event: Event, handlers: Handlers) -> None:
-    import msvcrt
     import time
 
+    msvcrt = cast(Any, import_module("msvcrt"))
     while not shutdown_event.is_set():
         if msvcrt.kbhit():
             try:
@@ -73,8 +75,9 @@ def _listen_unix(shutdown_event: Event, handlers: Handlers) -> None:
     import atexit
     import os
     import select
-    import termios
-    import tty
+
+    termios = cast(Any, import_module("termios"))
+    tty = cast(Any, import_module("tty"))
 
     fd = sys.stdin.fileno()
     try:

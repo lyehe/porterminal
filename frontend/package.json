@@ -10,6 +10,7 @@
     "watch": "vite build --watch",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:typecheck": "tsc -p tsconfig.test.json",
     "test:browser": "playwright test"
   },
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@types/node": "^26.1.2",
+    "@vitest/coverage-v8": "4.1.10",
     "jsdom": "^28.1.0",
     "typescript": "^6.0.2",
     "vite": "^8.2.0",

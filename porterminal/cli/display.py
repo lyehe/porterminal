@@ -2,8 +2,10 @@
 
 import io
 import sys
+from collections.abc import Sequence
 
 import qrcode
+from qrcode.constants import ERROR_CORRECT_L
 from rich.align import Align
 from rich.console import Console
 from rich.table import Table
@@ -12,7 +14,9 @@ from porterminal import __version__
 
 # Force UTF-8 for Windows console
 if sys.platform == "win32":
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8", errors="replace")
 
 console = Console(force_terminal=True)
 
@@ -37,7 +41,7 @@ COPY_AGENT_HINT = "Press 'c': copy agent instructions and URL"
 COPY_URL_HINT = "Press 'u': copy URL only"
 
 
-def _apply_gradient(lines: list[str], colors: list[str]) -> list[str]:
+def _apply_gradient(lines: Sequence[str], colors: Sequence[str]) -> list[str]:
     """Apply color gradient to text lines."""
     return [
         f"[{colors[min(i, len(colors) - 1)]}]{line}[/{colors[min(i, len(colors) - 1)]}]"
@@ -56,7 +60,7 @@ def get_qr_code(url: str) -> str:
     """
     qr = qrcode.QRCode(
         version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        error_correction=ERROR_CORRECT_L,
         box_size=1,
         border=1,
     )
@@ -157,7 +161,7 @@ def get_qr_placeholder(url: str) -> str:
     # Generate a real QR to get its dimensions
     qr = qrcode.QRCode(
         version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        error_correction=ERROR_CORRECT_L,
         box_size=1,
         border=1,
     )

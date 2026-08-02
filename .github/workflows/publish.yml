@@ -25,13 +25,13 @@ jobs:
       id-token: write
     steps:
       - name: Download verified distributions
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: python-package-distributions
           path: dist/
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
 
   release-github:
     name: Create GitHub release
@@ -40,8 +40,20 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Create release
-        uses: ncipollo/release-action@v1
+      - name: Download verified distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Generate distribution checksums
+        run: sha256sum dist/* > dist/SHA256SUMS
+
+      - name: Create release
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
+        with:
+          artifacts: "dist/*"
+          artifactErrorsFailBuild: true
           generateReleaseNotes: true
+          immutableCreate: true
           makeLatest: true

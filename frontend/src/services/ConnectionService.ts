@@ -206,7 +206,7 @@ export function createConnectionService(
         clearEmergencyTimer(state);
 
         state.emergencyResetTimer = setTimeout(() => {
-            if (state.pauseSent && (Date.now() - state.lastWatermarkActivity) > EMERGENCY_RESET_TIMEOUT) {
+            if (state.pauseSent && (Date.now() - state.lastWatermarkActivity) >= EMERGENCY_RESET_TIMEOUT) {
                 console.warn('Emergency watermark reset - xterm.js callbacks stalled');
                 state.watermark = 0;
                 state.pauseSent = false;

@@ -5,16 +5,27 @@ import os
 import select
 import sys
 import time
+from importlib import import_module
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
-# Unix-only imports
+# Unix-only modules are loaded dynamically so importing the package remains safe
+# on Windows while this backend can still be checked as part of the full package.
+fcntl: Any = None
+pty: Any = None
+signal: Any = None
+struct: Any = None
+termios: Any = None
 if sys.platform != "win32":
-    import fcntl
-    import pty
-    import signal
-    import struct
-    import termios
+    fcntl = cast(Any, import_module("fcntl"))
+    pty = cast(Any, import_module("pty"))
+    signal = cast(Any, import_module("signal"))
+    struct = cast(Any, import_module("struct"))
+    termios = cast(Any, import_module("termios"))
+
+O_NONBLOCK = getattr(os, "O_NONBLOCK", 0)
+WNOHANG = getattr(os, "WNOHANG", 1)
 
 
 class UnixPTYBackend:
@@ -63,7 +74,7 @@ class UnixPTYBackend:
         else:
             # Parent process - set non-blocking
             flags = fcntl.fcntl(self._master_fd, fcntl.F_GETFL)
-            fcntl.fcntl(self._master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+            fcntl.fcntl(self._master_fd, fcntl.F_SETFL, flags | O_NONBLOCK)
             # Set initial size
             self._set_winsize(rows, cols)
             logger.debug("Unix PTY spawned pid=%d cmd=%s", self._pid, cmd)
@@ -111,7 +122,7 @@ class UnixPTYBackend:
         if self._pid is None:
             return False
         try:
-            pid, _ = os.waitpid(self._pid, os.WNOHANG)
+            pid, _ = os.waitpid(self._pid, WNOHANG)
             return pid == 0
         except ChildProcessError:
             return False
@@ -134,7 +145,7 @@ class UnixPTYBackend:
                     elapsed = 0
 
                     while elapsed < grace_period_ms:
-                        pid, _ = os.waitpid(self._pid, os.WNOHANG)
+                        pid, _ = os.waitpid(self._pid, WNOHANG)
                         if pid != 0:
                             # Process exited gracefully
                             logger.debug("PTY process exited gracefully after SIGTERM")

@@ -1,13 +1,14 @@
-# Dependabot is configured for SECURITY UPDATES ONLY.
+# Dependabot is configured for dependency security updates plus reviewed
+# GitHub Actions SHA refreshes.
 #
 # `open-pull-requests-limit: 0` disables routine *version* update PRs for each
 # ecosystem. Dependabot *security* updates (raised in response to security
 # advisories) are unaffected by this limit and continue to flow - they have a
 # separate, fixed cap of 10 open PRs.
 #
-# Net effect: we stay pinned to the exact versions in uv.lock and
-# frontend/package-lock.json, and Dependabot only opens a PR when a dependency
-# has a known vulnerability. No more surprise major bumps (e.g. TS 6 / Vite 8).
+# Net effect: Python and npm stay pinned to the exact lockfiles except for known
+# vulnerabilities. Actions are pinned to immutable SHAs and receive small,
+# reviewable monthly update PRs.
 #
 # REQUIRES (repo Settings -> Code security): "Dependabot alerts" AND
 # "Dependabot security updates" must both be enabled - this file alone does not
@@ -43,16 +44,14 @@ updates:
       - "security"
     open-pull-requests-limit: 0
 
-  # GitHub Actions - security updates only
+  # GitHub Actions - refresh immutable SHA pins through reviewed PRs
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
     commit-message:
       prefix: "ci"
     labels:
       - "dependencies"
       - "ci"
-      - "security"
-    open-pull-requests-limit: 0
+    open-pull-requests-limit: 5

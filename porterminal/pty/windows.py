@@ -52,7 +52,10 @@ class WindowsPTYBackend:
         self._rows = rows
         self._cols = cols
 
-        self._pty = WinPtyProcess.spawn(
+        process_type = WinPtyProcess
+        if process_type is None:
+            raise RuntimeError("pywinpty is not installed")
+        self._pty = process_type.spawn(
             cmd,
             dimensions=(rows, cols),
             env=env,

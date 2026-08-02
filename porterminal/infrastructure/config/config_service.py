@@ -47,7 +47,7 @@ class ConfigService:
             data = await self._read()
             return self._extract_settings(data)
 
-    async def update_settings(self, updates: dict) -> tuple[dict, bool]:
+    async def update_settings(self, updates: dict[str, bool]) -> tuple[dict, bool]:
         """Update settings in config file.
 
         Args:
@@ -68,13 +68,11 @@ class ConfigService:
 
             # Update UI settings
             if "compose_mode" in updates:
-                data.setdefault("ui", {})["compose_mode"] = bool(updates["compose_mode"])
+                data.setdefault("ui", {})["compose_mode"] = updates["compose_mode"]
 
             # Update notification settings
             if "notify_on_startup" in updates:
-                data.setdefault("update", {})["notify_on_startup"] = bool(
-                    updates["notify_on_startup"]
-                )
+                data.setdefault("update", {})["notify_on_startup"] = updates["notify_on_startup"]
 
             await self._write(data)
             logger.info("Config updated: %s", updates)

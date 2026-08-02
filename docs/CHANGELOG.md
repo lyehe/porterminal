@@ -12,11 +12,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI package boundary** - Moved runtime orchestration behind the existing
   `porterminal.main` entry point so importing package metadata no longer loads
   the CLI, tunnel, repository, and process-management stack.
+- **Maintainable CLI lifecycle** - Decomposed startup, tunnel reporting,
+  foreground controls, and cleanup into typed helpers while preserving the
+  existing command-line interface and output.
 - **Responsive update checks** - Runs the existing cached PyPI update lookup
   outside the ASGI event loop without changing its response contract.
-- **Refactor safeguards** - Added public entry-point and update-route
-  characterization tests and expanded Pyright coverage across the package root,
-  application factory, updater, and web adapters.
+- **Strict management requests** - Settings, button, and password writes now
+  reject unknown fields, nulls, and type coercion with standard HTTP 422
+  validation responses; the browser renders those field errors readably.
+- **Refactor safeguards** - Added CLI, route, terminal lifecycle, reconnection,
+  and flow-control characterization tests and expanded Pyright coverage to the
+  complete Python package on Windows, Linux, and macOS.
+- **Verification and release integrity** - Added backend and frontend coverage
+  artifacts, declared-lower-bound tests, commit-pinned CI actions, checksum-
+  verified CI tools, and verified wheel/source archives plus SHA-256 checksums
+  on GitHub releases.
+- **Binary installation floors** - Raised the `pywinpty` and `PyYAML` minimums
+  to releases with wheels for both supported Python versions, avoiding
+  unexpected local Rust/C extension builds in fresh installs.
+
+### Security
+
+- **Local shutdown boundary** - Shutdown authorization now uses the direct TCP
+  peer instead of spoofable Cloudflare headers. Uvicorn proxy-header rewriting
+  is disabled so only the local server or its loopback Cloudflare tunnel origin
+  can reach the administrative shutdown path.
 
 ## [1.0.6] - 2026-08-01
 

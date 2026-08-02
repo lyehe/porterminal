@@ -146,6 +146,10 @@ This is secure because:
 - All traffic goes through Cloudflare tunnel (not exposed to internet)
 - Cloudflare validates tokens before forwarding requests
 
+Keep the Porterminal origin private when relying on this header for user
+isolation. Forwarded Cloudflare headers are never used to authorize the
+administrative shutdown endpoint; that endpoint checks the direct TCP peer.
+
 ### Without Cloudflare Access
 
 When running locally or without Access, users are identified as `local-user` and share sessions.
@@ -181,6 +185,18 @@ Run it again to disable the requirement. Use `ptn -sp` to save or clear a
 bcrypt password hash.
 
 See [security.md](security.md) for details on how authentication works.
+
+## Management API Validation
+
+State-changing settings, custom-button, and password endpoints use strict JSON
+schemas. Unknown properties, missing required values, `null`, and values of the
+wrong JSON type return HTTP 422 with a structured `detail` response. Boolean
+strings such as `"false"` are not coerced to `false`.
+
+The shutdown endpoint is restricted to a loopback origin connection. The
+bundled Cloudflare Quick Tunnel uses `127.0.0.1` and remains compatible. A
+custom reverse proxy must connect to Porterminal over loopback for the shutdown
+control to work; see [Security](security.md#administrative-shutdown-boundary).
 
 ## Environment Variables
 

@@ -152,7 +152,8 @@ for subsequent calls:
     DELETE {base}/api/agent/session?session_id=rest-...
 
 REST uses the same visible agent tab and shell backend as MCP. The `session_id`
-must come from a prior REST response.
+must come from a prior REST response. Unknown or closed IDs return 404 and never
+create a replacement shell or tab.
 
 If your HTTP client or local shell pretty-prints the REST response as a table,
 long `output` fields may be visually truncated with an ellipsis. Treat that as

@@ -1,14 +1,20 @@
 """REST fallback routes for agent terminal sessions."""
 
+import re
 import uuid
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from porterminal.application.services.agent_terminal_service import (
+    AgentSessionNotFoundError,
+)
+
 from .common import get_container
 
 router = APIRouter(tags=["agent"])
+_REST_SESSION_ID = re.compile(r"rest-[0-9a-f]{32}")
 
 
 class AgentRunRequest(BaseModel):
@@ -32,13 +38,20 @@ def _new_session_id() -> str:
 
 
 def _valid_session_id(session_id: str | None) -> bool:
-    return bool(session_id and session_id.startswith("rest-"))
+    return bool(session_id and _REST_SESSION_ID.fullmatch(session_id))
 
 
 def _bad_session_id() -> JSONResponse:
     return JSONResponse(
         {"error": "session_id must come from a prior REST agent API response"},
         status_code=400,
+    )
+
+
+def _unknown_session_id() -> JSONResponse:
+    return JSONResponse(
+        {"error": "session_id is unknown or no longer active"},
+        status_code=404,
     )
 
 
@@ -49,16 +62,21 @@ async def agent_rest_run(body: AgentRunRequest, request: Request):
     if not command:
         return JSONResponse({"error": "command is required"}, status_code=400)
 
+    create_if_missing = body.session_id is None
     session_id = body.session_id or _new_session_id()
     if not _valid_session_id(session_id):
         return _bad_session_id()
 
-    result = await get_container(request).agent_terminal_service.run_command(
-        session_id,
-        command,
-        body.timeout,
-        reap_on_disconnect=False,
-    )
+    try:
+        result = await get_container(request).agent_terminal_service.run_command(
+            session_id,
+            command,
+            body.timeout,
+            reap_on_disconnect=False,
+            create_if_missing=create_if_missing,
+        )
+    except AgentSessionNotFoundError:
+        return _unknown_session_id()
     return {"session_id": session_id, **result}
 
 
@@ -68,10 +86,14 @@ async def agent_rest_screen(request: Request, session_id: str = Query(...)):
     if not _valid_session_id(session_id):
         return _bad_session_id()
 
-    result = await get_container(request).agent_terminal_service.read_screen(
-        session_id,
-        reap_on_disconnect=False,
-    )
+    try:
+        result = await get_container(request).agent_terminal_service.read_screen(
+            session_id,
+            reap_on_disconnect=False,
+            create_if_missing=False,
+        )
+    except AgentSessionNotFoundError:
+        return _unknown_session_id()
     return {"session_id": session_id, **result}
 
 
@@ -81,11 +103,15 @@ async def agent_rest_keys(body: AgentKeysRequest, request: Request):
     if not _valid_session_id(body.session_id):
         return _bad_session_id()
 
-    result = await get_container(request).agent_terminal_service.send_keys(
-        body.session_id,
-        body.text,
-        reap_on_disconnect=False,
-    )
+    try:
+        result = await get_container(request).agent_terminal_service.send_keys(
+            body.session_id,
+            body.text,
+            reap_on_disconnect=False,
+            create_if_missing=False,
+        )
+    except AgentSessionNotFoundError:
+        return _unknown_session_id()
     return {"session_id": body.session_id, **result}
 
 
@@ -95,11 +121,15 @@ async def agent_rest_signal(body: AgentSignalRequest, request: Request):
     if not _valid_session_id(body.session_id):
         return _bad_session_id()
 
-    result = await get_container(request).agent_terminal_service.send_signal(
-        body.session_id,
-        body.signal,
-        reap_on_disconnect=False,
-    )
+    try:
+        result = await get_container(request).agent_terminal_service.send_signal(
+            body.session_id,
+            body.signal,
+            reap_on_disconnect=False,
+            create_if_missing=False,
+        )
+    except AgentSessionNotFoundError:
+        return _unknown_session_id()
     return {"session_id": body.session_id, **result}
 
 
@@ -110,4 +140,6 @@ async def agent_rest_close(request: Request, session_id: str = Query(...)):
         return _bad_session_id()
 
     closed = await get_container(request).agent_terminal_service.close_session(session_id)
+    if not closed:
+        return _unknown_session_id()
     return {"session_id": session_id, "closed": closed}

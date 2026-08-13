@@ -25,6 +25,14 @@ text, and any place you paste it. Anyone with that complete URL can use the
 terminal and agent APIs. Stop and restart Porterminal to rotate the code after
 a suspected leak.
 
+The MCP SDK's static localhost-only Host validation is disabled for the nested
+MCP application because a Quick Tunnel hostname is dynamic and learned only
+after the server starts. This does not bypass the application boundary: the
+outer access-path middleware validates the 128-bit capability before any MCP
+request is dispatched. The exact `/mcp` route is also forwarded internally to
+the mounted MCP application, avoiding an external redirect whose scheme could
+otherwise be derived from the local proxy connection.
+
 ## When to Use Password Protection
 
 Use a password as an extra layer for browser connections if the complete URL

@@ -9,6 +9,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import RequestResponseEndpoint
+from starlette.routing import Route
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import __version__
 from .access_path import AccessPathMiddleware, route_path, validate_access_code
@@ -25,6 +27,31 @@ from .infrastructure.web.routes import (
 from .logging_setup import setup_logging_from_env
 
 logger = logging.getLogger(__name__)
+
+
+class _ExactMountEndpoint:
+    """Forward one mount root without Starlette's slash redirect.
+
+    A normal ``Mount('/mcp', ...)`` accepts ``/mcp/`` and redirects ``/mcp``.
+    Behind Cloudflare that redirect is constructed from the deliberately
+    unmodified local HTTP ASGI scheme, downgrading an advertised HTTPS URL.
+    This exact route internally presents the canonical slash form to the
+    mounted app without sending a redirect to the client.
+    """
+
+    def __init__(self, app: ASGIApp, mount_path: str) -> None:
+        self.app = app
+        self.mount_path = mount_path
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        mounted_scope = dict(scope)
+        current_root = scope.get("root_path", "").rstrip("/")
+        mounted_scope["app_root_path"] = scope.get("app_root_path", current_root)
+        mounted_scope["root_path"] = f"{current_root}{self.mount_path}"
+        mounted_scope["path"] = f"{scope['path'].rstrip('/')}/"
+        if raw_path := scope.get("raw_path"):
+            mounted_scope["raw_path"] = raw_path.rstrip(b"/") + b"/"
+        await self.app(mounted_scope, receive, send)
 
 
 def is_admin() -> bool:
@@ -131,7 +158,9 @@ def create_app(
 
     mcp_adapter = McpAdapter()
     app.state.mcp_adapter = mcp_adapter
-    app.mount("/mcp", mcp_adapter.streamable_http_app())
+    mcp_http_app = mcp_adapter.streamable_http_app()
+    app.router.routes.append(Route("/mcp", endpoint=_ExactMountEndpoint(mcp_http_app, "/mcp")))
+    app.mount("/mcp", mcp_http_app)
 
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

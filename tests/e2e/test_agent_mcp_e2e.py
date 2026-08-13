@@ -102,17 +102,71 @@ async def test_agent_discovers_tools_and_controls_terminal(mcp_url):
             assert f"TYPED_{token2}" in screen2["screen"], screen2
 
 
-async def test_run_command_reports_nonzero_exit(mcp_url):
+async def test_tunnel_style_mcp_initialize_is_not_redirected_or_host_rejected(mcp_url):
+    headers = {
+        "host": "edge-case.trycloudflare.com",
+        "cf-ray": "tunnel-edge-marker",
+        "x-forwarded-proto": "https",
+        "accept": "application/json, text/event-stream",
+    }
+    initialize = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "porterminal-tunnel-test", "version": "1"},
+        },
+    }
+
+    async with httpx.AsyncClient(follow_redirects=False) as client:
+        # Disabling the MCP SDK's static Host check must not weaken the outer
+        # capability boundary, even for a tunnel-style Host header.
+        bare_url = mcp_url.replace(f"{ACCESS_PATH}/mcp", "/mcp")
+        blocked = await client.post(bare_url, headers=headers, json=initialize)
+        assert blocked.status_code == 404, blocked.text
+
+        # Both the advertised slashless URL and the canonical mounted form
+        # reach the same MCP app directly and accept the dynamic tunnel Host.
+        for endpoint in (mcp_url, f"{mcp_url}/"):
+            response = await client.post(endpoint, headers=headers, json=initialize)
+
+            assert response.status_code == 200, response.text
+            assert "location" not in response.headers
+            assert response.json()["result"]["serverInfo"]["name"] == "porterminal"
+            session_id = response.headers["mcp-session-id"]
+
+            closed = await client.delete(
+                endpoint,
+                headers={**headers, "mcp-session-id": session_id},
+            )
+            assert closed.status_code == 200, closed.text
+
+
+async def test_run_command_reports_exact_nonzero_exit(mcp_url):
     async with streamable_http_client(mcp_url) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
-            # `exit 3` style differs per shell; use a portable failing command.
-            res = await session.call_tool(
+            native = await session.call_tool(
+                "run_command",
+                {
+                    "command": 'python -c "import sys; sys.exit(7)"',
+                    "timeout": 25,
+                },
+            )
+            native_data = _payload(native)
+            assert native_data.get("status") == "completed", native_data
+            assert native_data.get("exit_code") == 7, native_data
+
+            # A following shell-builtin/cmdlet failure must not inherit the
+            # native process's previous exact exit code.
+            builtin = await session.call_tool(
                 "run_command", {"command": "cd __no_such_dir_ptn__", "timeout": 25}
             )
-            data = _payload(res)
-            assert data.get("status") == "completed", data
-            assert data.get("exit_code") != 0, data
+            builtin_data = _payload(builtin)
+            assert builtin_data.get("status") == "completed", builtin_data
+            assert builtin_data.get("exit_code") == 1, builtin_data
 
 
 async def test_llms_txt_and_discovery_hints(mcp_url):
@@ -130,6 +184,7 @@ async def test_llms_txt_and_discovery_hints(mcp_url):
         assert "Browser fallback" in body
         assert "Terminal screen" in body
         assert "Terminal input" in body
+        assert "Unknown or closed IDs return 404" in body
         for tool in ("run_command", "read_screen", "send_keys", "send_signal"):
             assert tool in body, f"missing tool in llms.txt: {tool}"
 
@@ -311,3 +366,62 @@ async def test_rest_agent_api_rejects_non_rest_session_ids(base_url_fast):
         )
         assert r.status_code == 400
         assert "session_id" in r.json()["error"]
+
+
+async def test_rest_agent_api_never_creates_unknown_or_stale_session_ids(base_url_fast):
+    unknown = f"rest-{uuid.uuid4().hex}"
+
+    async with httpx.AsyncClient() as client:
+        unknown_responses = [
+            await client.post(
+                f"{base_url_fast}/api/agent/run",
+                json={"session_id": unknown, "command": "echo must-not-run"},
+            ),
+            await client.get(
+                f"{base_url_fast}/api/agent/screen",
+                params={"session_id": unknown},
+            ),
+            await client.post(
+                f"{base_url_fast}/api/agent/keys",
+                json={"session_id": unknown, "text": "echo must-not-run\r"},
+            ),
+            await client.post(
+                f"{base_url_fast}/api/agent/signal",
+                json={"session_id": unknown, "signal": "int"},
+            ),
+            await client.delete(
+                f"{base_url_fast}/api/agent/session",
+                params={"session_id": unknown},
+            ),
+        ]
+        assert [response.status_code for response in unknown_responses] == [404] * 5
+        health = (await client.get(f"{base_url_fast}/health")).json()
+        assert health["sessions"] == 0, health
+        assert health["tabs"] == 0, health
+
+        created = await client.post(
+            f"{base_url_fast}/api/agent/run",
+            json={"command": "echo issued-session", "timeout": 25},
+        )
+        assert created.status_code == 200, created.text
+        issued = created.json()["session_id"]
+        closed = await client.delete(
+            f"{base_url_fast}/api/agent/session",
+            params={"session_id": issued},
+        )
+        assert closed.status_code == 200, closed.text
+        assert closed.json()["closed"] is True
+
+        stale_screen = await client.get(
+            f"{base_url_fast}/api/agent/screen",
+            params={"session_id": issued},
+        )
+        stale_run = await client.post(
+            f"{base_url_fast}/api/agent/run",
+            json={"session_id": issued, "command": "echo must-not-recreate"},
+        )
+        assert stale_screen.status_code == 404
+        assert stale_run.status_code == 404
+        final_health = (await client.get(f"{base_url_fast}/health")).json()
+        assert final_health["sessions"] == 0, final_health
+        assert final_health["tabs"] == 0, final_health

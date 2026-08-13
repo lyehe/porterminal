@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-08-13
+
+### Fixed
+
+- **Remote MCP tunnel transport** - The advertised slashless `/mcp` endpoint
+  now reaches the MCP app directly without a proxy-scheme redirect, and MCP
+  accepts dynamic Cloudflare tunnel hosts after the outer per-launch capability
+  boundary has validated the request path.
+- **REST session provenance** - Only `run` without a `session_id` creates a REST
+  agent shell. Unknown or closed IDs now return 404 for every operation and can
+  no longer create or recreate terminal tabs.
+- **Exact PowerShell exit codes** - Native process exit statuses are preserved
+  instead of collapsing every nonzero result to 1, while PowerShell command
+  failures still return 1 without inheriting a stale native status.
+
 ## [1.1.0] - 2026-08-13
 
 ### Added
@@ -551,7 +566,8 @@ This release focuses on mobile experience improvements and robust shell support.
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/lyehe/porterminal/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/lyehe/porterminal/compare/v1.0.7...v1.1.0
 [1.0.7]: https://github.com/lyehe/porterminal/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/lyehe/porterminal/compare/v1.0.5...v1.0.6

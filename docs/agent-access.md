@@ -68,6 +68,10 @@ Use REST when the agent cannot register/connect an MCP server but can make HTTP
 requests. First call `run` without a session id; reuse the returned `session_id`
 for later calls.
 
+Only `run` without `session_id` creates a REST shell. Every other operation,
+including `run` with an ID, requires a live ID returned by that server. An
+unknown or closed ID returns 404 and never creates or recreates a shell or tab.
+
 ```bash
 curl -s -X POST https://<your-tunnel>.trycloudflare.com/<access-code>/api/agent/run \
   -H "content-type: application/json" \

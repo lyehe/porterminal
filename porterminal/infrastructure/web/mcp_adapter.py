@@ -18,6 +18,7 @@ import logging
 from typing import Any
 
 from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 
 logger = logging.getLogger(__name__)
 
@@ -83,10 +84,20 @@ class McpAdapter:
         service.bind_live_probe(live_sessions)
 
     def streamable_http_app(self):
+        # MCP's default `host="127.0.0.1"` policy accepts only loopback Host
+        # headers. Porterminal intentionally serves this endpoint through a
+        # dynamic Cloudflare hostname, and the entire ASGI application rejects
+        # requests before they reach MCP unless they carry the 128-bit launch
+        # capability in the path. That outer capability boundary is the DNS
+        # rebinding defense here; a static MCP Host allowlist cannot represent
+        # the tunnel hostname, which is learned only after the server starts.
         return self.mcp.streamable_http_app(
             streamable_http_path="/",
             json_response=True,
             stateless_http=False,
+            transport_security=TransportSecuritySettings(
+                enable_dns_rebinding_protection=False,
+            ),
         )
 
     @property

@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import RequestResponseEndpoint
 
 from . import __version__
+from .access_path import AccessPathMiddleware, route_path, validate_access_code
 from .composition import create_container
 from .container import Container
 from .infrastructure.web import McpAdapter
@@ -98,8 +99,13 @@ async def lifespan(app: FastAPI):
         logger.info("Porterminal server stopped")
 
 
-def create_app(container: Container | None = None) -> FastAPI:
-    """Create the application and mount adapters and route groups."""
+def create_app(
+    container: Container | None = None,
+    *,
+    access_code: str,
+) -> FastAPI:
+    """Create the protected application and mount adapters and route groups."""
+    access_code = validate_access_code(access_code)
     app = FastAPI(
         title="Porterminal",
         description="Web-based terminal accessible from phone via Cloudflare Tunnel",
@@ -115,7 +121,9 @@ def create_app(container: Container | None = None) -> FastAPI:
         call_next: RequestResponseEndpoint,
     ) -> Response:
         response = await call_next(request)
-        if request.url.path.startswith("/static/"):
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        if route_path(request.scope).startswith("/static/"):
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
@@ -132,4 +140,5 @@ def create_app(container: Container | None = None) -> FastAPI:
     app.include_router(agent_router)
     app.include_router(settings_router)
     app.include_router(websocket_router)
+    app.add_middleware(AccessPathMiddleware, access_code=access_code)
     return app

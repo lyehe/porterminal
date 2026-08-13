@@ -8,6 +8,7 @@ Porterminal uses hexagonal (ports & adapters) architecture for clean separation 
 porterminal/
 ├── __init__.py              # Package metadata and lazy CLI entry point
 ├── app.py                   # FastAPI application factory
+├── access_path.py           # Per-launch capability path boundary
 ├── config.py                # ConfigStore discovery, validation, atomic persistence
 ├── composition.py           # Dependency injection composition root
 ├── container.py             # DI container definition
@@ -315,9 +316,22 @@ With Cloudflare Access enabled:
 
 ### Authentication
 
+- Per-launch 128-bit capability path enforced by outer ASGI middleware for all
+  HTTP and WebSocket routes
 - Optional bcrypt password on management WebSocket
+- Browser passwords stored with and matched against the exact protected base
+  URL; a successful save keeps only the current launch credential on that origin
 - Max auth attempts limit
 - Per-connection tracking
+
+### Application Construction Boundary
+
+The public `create_app` factory requires a keyword-only access code:
+`create_app(..., access_code=...)`. The environment-backed ASGI factory also
+fails closed unless `PORTERMINAL_ACCESS_CODE` contains a valid URL-safe access
+code. The `ptn` CLI generates and supplies this automatically; embedders and
+direct `uvicorn porterminal.asgi:create_app_from_env --factory` launches must
+supply it and address every endpoint below `/<access-code>/`.
 
 ## Cross-Platform PTY
 
@@ -337,7 +351,7 @@ Agent routes, alongside the two human WebSockets, let AI agents drive the termin
 - **`AgentTerminalService`** (`application/services/agent_terminal_service.py`) maps one MCP session or REST `session_id` to a dedicated PTY session + 🤖 tab. MCP sessions reap on client disconnect; REST sessions reap on explicit close, shell exit, or idle cleanup.
 - **`AgentSessionConnection`** (`infrastructure/web/agent_connection.py`) implements the same `ConnectionPort` the human path uses, bridging request/response MCP tools onto the shared multi-client `TerminalService` (a `pyte` screen powers `read_screen`). Because the agent is "just another client", a human co-views and can take over the agent's shell for free.
 
-**Discovery:** `GET /.well-known/mcp.json` (and `/.well-known/mcp/server.json`) serves the machine-readable MCP `server.json` descriptor (name/version/`remotes` -> `/mcp`) that capable clients auto-detect; `GET /llms.txt` serves human/agent-readable usage for MCP, REST, and browser fallback; and the `/` response carries a `Link:` header plus an inert `<link rel="alternate">`. The base page also includes accessibility-visible agent guidance, a DOM mirror labeled **Terminal screen**, and a labeled **Terminal input** fallback for browser-driving agents. Tool descriptions live once in `AGENT_TOOLS` (`mcp_adapter.py`) and render into both `tools/list` and `/llms.txt`.
+**Discovery:** `<url>` means the complete generated base URL, including the per-launch access code. `GET <url>/.well-known/mcp.json` (and `<url>/.well-known/mcp/server.json`) serves the machine-readable MCP `server.json` descriptor (name/version/`remotes` -> `<url>/mcp`) that capable clients auto-detect; `GET <url>/llms.txt` serves human/agent-readable usage for MCP, REST, and browser fallback; and the `<url>/` response carries a `Link:` header plus an inert `<link rel="alternate">`. The base page also includes accessibility-visible agent guidance, a DOM mirror labeled **Terminal screen**, and a labeled **Terminal input** fallback for browser-driving agents. Tool descriptions live once in `AGENT_TOOLS` (`mcp_adapter.py`) and render into both `tools/list` and `/llms.txt`.
 
 **Sharing:** the CLI `c` hotkey and the top-right web share button copy agent instructions and URL, including the base URL, `/mcp`, `/api/agent/run`, and `/llms.txt`; the CLI `u` hotkey copies the URL only.
 

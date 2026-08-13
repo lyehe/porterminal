@@ -13,6 +13,7 @@ import type {
     TabChange,
     ManagementMessage,
 } from '@/types';
+import { appWebSocketUrl } from '@/config/paths';
 
 export interface ManagementService {
     /** Connect to management WebSocket */
@@ -210,8 +211,7 @@ export function createManagementService(
          */
         connect(): Promise<void> {
             return new Promise((resolve, reject) => {
-                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const url = `${protocol}//${window.location.host}/ws/management`;
+                const url = appWebSocketUrl('/ws/management');
 
                 ws = new WebSocket(url);
 

@@ -2,22 +2,29 @@
 
 Porterminal exposes the same machine to **AI agents** over the [Model Context
 Protocol (MCP)](https://modelcontextprotocol.io) and a plain REST fallback. You
-hand out **one** tunnel URL: a human opens it in a browser and gets the touch
-terminal; an agent uses MCP if its host supports it, or REST if it only has
-HTTP/shell tools. Both see the same sessions.
+hand out **one** generated URL (tunnel hostname plus per-launch access code): a
+human opens it in a browser and gets the touch terminal; an agent uses MCP if
+its host supports it, or REST if it only has HTTP/shell tools. Both see the
+same sessions.
+
+Throughout this guide, `<url>` means the **complete** generated base URL,
+`https://<your-tunnel>.trycloudflare.com/<access-code>`. Do not remove the
+access-code segment when constructing discovery, MCP, or REST URLs.
 
 ## Discovery — how an agent finds it from the URL
 
-You don't have to tell the agent anything beyond the base URL. Several signals
-lead a client to the MCP endpoint:
+You don't have to tell the agent anything beyond that complete base URL.
+Several signals lead a client to the MCP endpoint:
 
-- **`/.well-known/mcp.json`** (also `/.well-known/mcp/server.json`) — a
+- **`<url>/.well-known/mcp.json`** (also
+  `<url>/.well-known/mcp/server.json`) — a
   machine-readable MCP `server.json` descriptor: server name, version, and a
-  `remotes` entry pointing at the `streamable-http` `/mcp` endpoint. This is the
-  MCP-native discovery surface that capable clients auto-detect. The well-known
-  path is still being finalized upstream (SEPs #1649 / #1960), so we serve both
-  spellings; a client that 404s falls back to being handed the `/mcp` URL.
-- **`/llms.txt`** — a human/agent-readable prose page (the `llms.txt` convention)
+  `remotes` entry pointing at the `streamable-http` `<url>/mcp` endpoint. This
+  is the MCP-native discovery surface that capable clients auto-detect. The
+  well-known path is still being finalized upstream (SEPs #1649 / #1960), so
+  we serve both spellings; a client that 404s falls back to being handed the
+  complete `<url>/mcp` URL.
+- **`<url>/llms.txt`** — a human/agent-readable prose page (the `llms.txt` convention)
   with MCP setup, REST fallback calls, and browser fallback instructions.
   `llms.txt` is popular but not reliably auto-fetched, so treat it as the
   readable companion to `server.json`, not the primary discovery.
@@ -48,7 +55,7 @@ client at it:
 ```json
 {
   "mcpServers": {
-    "porterminal": { "url": "https://<your-tunnel>.trycloudflare.com/mcp" }
+    "porterminal": { "url": "https://<your-tunnel>.trycloudflare.com/<access-code>/mcp" }
   }
 }
 ```
@@ -62,7 +69,7 @@ requests. First call `run` without a session id; reuse the returned `session_id`
 for later calls.
 
 ```bash
-curl -s -X POST https://<your-tunnel>.trycloudflare.com/api/agent/run \
+curl -s -X POST https://<your-tunnel>.trycloudflare.com/<access-code>/api/agent/run \
   -H "content-type: application/json" \
   -d '{"command":"echo hello","timeout":30}'
 ```
@@ -78,15 +85,15 @@ Typical response:
 }
 ```
 
-Endpoints:
+Endpoints below the complete `<url>` base:
 
-| Endpoint | Purpose |
+| Complete endpoint | Purpose |
 |----------|---------|
-| `POST /api/agent/run` | Run a command. Body: `{ "command": "...", "timeout": 30, "session_id": "optional" }`. |
-| `GET /api/agent/screen?session_id=rest-...` | Read the rendered terminal screen. |
-| `POST /api/agent/keys` | Send raw keystrokes. Body: `{ "session_id": "rest-...", "text": "answer\\r" }`. |
-| `POST /api/agent/signal` | Send `int` (Ctrl-C) or `eof`. |
-| `DELETE /api/agent/session?session_id=rest-...` | Close the REST agent shell and visible tab. |
+| `POST <url>/api/agent/run` | Run a command. Body: `{ "command": "...", "timeout": 30, "session_id": "optional" }`. |
+| `GET <url>/api/agent/screen?session_id=rest-...` | Read the rendered terminal screen. |
+| `POST <url>/api/agent/keys` | Send raw keystrokes. Body: `{ "session_id": "rest-...", "text": "answer\\r" }`. |
+| `POST <url>/api/agent/signal` | Send `int` (Ctrl-C) or `eof`. |
+| `DELETE <url>/api/agent/session?session_id=rest-...` | Close the REST agent shell and visible tab. |
 
 When calling REST from a local shell that pretty-prints objects, inspect the raw
 response fields for long output. For example, PowerShell table formatting can
@@ -132,14 +139,17 @@ run_command(command="echo hello")
   The human can watch it live, type into it (take over), or close it.
 - Shell state persists across tool calls (`cd`, env vars, activated venvs).
 - MCP sessions are **reaped shortly after the agent disconnects**. REST sessions
-  are closed by `DELETE /api/agent/session`, shell exit, phone tab close, or idle
-  cleanup.
+  are closed by `DELETE <url>/api/agent/session`, shell exit, phone tab close,
+  or idle cleanup.
 
 ## Security & limits
 
-- **No auth beyond the URL.** Whoever holds the tunnel URL has full shell access
-  — for humans *and* agents. The URL is the credential. If you need real
-  authentication, this is not the tool for it.
+- **The complete URL is the credential.** Every launch adds a new 128-bit random
+  access path, and the bare tunnel hostname or a wrong path returns 404. Whoever
+  holds the complete generated URL has full shell access—for humans *and*
+  agents. Restart Porterminal to rotate the path if the link or QR leaks.
+- **Passwords do not cover agent APIs.** The optional password protects browser
+  WebSockets. MCP and REST deliberately retain the one-link capability model.
 - **Non-elevated.** The shell runs as your user, not as administrator, so an
   agent can install user-scoped tools (e.g. `uv tool install ...`) but cannot
   silently update or install software that requires elevation/UAC.

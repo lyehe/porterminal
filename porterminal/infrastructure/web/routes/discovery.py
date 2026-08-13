@@ -1,5 +1,7 @@
 """Human UI, health, and agent discovery routes."""
 
+import html
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Request
@@ -12,35 +14,87 @@ from .common import get_container
 
 STATIC_DIR = Path(__file__).parents[3] / "static"
 router = APIRouter()
+_ROOT_RELATIVE_ATTRIBUTE = re.compile(r'(?P<attribute>\b(?:href|src)=["\'])/(?!/)')
+_PUBLIC_TUNNEL_HOST = re.compile(
+    r"[a-z0-9-]+\.(?:trycloudflare\.com|cloudflare-tunnel\.com)",
+    re.IGNORECASE,
+)
+
+
+def _request_root_path(request: Request) -> str:
+    """Return the externally visible application path without a trailing slash."""
+    return request.scope.get("root_path", "").rstrip("/")
+
+
+def _render_index(request: Request, content: str) -> str:
+    """Teach the packaged frontend its runtime prefix and prefix asset links."""
+    root_path = _request_root_path(request)
+    meta = f'<meta name="porterminal-base-path" content="{html.escape(root_path, quote=True)}">'
+    placeholder = '<meta name="porterminal-base-path" content="">'
+    if placeholder in content:
+        content = content.replace(placeholder, meta, 1)
+    else:
+        content = content.replace("<head>", f"<head>\n    {meta}", 1)
+    if not root_path:
+        return content
+    return _ROOT_RELATIVE_ATTRIBUTE.sub(
+        lambda match: f"{match.group('attribute')}{root_path}/",
+        content,
+    )
 
 
 def _request_base_url(request: Request) -> str:
-    """Return a tunnel-aware absolute base URL."""
-    host = request.headers.get("host") or request.url.netloc
-    scheme = (
-        "https"
-        if request.headers.get("x-forwarded-proto") == "https" or request.headers.get("cf-ray")
-        else request.url.scheme
-    )
-    return f"{scheme}://{host}"
+    """Return an absolute base URL without reflecting an untrusted Host header.
+
+    The CLI starts uvicorn with proxy-header processing disabled.  The ASGI
+    ``server`` tuple therefore identifies the local listener independently of
+    request-controlled forwarding and Host headers.  Cloudflare requests use
+    their fixed public hostname suffix; local requests use that listener.
+    """
+    request_host = request.url.hostname
+    if (
+        request.headers.get("cf-ray")
+        and request_host
+        and _PUBLIC_TUNNEL_HOST.fullmatch(request_host)
+    ):
+        # Rebuild from the validated hostname rather than reflecting netloc,
+        # which can also contain user-info or an attacker-selected port.
+        authority = request_host
+        scheme = "https"
+    else:
+        server = request.scope.get("server")
+        if server is None:
+            raise RuntimeError("Request server address is unavailable")
+        host, port = server
+        bracketed_host = f"[{host}]" if ":" in host and not host.startswith("[") else host
+        default_port = (
+            port is None
+            or (request.url.scheme == "http" and port == 80)
+            or (request.url.scheme == "https" and port == 443)
+        )
+        authority = bracketed_host if default_port else f"{bracketed_host}:{port}"
+        scheme = request.url.scheme
+    return f"{scheme}://{authority}{_request_root_path(request)}"
 
 
 @router.get("/", response_class=HTMLResponse)
-async def index():
+async def index(request: Request):
     """Serve the main page."""
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return HTMLResponse(
-            content=index_path.read_text(encoding="utf-8"),
+            content=_render_index(request, index_path.read_text(encoding="utf-8")),
             headers={
                 "Cache-Control": "no-cache, no-store, must-revalidate",
                 "Pragma": "no-cache",
                 "Expires": "0",
                 "Link": (
-                    '</.well-known/mcp.json>; rel="alternate"; type="application/json", '
-                    '</llms.txt>; rel="alternate"; type="text/markdown", '
-                    '</mcp>; rel="related", '
-                    '</api/agent/run>; rel="related"'
+                    f"<{_request_root_path(request)}/.well-known/mcp.json>; "
+                    'rel="alternate"; type="application/json", '
+                    f"<{_request_root_path(request)}/llms.txt>; "
+                    'rel="alternate"; type="text/markdown", '
+                    f'<{_request_root_path(request)}/mcp>; rel="related", '
+                    f'<{_request_root_path(request)}/api/agent/run>; rel="related"'
                 ),
             },
         )
@@ -122,8 +176,10 @@ ordinary page text for browser-driving agents.
 - Each MCP or REST agent session gets its own persistent shell, shown as a tab
   the human can watch and take over. MCP sessions are cleaned up when you
   disconnect; REST sessions close on DELETE, shell exit, or idle cleanup.
-- Security: the URL is the only credential - there is no extra auth, and the
-  shell runs non-elevated (it can't install software that requires admin).
+- Security: the complete generated URL (including its random access path) is
+  the credential. The bare hostname exposes no routes, but anyone with the full
+  URL has shell access. The shell runs non-elevated (it can't install software
+  that requires admin).
 """
     return PlainTextResponse(body, media_type="text/markdown; charset=utf-8")
 

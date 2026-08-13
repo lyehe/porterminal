@@ -22,19 +22,26 @@ def _is_icmp_warning(line: str) -> bool:
     return "icmp" in lower or "ping_group" in lower or "ping group" in lower
 
 
-def wait_for_server(host: str, port: int, timeout: int = 30) -> bool:
+def wait_for_server(
+    host: str,
+    port: int,
+    timeout: int = 30,
+    *,
+    access_path: str = "",
+) -> bool:
     """Wait for the server to be ready and verify it's Porterminal.
 
     Args:
         host: Server host address.
         port: Server port number.
         timeout: Maximum seconds to wait.
+        access_path: Protected application prefix, including its leading slash.
 
     Returns:
         True if server is ready, False otherwise.
     """
     start_time = time.time()
-    url = f"http://{host}:{port}/health"
+    url = f"http://{host}:{port}{access_path.rstrip('/')}/health"
 
     while time.time() - start_time < timeout:
         try:

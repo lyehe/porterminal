@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -13,9 +15,17 @@ from pathlib import Path
 from threading import Event, Thread
 from types import FrameType
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 from rich.console import Console
 
+from porterminal.access_path import (
+    ACCESS_CODE_ENV,
+    access_path,
+    build_access_url,
+    generate_access_code,
+    validate_access_code,
+)
 from porterminal.cli import (
     build_agent_share_text,
     copy_to_clipboard,
@@ -57,6 +67,7 @@ class _Runtime:
 
     server_process: Process | None
     tunnel_process: Process | None
+    base_url: str
     display_url: str
     display_cwd: str
 
@@ -73,14 +84,34 @@ class _ForegroundState:
     copy_feedback: str | None = None
 
 
+@dataclass
+class _BackgroundSignalState:
+    """Original handlers and shutdown state during detached-process handoff."""
+
+    old_handlers: dict[int, Any]
+    shutdown_requested: Event
+
+
+def _posix_termination_signals() -> list[int]:
+    """Return catchable POSIX termination signals relevant to CLI ownership."""
+    signals: list[int] = [signal.SIGTERM]
+    sighup = getattr(signal, "SIGHUP", None)
+    if sighup is not None:
+        signals.append(sighup)
+    return signals
+
+
 def _background_command(args: Args, url_file: Path) -> list[str]:
     command = [sys.executable, "-m", "porterminal", f"--_url-file={url_file}"]
-    if args.path:
-        command.append(args.path)
     if args.no_tunnel:
         command.append("--no-tunnel")
     if args.verbose:
         command.append("--verbose")
+    if args.path:
+        # The path is positional user data and may itself look like an option
+        # (for example a directory named "--background"). Keep it after the
+        # option delimiter so the child cannot reinterpret it as a CLI flag.
+        command.extend(["--", args.path])
     return command
 
 
@@ -103,20 +134,78 @@ def _spawn_background_process(command: list[str]) -> Process:
     )
 
 
-def _remove_url_file(url_file: Path) -> None:
+def _validated_background_base_url(value: str, *, no_tunnel: bool) -> str:
+    """Validate the child-reported origin before adding the bearer path."""
+    if not value or value != value.strip() or any(ord(character) < 32 for character in value):
+        raise ValueError("Background process reported an invalid server URL")
     try:
-        url_file.unlink()
-    except OSError:
-        pass
+        parsed = urlsplit(value)
+        parsed.port  # Force validation of a malformed port.
+    except ValueError as error:
+        raise ValueError("Background process reported an invalid server URL") from error
+
+    expected_scheme = "http" if no_tunnel else "https"
+    if (
+        parsed.scheme != expected_scheme
+        or parsed.hostname is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("Background process reported an invalid server URL")
+    return value.rstrip("/")
 
 
-def _read_background_url(url_file: Path) -> str | None:
-    if not url_file.exists():
-        return None
+def _write_background_ready(url_file: Path, base_url: str) -> None:
+    """Atomically publish credential-free startup data to the parent process."""
+    temporary_file = url_file.with_name(f".{url_file.name}.{os.getpid()}.tmp")
+    payload = json.dumps(
+        {"version": 1, "base_url": base_url},
+        separators=(",", ":"),
+    )
     try:
-        return url_file.read_text().strip() or None
+        with temporary_file.open("x", encoding="utf-8", newline="\n") as stream:
+            stream.write(f"{payload}\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_file, url_file)
+    finally:
+        try:
+            temporary_file.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _read_background_url(
+    url_file: Path,
+    *,
+    access_code: str,
+    no_tunnel: bool,
+) -> str | None:
+    try:
+        raw_payload = url_file.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
     except OSError:
         return None
+
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError as error:
+        raise ValueError("Background process reported malformed startup data") from error
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != {"version", "base_url"}
+        or type(payload["version"]) is not int
+        or payload["version"] != 1
+        or not isinstance(payload["base_url"], str)
+    ):
+        raise ValueError("Background process reported malformed startup data")
+
+    base_url = _validated_background_base_url(payload["base_url"], no_tunnel=no_tunnel)
+    return build_access_url(base_url, access_code)
 
 
 def _report_background_started(args: Args, process: Process, url: str) -> None:
@@ -132,55 +221,215 @@ def _report_background_started(args: Args, process: Process, url: str) -> None:
     console.print(f"[dim]Stop with: {stop_command}[/dim]\n")
 
 
-def _stop_timed_out_background_process(process: Process) -> None:
+def _stop_background_process(process: Process) -> None:
     if sys.platform == "win32":
-        subprocess.run(
-            ["taskkill", "/T", "/PID", str(process.pid), "/F"],
-            capture_output=True,
-        )
+        # On Windows we have no durable process-group handle. Never signal a
+        # numeric PID after Popen has observed its child exit: it may be reused.
+        if process.poll() is not None:
+            return
+        try:
+            result = subprocess.run(
+                ["taskkill", "/T", "/PID", str(process.pid), "/F"],
+                capture_output=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            result = None
+
+        if result is not None and result.returncode == 0:
+            try:
+                process.wait(timeout=5)
+                return
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+
+        # Popen retains a process handle even when taskkill itself fails. Use
+        # that handle as a final best-effort fallback and reap the leader.
+        if process.poll() is None:
+            try:
+                process.kill()
+                process.wait(timeout=3)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
         return
 
-    process.terminate()
+    # start_new_session=True makes the child's PID its dedicated PGID. The
+    # leader may exit before uvicorn/cloudflared, so group liveness—not leader
+    # liveness—governs cleanup.
+    def group_is_running() -> bool:
+        try:
+            os.killpg(process.pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+
     try:
-        process.wait(timeout=3)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        if process.poll() is None:
+            process.terminate()
+
+    deadline = time.monotonic() + 3
+    while True:
+        # Reap the group leader as soon as it exits. Otherwise its zombie can
+        # make killpg(..., 0) report a live group for the entire grace period.
+        process.poll()
+        if not group_is_running():
+            break
+        if time.monotonic() >= deadline:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                if process.poll() is None:
+                    process.kill()
+
+            kill_deadline = time.monotonic() + 1
+            while True:
+                process.poll()
+                if not group_is_running() or time.monotonic() >= kill_deadline:
+                    break
+                time.sleep(0.05)
+            break
+        time.sleep(0.05)
+
+    if process.poll() is None:
+        try:
+            process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+    else:
+        # poll() normally reaps the leader. Fake/test Popen implementations and
+        # alternate runtimes may still need a non-blocking wait.
+        try:
+            process.wait(timeout=0)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
 
 
-def _run_in_background(args: Args) -> int:
+def _background_process_exit(process: Process) -> int | None:
+    """Return a stable child exit code, or None while it remains alive."""
+    return process.poll()
+
+
+def _install_background_parent_shutdown_handlers() -> _BackgroundSignalState | None:
+    """Make POSIX pre-handoff termination unwind through ownership cleanup."""
+    if sys.platform == "win32":
+        return None
+
+    shutdown_requested = Event()
+
+    def signal_handler(_signum: int, _frame: FrameType | None) -> None:
+        shutdown_requested.set()
+
+    old_handlers: dict[int, Any] = {}
+    try:
+        for shutdown_signal in _posix_termination_signals():
+            old_handlers[shutdown_signal] = signal.signal(shutdown_signal, signal_handler)
+    except BaseException:
+        for shutdown_signal in reversed(old_handlers):
+            signal.signal(shutdown_signal, old_handlers[shutdown_signal])
+        raise
+    return _BackgroundSignalState(old_handlers, shutdown_requested)
+
+
+def _restore_background_parent_shutdown_handlers(
+    handler_state: _BackgroundSignalState | None,
+) -> None:
+    if handler_state is not None:
+        for shutdown_signal in reversed(handler_state.old_handlers):
+            signal.signal(shutdown_signal, handler_state.old_handlers[shutdown_signal])
+
+
+def _background_parent_shutdown_requested(
+    handler_state: _BackgroundSignalState | None,
+) -> bool:
+    return handler_state is not None and handler_state.shutdown_requested.is_set()
+
+
+def _raise_if_background_parent_shutdown_requested(
+    handler_state: _BackgroundSignalState | None,
+) -> None:
+    if _background_parent_shutdown_requested(handler_state):
+        raise KeyboardInterrupt
+
+
+def _run_in_background(args: Args, access_code: str) -> int:
     """Spawn the server in background and return immediately."""
-    import tempfile
-
-    url_file = Path(tempfile.gettempdir()) / f"porterminal-{os.getpid()}.url"
+    access_code = validate_access_code(access_code)
+    shutdown_handler_state = _install_background_parent_shutdown_handlers()
     try:
-        process = _spawn_background_process(_background_command(args, url_file))
-    except Exception as error:
-        console.print(f"[red]Error starting process:[/red] {error}")
-        return 1
+        with tempfile.TemporaryDirectory(prefix="porterminal-") as rendezvous_directory:
+            url_file = Path(rendezvous_directory) / "ready.json"
+            process: Process | None = None
+            handed_off = False
+            try:
+                process = _spawn_background_process(_background_command(args, url_file))
+                deadline = time.monotonic() + 30
+                with console.status(
+                    "[cyan]Starting in background...[/cyan]", spinner="dots"
+                ) as status:
+                    while time.monotonic() < deadline:
+                        _raise_if_background_parent_shutdown_requested(shutdown_handler_state)
+                        exit_code = _background_process_exit(process)
+                        if exit_code is not None:
+                            status.stop()
+                            console.print(
+                                f"[red]Error:[/red] Process exited unexpectedly (code: {exit_code})"
+                            )
+                            return 1
+                        try:
+                            url = _read_background_url(
+                                url_file,
+                                access_code=access_code,
+                                no_tunnel=args.no_tunnel,
+                            )
+                        except ValueError as error:
+                            status.stop()
+                            console.print(f"[red]Error:[/red] {error}")
+                            return 1
+                        if url is not None:
+                            # Close the ready-then-exit race before reporting a
+                            # PID that no longer owns a running child lifecycle.
+                            exit_code = _background_process_exit(process)
+                            if exit_code is not None:
+                                status.stop()
+                                console.print(
+                                    "[red]Error:[/red] Process exited unexpectedly "
+                                    f"(code: {exit_code})"
+                                )
+                                return 1
+                            _raise_if_background_parent_shutdown_requested(shutdown_handler_state)
+                            status.stop()
+                            _report_background_started(args, process, url)
+                            _raise_if_background_parent_shutdown_requested(shutdown_handler_state)
+                            # Ownership changes only after the complete report succeeds. From
+                            # this point on, the advertised child belongs to the caller.
+                            handed_off = True
+                            return 0
+                        time.sleep(0.2)
 
-    deadline = time.time() + 30
-    with console.status("[cyan]Starting in background...[/cyan]", spinner="dots") as status:
-        while time.time() < deadline:
-            if url := _read_background_url(url_file):
-                status.stop()
-                _report_background_started(args, process, url)
-                _remove_url_file(url_file)
-                return 0
-
-            if process.poll() is not None:
-                status.stop()
-                console.print(
-                    f"[red]Error:[/red] Process exited unexpectedly (code: {process.returncode})"
-                )
-                _remove_url_file(url_file)
+                console.print("[red]Error:[/red] Timeout waiting for server to start")
                 return 1
-
-            time.sleep(0.2)
-
-    console.print("[red]Error:[/red] Timeout waiting for server to start")
-    _stop_timed_out_background_process(process)
-    return 1
+            finally:
+                # Stop the process group before TemporaryDirectory removes the
+                # rendezvous path, so a child cannot race a late readiness write.
+                if process is not None and not handed_off:
+                    _stop_background_process(process)
+    except KeyboardInterrupt:
+        console.print("\n[dim]Cancelled[/dim]")
+        return 130
+    except Exception as error:
+        console.print(f"[red]Error starting background process:[/red] {error}")
+        return 1
+    finally:
+        _restore_background_parent_shutdown_handlers(shutdown_handler_state)
 
 
 def _configure_password(args: Args, config: Config) -> int | None:
@@ -257,20 +506,15 @@ def _terminate_startup_process(process: Process | None) -> None:
         process.wait()
 
 
-def _start_or_reuse_server(
+def _start_server_process(
     bind_host: str,
     check_host: str,
     preferred_port: int,
     *,
     verbose: bool,
-    password_enabled: bool,
+    access_code: str,
     on_start: Callable[[], None],
-) -> tuple[Process | None, int]:
-    if not password_enabled and wait_for_server(check_host, preferred_port, timeout=1):
-        if verbose:
-            console.print(f"[dim]Reusing server on {bind_host}:{preferred_port}[/dim]")
-        return None, preferred_port
-
+) -> tuple[Process, int]:
     port = preferred_port
     if not is_port_available(bind_host, port):
         port = find_available_port(bind_host, preferred_port)
@@ -279,7 +523,12 @@ def _start_or_reuse_server(
 
     on_start()
     server_process = start_server(bind_host, port, verbose=verbose)
-    if wait_for_server(check_host, port, timeout=30):
+    if wait_for_server(
+        check_host,
+        port,
+        timeout=30,
+        access_path=access_path(access_code),
+    ):
         return server_process, port
 
     console.print("[red]Error:[/red] Server failed to start")
@@ -287,25 +536,31 @@ def _start_or_reuse_server(
     raise _CliAbort()
 
 
-def _start_runtime(args: Args, config: Config, working_directory: str | None) -> _Runtime:
+def _start_runtime(
+    args: Args,
+    config: Config,
+    working_directory: str | None,
+    access_code: str,
+) -> _Runtime:
     bind_host = config.server.host
     check_host = "127.0.0.1" if bind_host == "0.0.0.0" else bind_host
-    password_enabled = os.environ.get("PORTERMINAL_PASSWORD_HASH") is not None
 
     with console.status("[cyan]Starting...[/cyan]", spinner="dots") as status:
-        server_process, port = _start_or_reuse_server(
+        server_process, port = _start_server_process(
             bind_host,
             check_host,
             config.server.port,
             verbose=args.verbose,
-            password_enabled=password_enabled,
+            access_code=access_code,
             on_start=lambda: status.update("[cyan]Starting server...[/cyan]"),
         )
         if args.no_tunnel:
+            base_url = f"http://{check_host}:{port}"
             return _Runtime(
                 server_process=server_process,
                 tunnel_process=None,
-                display_url=f"http://{check_host}:{port}",
+                base_url=base_url,
+                display_url=build_access_url(base_url, access_code),
                 display_cwd=working_directory or os.getcwd(),
             )
 
@@ -316,7 +571,8 @@ def _start_runtime(args: Args, config: Config, working_directory: str | None) ->
             return _Runtime(
                 server_process=server_process,
                 tunnel_process=tunnel_process,
-                display_url=tunnel_url,
+                base_url=tunnel_url,
+                display_url=build_access_url(tunnel_url, access_code),
                 display_cwd=working_directory or os.getcwd(),
             )
 
@@ -337,15 +593,21 @@ def _redraw(runtime: _Runtime, args: Args, show_url: bool, status: str | None) -
     )
 
 
-def _show_or_persist_url(runtime: _Runtime, args: Args) -> None:
+def _show_or_persist_url(runtime: _Runtime, args: Args) -> bool:
     if not args.url_file:
         _redraw(runtime, args, True, None)
-        return
+        return True
 
     try:
-        Path(args.url_file).write_text(runtime.display_url)
+        base_url = _validated_background_base_url(runtime.base_url, no_tunnel=args.no_tunnel)
+        _write_background_ready(Path(args.url_file), base_url)
+    except ValueError as error:
+        console.print(f"[red]Error:[/red] {error}")
+        return False
     except OSError as error:
         console.print(f"[red]Error writing URL file:[/red] {error}")
+        return False
+    return True
 
 
 def _copy_share_text(runtime: _Runtime, state: _ForegroundState) -> None:
@@ -514,19 +776,27 @@ def _cleanup_process(process: Process | None) -> None:
 
 
 def _cleanup_runtime(runtime: _Runtime) -> None:
-    old_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    shutdown_signals = [signal.SIGINT]
+    if sys.platform != "win32":
+        shutdown_signals.extend(_posix_termination_signals())
+    old_handlers: dict[int, Any] = {}
     try:
-        _cleanup_process(runtime.server_process)
-        _cleanup_process(runtime.tunnel_process)
+        for shutdown_signal in shutdown_signals:
+            old_handlers[shutdown_signal] = signal.signal(shutdown_signal, signal.SIG_IGN)
+        try:
+            _cleanup_process(runtime.server_process)
+        finally:
+            _cleanup_process(runtime.tunnel_process)
     finally:
-        signal.signal(signal.SIGINT, old_handler)
+        for shutdown_signal in reversed(shutdown_signals):
+            if shutdown_signal in old_handlers:
+                signal.signal(shutdown_signal, old_handlers[shutdown_signal])
 
 
 def _run_foreground(runtime: _Runtime, args: Args) -> int:
-    _show_or_persist_url(runtime, args)
     state = _ForegroundState()
-    _start_background_drainers(runtime, args, state)
-    listener = _start_interactive_listener(runtime, args, state)
+    listener: Thread | None = None
+    old_handlers: dict[int, Any] = {}
 
     def redraw(show_url: bool = True, status: str | None = None) -> None:
         _redraw(runtime, args, show_url, status)
@@ -534,25 +804,55 @@ def _run_foreground(runtime: _Runtime, args: Args) -> int:
     def signal_handler(_signum: int, _frame: FrameType | None) -> None:
         state.shutdown.set()
 
-    old_handler = signal.signal(signal.SIGINT, signal_handler)
+    shutdown_signals = [signal.SIGINT]
+    if sys.platform != "win32":
+        shutdown_signals.extend(_posix_termination_signals())
     try:
+        # Install termination handlers before publishing background readiness.
+        # Once a PID is advertised, `kill PID` must take the orderly cleanup path.
+        for shutdown_signal in shutdown_signals:
+            old_handlers[shutdown_signal] = signal.signal(shutdown_signal, signal_handler)
+
+        if not _show_or_persist_url(runtime, args):
+            return 1
+        _start_background_drainers(runtime, args, state)
+        listener = _start_interactive_listener(runtime, args, state)
         _run_foreground_loop(runtime, args, state, redraw)
+
+        if state.shutdown.is_set():
+            console.print("\n[dim]Shutting down...[/dim]")
+        return 0
     finally:
-        signal.signal(signal.SIGINT, old_handler)
-
-    if state.shutdown.is_set():
-        console.print("\n[dim]Shutting down...[/dim]")
-
-    state.shutdown.set()
-    if listener is not None:
-        listener.join(timeout=1)
-    _cleanup_runtime(runtime)
-    return 0
+        state.shutdown.set()
+        try:
+            if listener is not None:
+                listener.join(timeout=1)
+        finally:
+            try:
+                _cleanup_runtime(runtime)
+            finally:
+                for shutdown_signal in reversed(shutdown_signals):
+                    if shutdown_signal in old_handlers:
+                        signal.signal(shutdown_signal, old_handlers[shutdown_signal])
 
 
 def main() -> int:
     """Run the Porterminal command-line application."""
     args = parse_args()
+
+    if args.url_file:
+        inherited_access_code = os.environ.get(ACCESS_CODE_ENV)
+        if inherited_access_code is None:
+            console.print("[red]Error:[/red] Background child is missing its access code")
+            return 1
+        try:
+            access_code = validate_access_code(inherited_access_code)
+        except ValueError as error:
+            console.print(f"[red]Error:[/red] Invalid background child access code: {error}")
+            return 1
+    else:
+        access_code = generate_access_code()
+    os.environ[ACCESS_CODE_ENV] = access_code
 
     from porterminal.config import get_config
     from porterminal.updater import check_and_notify
@@ -565,14 +865,14 @@ def main() -> int:
     if args.compose:
         os.environ["PORTERMINAL_COMPOSE_MODE"] = "true"
     if args.background:
-        return _run_in_background(args)
+        return _run_in_background(args, access_code)
     if args.verbose:
         os.environ["PORTERMINAL_LOG_LEVEL"] = "DEBUG"
 
     try:
         working_directory = _resolve_working_directory(args.path)
         _ensure_cloudflared(args.no_tunnel)
-        runtime = _start_runtime(args, config, working_directory)
+        runtime = _start_runtime(args, config, working_directory, access_code)
     except _CliAbort as abort:
         return abort.exit_code
     return _run_foreground(runtime, args)

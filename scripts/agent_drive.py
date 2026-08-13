@@ -6,21 +6,80 @@ Reads a JSON list of steps from stdin and runs them in ONE MCP session
     [{"tool": "run_command", "args": {"command": "whoami"}},
      {"tool": "read_screen", "args": {}}]
 
-Usage:  echo '<json>' | uv run python scripts/agent_drive.py [url]
+Usage:
+    echo '<json>' | uv run python scripts/agent_drive.py \
+        https://<tunnel>.trycloudflare.com/<access-code>/mcp
 """
 
+import argparse
 import asyncio
 import json
 import re
 import sys
+from collections.abc import Sequence
+from urllib.parse import urlsplit
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+from porterminal.access_path import validate_access_code
+
 # A bare PowerShell prompt at the end of the screen = the command finished.
 _PROMPT_RE = re.compile(r"PS .*?>\s*$")
 
-URL = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8077/mcp"
+
+def validate_mcp_url(value: str) -> str:
+    """Require a complete HTTP(S) MCP URL containing a valid access code."""
+    if not value or value != value.strip() or any(ord(character) < 32 for character in value):
+        raise ValueError("MCP URL must be a complete protected HTTP(S) URL")
+    try:
+        parsed = urlsplit(value)
+        parsed.port
+    except ValueError as error:
+        raise ValueError("MCP URL must be a complete protected HTTP(S) URL") from error
+
+    if (
+        parsed.scheme not in {"http", "https"}
+        or parsed.hostname is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or "\\" in parsed.path
+    ):
+        raise ValueError("MCP URL must be a complete protected HTTP(S) URL")
+
+    segments = parsed.path.split("/")
+    if (
+        len(segments) < 3
+        or segments[0] != ""
+        or any(not segment for segment in segments[1:])
+        or segments[-1] != "mcp"
+    ):
+        raise ValueError("MCP URL must end with /<access-code>/mcp")
+    try:
+        validate_access_code(segments[-2])
+    except ValueError as error:
+        raise ValueError("MCP URL must end with /<access-code>/mcp") from error
+    return value
+
+
+def _mcp_url_argument(value: str) -> str:
+    try:
+        return validate_mcp_url(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "url",
+        type=_mcp_url_argument,
+        metavar="PROTECTED_MCP_URL",
+        help="complete URL printed by ptn with /mcp appended",
+    )
+    return parser.parse_args(argv)
 
 
 def payload(result) -> dict:
@@ -37,12 +96,14 @@ def payload(result) -> dict:
     return {}
 
 
-async def main() -> None:
+async def drive(url: str) -> None:
     steps = json.loads(sys.stdin.read())
-    async with streamable_http_client(URL) as (read, write):
+    async with streamable_http_client(url) as (read, write):
         async with ClientSession(read, write) as session:
             init = await session.initialize()
-            print(f"# connected: {init.serverInfo.name} (session shell is persistent)\n")
+            server_info = getattr(init, "serverInfo", None) or getattr(init, "server_info", None)
+            server_name = getattr(server_info, "name", "porterminal")
+            print(f"# connected: {server_name} (session shell is persistent)\n")
             for i, step in enumerate(steps, 1):
                 tool = step["tool"]
                 args = step.get("args", {})
@@ -77,4 +138,11 @@ async def main() -> None:
                 print()
 
 
-asyncio.run(main())
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    asyncio.run(drive(args.url))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

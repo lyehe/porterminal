@@ -18,6 +18,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+ACCESS_CODE = "DistributionCode_123456"
+
 
 def _run(*args: str | Path, cwd: Path | None = None) -> None:
     subprocess.run([str(arg) for arg in args], check=True, cwd=cwd)
@@ -45,6 +47,7 @@ def _verify_server(python: Path, cwd: Path) -> None:
     environment = os.environ.copy()
     environment["PORTERMINAL_CONFIG_PATH"] = str(cwd / "missing-config.yaml")
     environment["PORTERMINAL_CWD"] = str(cwd)
+    environment["PORTERMINAL_ACCESS_CODE"] = ACCESS_CODE
     process = subprocess.Popen(
         [
             str(python),
@@ -68,7 +71,7 @@ def _verify_server(python: Path, cwd: Path) -> None:
     )
     try:
         deadline = time.monotonic() + 20
-        health_url = f"http://127.0.0.1:{port}/health"
+        health_url = f"http://127.0.0.1:{port}/{ACCESS_CODE}/health"
         while time.monotonic() < deadline:
             if process.poll() is not None:
                 output = process.stdout.read() if process.stdout is not None else ""
@@ -77,6 +80,15 @@ def _verify_server(python: Path, cwd: Path) -> None:
                 with urllib.request.urlopen(health_url, timeout=1) as response:
                     payload = json.load(response)
                 if response.status == 200 and payload.get("status") == "healthy":
+                    try:
+                        urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=1)
+                    except urllib.error.HTTPError as error:
+                        if error.code != 404:
+                            raise
+                    else:
+                        raise RuntimeError(
+                            "Installed server exposed a route without its access path"
+                        )
                     print(f"verified installed server at {health_url}")
                     return
             except (OSError, TimeoutError, urllib.error.URLError, json.JSONDecodeError):
@@ -117,7 +129,7 @@ missing_assets = [
     if not (package / "static" / reference.removeprefix("/static/")).is_file()
 ]
 assert not missing_assets, f"wheel is missing referenced static assets: {missing_assets}"
-app = create_app()
+app = create_app(access_code="DistributionCode_123456")
 documented_paths = set(app.openapi()["paths"])
 mounted_paths = {getattr(route, "path", None) for route in app.routes}
 assert "/mcp" in mounted_paths, f"wheel is missing /mcp mount: {mounted_paths}"

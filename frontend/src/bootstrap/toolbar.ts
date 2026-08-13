@@ -9,6 +9,7 @@ import type { AppConfig, ButtonConfig, ButtonSend, ModifierMode } from '@/types'
 import type { DisconnectOverlay } from '@/ui/DisconnectOverlay';
 import type { SettingsOverlay } from '@/ui/SettingsOverlay';
 import type { TextViewOverlay } from '@/ui/TextViewOverlay';
+import { appPath } from '@/config/paths';
 import { buildAgentShareText, currentBaseUrl } from '@/utils/share';
 import { getDisabledButtons } from '@/utils/storage';
 
@@ -288,7 +289,7 @@ export function setupShutdownButton(disconnectOverlay: DisconnectOverlay): void 
         if (!confirm('Shutdown server and tunnel?\n\nThis will terminate all sessions.')) return;
 
         try {
-            const response = await fetch('/api/shutdown', { method: 'POST' });
+            const response = await fetch(appPath('/api/shutdown'), { method: 'POST' });
             if (response.ok) {
                 disconnectOverlay.setText('Server Shutdown');
                 disconnectOverlay.show();

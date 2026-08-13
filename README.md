@@ -30,7 +30,7 @@
 </p>
 
 > [!WARNING]
-> **That URL is full access to this computer.** Anyone (or any AI agent) you hand it to gets a real shell on your machine, no password. That's the whole point, but it's dangerously easy to give an agent more than you meant to. Treat the URL like a secret, only share it with people and agents you trust, and read [Security](#security) before you point it at anything important.
+> **That complete URL is full access to this computer.** It contains a random per-launch access code, and anyone (or any AI agent) you hand it to gets a real shell on your machine. Treat the URL and QR code like a secret, only share them with people and agents you trust, and read [Security](#security) before you point Porterminal at anything important.
 
 ## Why
 
@@ -44,19 +44,19 @@ Then it clicked: the same trick (one command, one URL) is the easiest way to giv
 
 ## Features
 
-- **Hand a computer to an agent, full control, and watch it** - Give an AI agent the URL and it gets a real terminal on the machine via MCP or plain REST. Open the same session in any browser to watch it work live, and grab the keyboard whenever you want. No keys, no Docker. The agent learns how from `/llms.txt` and `/.well-known/mcp.json`. See [Agent access](#agent-access-mcp--rest).
+- **Hand a computer to an agent, full control, and watch it** - Give an AI agent the URL and it gets a real terminal on the machine via MCP or plain REST. Open the same session in any browser to watch it work live, and grab the keyboard whenever you want. No keys, no Docker. The agent learns how from `<url>/llms.txt` and `<url>/.well-known/mcp.json`. See [Agent access](#agent-access-mcp--rest).
 - **One command, instant access** - `uvx ptn` and you (or an agent) get a real terminal on this machine. No SSH, no port forwarding, no config files. Cloudflare tunnel + QR code.
 - **Actually usable on mobile** - Touch-optimized with momentum scrolling, pinch-to-zoom, swipe gestures, and modifier keys (Ctrl, Alt).
 - **Full terminal apps** - vim, htop, less, tmux all work correctly with proper alt-screen buffer handling.
 - **Persistent multi-tab sessions** - Sessions survive disconnects. Close the browser, switch networks, reconnect from another device, and your shell and running processes are still there. You and an agent can share one session: watch it work, or take over.
 - **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish, Nushell, and any shell via `$SHELL`). Auto-detects your shells.
-- **Private by default** - The secret tunnel URL never sits on screen, so it's safe to screen-share or screenshot the QR. Press `c` to copy agent instructions and URL, or `u` to copy the URL only.
+- **Hard to guess by default** - Every launch adds an independent 128-bit random access path. The bare tunnel hostname and every wrong path return 404. The URL is hidden on screen, but the QR contains the complete credential, so keep both private. Press `c` to copy agent instructions and URL, or `u` to copy the URL only.
 
 ## Install
 
 | Method | Install | Update |
 |--------|---------|--------|
-| **uvx** (no install) | `uvx ptn` | `uvx --refresh ptn` |
+| **uvx** (no install) | `uvx ptn` | `uvx ptn@latest` |
 | **uv tool** | `uv tool install ptn` | `uv tool upgrade ptn` |
 | **pipx** | `pipx install ptn` | `pipx upgrade ptn` |
 | **pip** | `pip install ptn` | `pip install -U ptn` |
@@ -98,12 +98,12 @@ ptn ~/projects/myapp   # Start in specific folder
 
 The same URL also works for AI agents. MCP-capable clients can use **`<url>/mcp`** (Streamable HTTP) for native typed tools. Agents that cannot register an MCP server can use the REST fallback at **`<url>/api/agent/run`** with ordinary HTTP requests. Either path creates a persistent agent shell, shown as a 🤖 tab you can watch and take over from your phone.
 
-Hand the agent the tunnel URL. MCP clients can auto-discover the server from **`<url>/.well-known/mcp.json`** (the MCP `server.json` descriptor), and there's a human/agent-readable **`<url>/llms.txt`** with usage. The base page also includes accessibility-visible hints for browser-driving agents, while the human UI stays compact. Example client config:
+Hand the agent the complete generated URL, including its access code. MCP clients can auto-discover the server from **`<url>/.well-known/mcp.json`** (the MCP `server.json` descriptor), and there's a human/agent-readable **`<url>/llms.txt`** with usage. The base page also includes accessibility-visible hints for browser-driving agents, while the human UI stays compact. Example client config:
 
 ```json
 {
   "mcpServers": {
-    "porterminal": { "url": "https://<your-tunnel>.trycloudflare.com/mcp" }
+    "porterminal": { "url": "https://<your-tunnel>.trycloudflare.com/<access-code>/mcp" }
   }
 }
 ```
@@ -113,16 +113,18 @@ MCP tools: `run_command` (clean output + exit code), `read_screen`, `send_keys`,
 REST fallback:
 
 ```bash
-curl -s -X POST https://<your-tunnel>.trycloudflare.com/api/agent/run \
+curl -s -X POST https://<your-tunnel>.trycloudflare.com/<access-code>/api/agent/run \
   -H "content-type: application/json" \
   -d '{"command":"echo hello","timeout":30}'
 ```
 
-The response includes a `session_id`; reuse it with `/api/agent/screen`, `/api/agent/keys`, `/api/agent/signal`, and `DELETE /api/agent/session`.
+The response includes a `session_id`; reuse it with `<url>/api/agent/screen`,
+`<url>/api/agent/keys`, `<url>/api/agent/signal`, and
+`DELETE <url>/api/agent/session`.
 
 When you open Porterminal on your phone, the top-right copy button copies the same agent-ready share text. Browser-only agents also get a fallback on the base page: a DOM-readable **Terminal screen** mirror and a clearly labeled **Terminal input**.
 
-> **Security:** like the human terminal, the only protection is the secret tunnel URL: anyone (or any agent) with it gets full, non-elevated shell access. If you need real auth, use a different tool. See [docs/agent-access.md](docs/agent-access.md).
+> **Security:** `<url>` means the complete generated URL, including its random access code. The bare tunnel hostname exposes nothing, but anyone (or any agent) with the complete URL gets full, non-elevated shell access. See [docs/agent-access.md](docs/agent-access.md).
 
 ## Mobile Gestures
 
@@ -189,7 +191,23 @@ Config is searched in order: `$PORTERMINAL_CONFIG_PATH`, `./ptn.yaml`, `./.ptn/p
 
 ## Security
 
-**There's no password by default.** The only thing stopping anyone is that they can't guess the random tunnel URL. Anyone (or any AI agent) who gets it has a full shell on your machine. Don't expose anything you wouldn't hand to a stranger, and set a password for anything sensitive:
+Every launch creates a new 128-bit random path such as
+`https://<tunnel>.trycloudflare.com/<access-code>/`. All browser, WebSocket,
+MCP, REST, health, and static routes require that exact prefix; the bare host
+and wrong paths return 404. This makes brute-forcing a discovered tunnel
+hostname impractical.
+
+The complete generated URL is still a bearer credential: anyone who gets it
+has shell access. Restart Porterminal to rotate the code if it leaks. The
+optional password adds authentication to browser WebSockets, but MCP and REST
+continue to trust the complete URL so agents can use the one-link workflow.
+
+A browser remembers a successful password in plaintext storage scoped to that
+complete launch URL. Saving a password for a newer launch on the same origin
+retires older Porterminal password entries; clearing or rejecting a remembered
+password removes them all without touching other browser storage. Consequently,
+concurrent launches on the same origin may prompt again, while an already
+authenticated connection remains connected.
 
 **From the UI:** Open Settings (gear icon) and use the Security section to set/change password and toggle password requirement. Changes require server restart.
 
@@ -216,7 +234,11 @@ See [docs/security.md](docs/security.md) for details.
 
 ## Troubleshooting
 
-**Connection fails?** Cloudflare tunnel sometimes blocks connections. Restart the server (`Ctrl+C`, then `ptn`) to get a fresh tunnel URL.
+**Connection fails?** Use the complete generated URL, including its access code. Cloudflare tunnel issues can also be resolved by restarting the server (`Ctrl+C`, then `ptn`) for a fresh tunnel and access path.
+
+**`uvx ptn` still runs an older version?** An existing `uv tool` installation
+can take precedence. Run `uv tool upgrade ptn`, or bypass installed tools with
+`uvx --isolated ptn@latest`.
 
 **Shell not detected?** Set your `$SHELL` environment variable or configure shells in `ptn.yaml`.
 

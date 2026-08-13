@@ -4,6 +4,7 @@
  */
 
 import type { AppConfig, ButtonConfig } from '@/types';
+import { appPath } from '@/config/paths';
 
 export interface SettingsUpdate {
     compose_mode?: boolean;
@@ -142,7 +143,7 @@ export function createConfigService(): ConfigService {
     return {
         async load(): Promise<AppConfig> {
             try {
-                const response = await fetch('/api/config');
+                const response = await fetch(appPath('/api/config'));
                 if (!response.ok) {
                     throw new Error(`Config fetch failed: ${response.status}`);
                 }
@@ -159,7 +160,7 @@ export function createConfigService(): ConfigService {
 
         async updateSettings(settings: SettingsUpdate): Promise<SettingsUpdateResult> {
             try {
-                const response = await fetch('/api/settings', {
+                const response = await fetch(appPath('/api/settings'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -193,7 +194,7 @@ export function createConfigService(): ConfigService {
         },
 
         async addButton(label: string, send: string, row?: number): Promise<ButtonResult> {
-            return buttonRequest('/api/buttons', {
+            return buttonRequest(appPath('/api/buttons'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ label, send, row: row ?? 1 }),
@@ -201,14 +202,14 @@ export function createConfigService(): ConfigService {
         },
 
         async removeButton(label: string): Promise<ButtonResult> {
-            return buttonRequest(`/api/buttons/${encodeURIComponent(label)}`, {
+            return buttonRequest(appPath(`/api/buttons/${encodeURIComponent(label)}`), {
                 method: 'DELETE',
             });
         },
 
         async getPasswordStatus(): Promise<PasswordStatus> {
             try {
-                const response = await fetch('/api/password');
+                const response = await fetch(appPath('/api/password'));
                 if (!response.ok) {
                     return { password_saved: false, require_password: false, currently_protected: false };
                 }
@@ -219,7 +220,7 @@ export function createConfigService(): ConfigService {
         },
 
         async setPassword(password: string): Promise<PasswordResult> {
-            return passwordRequest('/api/password', {
+            return passwordRequest(appPath('/api/password'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ password }),
@@ -227,11 +228,11 @@ export function createConfigService(): ConfigService {
         },
 
         async clearPassword(): Promise<PasswordResult> {
-            return passwordRequest('/api/password', { method: 'DELETE' });
+            return passwordRequest(appPath('/api/password'), { method: 'DELETE' });
         },
 
         async setRequirePassword(require: boolean): Promise<PasswordResult> {
-            return passwordRequest('/api/password/require', {
+            return passwordRequest(appPath('/api/password/require'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ require }),

@@ -2,6 +2,8 @@
  * Sharing helpers for Porterminal URLs.
  */
 
+import { appBaseUrl } from '@/config/paths';
+
 function cleanBaseUrl(url: string): string {
     return url.replace(/\/+$/, '');
 }
@@ -22,5 +24,5 @@ export function buildAgentShareText(url: string): string {
 }
 
 export function currentBaseUrl(): string {
-    return window.location.origin;
+    return appBaseUrl();
 }

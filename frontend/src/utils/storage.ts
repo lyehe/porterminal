@@ -2,23 +2,58 @@
  * Storage utilities for authentication
  */
 
-const STORAGE_PREFIX = 'ptn_auth_';
+import { appBaseUrl } from '@/config/paths';
 
-function getStorageKey(): string {
-    // Simple hash of origin for uniqueness across different tunnel URLs
-    const origin = window.location.origin;
-    let hash = 0;
-    for (let i = 0; i < origin.length; i++) {
-        const char = origin.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32-bit integer
+const STORAGE_PREFIX = 'ptn_auth_';
+const CURRENT_AUTH_KEY = `${STORAGE_PREFIX}current_v2`;
+
+interface StoredCredential {
+    version: 2;
+    baseUrl: string;
+    password: string;
+}
+
+/** Remove Porterminal password entries from this browser origin. */
+function removeAuthKeys(keepKey?: string): void {
+    try {
+        const keysToRemove: string[] = [];
+        for (let index = 0; index < localStorage.length; index++) {
+            const key = localStorage.key(index);
+            if (key?.startsWith(STORAGE_PREFIX) && key !== keepKey) {
+                keysToRemove.push(key);
+            }
+        }
+
+        for (const key of keysToRemove) {
+            try {
+                localStorage.removeItem(key);
+            } catch {
+                // Keep trying the remaining Porterminal auth keys.
+            }
+        }
+    } catch {
+        // localStorage may be unavailable in some contexts.
     }
-    return `${STORAGE_PREFIX}${Math.abs(hash).toString(36)}`;
 }
 
 export function getSavedPassword(): string | null {
     try {
-        return localStorage.getItem(getStorageKey());
+        const value = localStorage.getItem(CURRENT_AUTH_KEY);
+        if (value === null) return null;
+
+        const credential: unknown = JSON.parse(value);
+        if (
+            typeof credential !== 'object'
+            || credential === null
+            || !('version' in credential)
+            || credential.version !== 2
+            || !('baseUrl' in credential)
+            || credential.baseUrl !== appBaseUrl()
+            || !('password' in credential)
+            || typeof credential.password !== 'string'
+        ) return null;
+
+        return credential.password;
     } catch {
         return null;
     }
@@ -26,18 +61,23 @@ export function getSavedPassword(): string | null {
 
 export function savePassword(password: string): void {
     try {
-        localStorage.setItem(getStorageKey(), password);
+        const credential: StoredCredential = {
+            version: 2,
+            baseUrl: appBaseUrl(),
+            password,
+        };
+        localStorage.setItem(CURRENT_AUTH_KEY, JSON.stringify(credential));
     } catch {
         // localStorage may be unavailable in some contexts
+        return;
     }
+
+    // A successfully saved launch supersedes older credentials on this origin.
+    removeAuthKeys(CURRENT_AUTH_KEY);
 }
 
 export function clearPassword(): void {
-    try {
-        localStorage.removeItem(getStorageKey());
-    } catch {
-        // Ignore errors
-    }
+    removeAuthKeys();
 }
 
 // ========== Compose Mode Storage ==========

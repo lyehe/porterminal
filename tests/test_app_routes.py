@@ -15,9 +15,20 @@ from porterminal.container import Container
 from porterminal.infrastructure.web.routes import settings as settings_routes
 from porterminal.infrastructure.web.routes import websocket_router
 
+ACCESS_CODE = "RouteContract_123456"
+PREFIX = f"/{ACCESS_CODE}"
+
+
+def _create_app(container: Container | None = None):
+    return create_app(container, access_code=ACCESS_CODE)
+
+
+def _protected(path: str) -> str:
+    return f"{PREFIX}{path}"
+
 
 def test_public_route_inventory_is_stable():
-    app = create_app()
+    app = _create_app()
     operations = {
         (path, method.upper())
         for path, path_operations in app.openapi()["paths"].items()
@@ -57,7 +68,7 @@ def test_public_route_inventory_is_stable():
 
 
 def test_state_changing_request_schemas_are_strict_and_non_nullable():
-    schemas = create_app().openapi()["components"]["schemas"]
+    schemas = _create_app().openapi()["components"]["schemas"]
 
     expected_properties = {
         "SettingsUpdateRequest": {
@@ -84,23 +95,26 @@ def test_state_changing_request_schemas_are_strict_and_non_nullable():
 @pytest.mark.asyncio
 async def test_discovery_health_and_validation_responses(tmp_path):
     container = create_container(config_path=tmp_path / "missing.yaml")
-    app = create_app(container)
+    app = _create_app(container)
     transport = httpx.ASGITransport(app=app)
 
     async with httpx.AsyncClient(transport=transport, base_url="http://tunnel.test") as client:
-        index = await client.get("/")
-        descriptor = await client.get("/.well-known/mcp.json", headers={"cf-ray": "test"})
-        health = await client.get("/health")
+        index = await client.get(_protected("/"))
+        descriptor = await client.get(
+            _protected("/.well-known/mcp.json"),
+            headers={"cf-ray": "test"},
+        )
+        health = await client.get(_protected("/health"))
         invalid_session = await client.get(
-            "/api/agent/screen",
+            _protected("/api/agent/screen"),
             params={"session_id": "made-up"},
         )
-        reload_response = await client.post("/api/config/reload")
+        reload_response = await client.post(_protected("/api/config/reload"))
 
     assert index.status_code == 200
-    assert "</llms.txt>" in index.headers["link"]
+    assert f"<{PREFIX}/llms.txt>" in index.headers["link"]
     assert descriptor.json()["remotes"] == [
-        {"type": "streamable-http", "url": "https://tunnel.test/mcp"}
+        {"type": "streamable-http", "url": f"http://tunnel.test{PREFIX}/mcp"}
     ]
     assert health.json() == {"status": "healthy", "sessions": 0, "tabs": 0, "connections": 0}
     assert invalid_session.status_code == 400
@@ -110,7 +124,7 @@ async def test_discovery_health_and_validation_responses(tmp_path):
 @pytest.mark.asyncio
 async def test_config_route_preserves_update_response_contract(tmp_path, monkeypatch):
     container = create_container(config_path=tmp_path / "missing.yaml")
-    app = create_app(container)
+    app = _create_app(container)
     transport = httpx.ASGITransport(app=app)
     monkeypatch.setattr(
         settings_routes,
@@ -119,7 +133,7 @@ async def test_config_route_preserves_update_response_contract(tmp_path, monkeyp
     )
 
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/api/config")
+        response = await client.get(_protected("/api/config"))
 
     assert response.status_code == 200
     payload = response.json()
@@ -134,7 +148,7 @@ async def test_config_route_does_not_block_event_loop_during_update_check(
     monkeypatch,
 ):
     container = create_container(config_path=tmp_path / "missing.yaml")
-    app = create_app(container)
+    app = _create_app(container)
     transport = httpx.ASGITransport(app=app)
     started = threading.Event()
     release = threading.Event()
@@ -148,7 +162,7 @@ async def test_config_route_does_not_block_event_loop_during_update_check(
     monkeypatch.setattr(settings_routes, "check_for_updates", slow_update_check)
 
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        request = asyncio.create_task(client.get("/api/config"))
+        request = asyncio.create_task(client.get(_protected("/api/config")))
         try:
             assert await asyncio.to_thread(started.wait, 1)
             await asyncio.sleep(0)
@@ -164,7 +178,7 @@ async def test_config_route_does_not_block_event_loop_during_update_check(
 @pytest.mark.asyncio
 async def test_settings_routes_reject_malformed_and_coercive_json(tmp_path):
     container = create_container(config_path=tmp_path / "settings.yaml")
-    app = create_app(container)
+    app = _create_app(container)
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
 
     cases = [
@@ -182,10 +196,10 @@ async def test_settings_routes_reject_malformed_and_coercive_json(tmp_path):
     ]
 
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        responses = [await client.post(path, json=body) for path, body in cases]
+        responses = [await client.post(_protected(path), json=body) for path, body in cases]
         responses.append(
             await client.post(
-                "/api/settings",
+                _protected("/api/settings"),
                 content="{",
                 headers={"content-type": "application/json"},
             )
@@ -198,16 +212,19 @@ async def test_settings_routes_reject_malformed_and_coercive_json(tmp_path):
 @pytest.mark.asyncio
 async def test_settings_routes_preserve_valid_boolean_values(tmp_path):
     container = create_container(config_path=tmp_path / "settings.yaml")
-    app = create_app(container)
+    app = _create_app(container)
     transport = httpx.ASGITransport(app=app)
 
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         enabled = await client.post(
-            "/api/settings",
+            _protected("/api/settings"),
             json={"compose_mode": True, "notify_on_startup": False},
         )
-        disabled = await client.post("/api/settings", json={"compose_mode": False})
-        unchanged = await client.post("/api/settings", json={})
+        disabled = await client.post(
+            _protected("/api/settings"),
+            json={"compose_mode": False},
+        )
+        unchanged = await client.post(_protected("/api/settings"), json={})
 
     assert enabled.status_code == 200
     assert enabled.json()["settings"]["notify_on_startup"] is False
@@ -223,14 +240,14 @@ async def test_shutdown_rejects_spoofed_cloudflare_headers_from_remote_peer(
     monkeypatch,
 ):
     container = create_container(config_path=tmp_path / "settings.yaml")
-    app = create_app(container)
+    app = _create_app(container)
     scheduled = MagicMock()
     monkeypatch.setattr(settings_routes, "_schedule_shutdown", scheduled)
     remote = httpx.ASGITransport(app=app, client=("203.0.113.10", 4567))
 
     async with httpx.AsyncClient(transport=remote, base_url="http://test") as client:
         response = await client.post(
-            "/api/shutdown",
+            _protected("/api/shutdown"),
             headers={
                 "cf-ray": "spoofed",
                 "cf-access-authenticated-user-email": "attacker@example.test",
@@ -245,13 +262,13 @@ async def test_shutdown_rejects_spoofed_cloudflare_headers_from_remote_peer(
 @pytest.mark.asyncio
 async def test_shutdown_allows_a_direct_loopback_peer(tmp_path, monkeypatch):
     container = create_container(config_path=tmp_path / "settings.yaml")
-    app = create_app(container)
+    app = _create_app(container)
     scheduled = MagicMock()
     monkeypatch.setattr(settings_routes, "_schedule_shutdown", scheduled)
     loopback = httpx.ASGITransport(app=app, client=("127.0.0.1", 4567))
 
     async with httpx.AsyncClient(transport=loopback, base_url="http://test") as client:
-        response = await client.post("/api/shutdown")
+        response = await client.post(_protected("/api/shutdown"))
 
     assert response.status_code == 200
     scheduled.assert_called_once_with()
@@ -286,7 +303,7 @@ async def test_lifespan_unwinds_services_after_partial_startup_failure():
     container.session_service.stop = AsyncMock()
     container.agent_terminal_service.start = AsyncMock(side_effect=RuntimeError("startup failed"))
     container.agent_terminal_service.shutdown = AsyncMock()
-    app = create_app(cast(Container, container))
+    app = _create_app(cast(Container, container))
 
     with pytest.raises(RuntimeError, match="startup failed"):
         async with app.router.lifespan_context(app):

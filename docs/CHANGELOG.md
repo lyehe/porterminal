@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-13
+
+### Added
+
+- **Per-launch access path** - Every start creates a 128-bit random URL path
+  included in the displayed link, copied text, and QR code.
+- **Protected-path browser verification** - CI now boots the built frontend on
+  the real ASGI server and verifies default-deny HTTP routing, static/API paths,
+  both WebSocket paths, and copied agent links in Chromium.
+
+### Changed
+
+- **Manual MCP driver URL** - `scripts/agent_drive.py` now requires and validates
+  the complete protected `/<access-code>/mcp` URL instead of falling back to an
+  unreachable bare endpoint.
+- **Browser password lifecycle** - A remembered plaintext password is stored
+  with its complete protected URL and returned only for an exact match, avoiding
+  collisions from the legacy 32-bit hashed keys. A successful save retires
+  stale legacy/current Porterminal auth entries on the same origin. Clearing a
+  remembered password removes all Porterminal auth entries while preserving
+  unrelated localStorage data.
+- **Application factory migration (breaking)** - Embedders must call
+  `create_app(..., access_code=...)`. Direct uses of the environment-backed ASGI
+  factory must set a valid `PORTERMINAL_ACCESS_CODE`; missing or invalid values
+  now fail startup. The `ptn` CLI supplies this automatically, and clients must
+  use the resulting complete `/<access-code>/...` URLs.
+
+### Security
+
+- **Whole-application capability boundary** - Browser pages, static assets,
+  WebSockets, MCP, REST, discovery, and health checks are reachable only below
+  the exact per-launch path. The bare hostname and incorrect paths return 404,
+  and rejected WebSocket upgrades close before reaching terminal handlers.
+- **Capability-link privacy** - Protected pages send a no-referrer policy, and
+  browser credential storage is scoped to the per-launch URL path.
+- **Fail-closed application construction** - Every application factory call now
+  requires a valid access code, so alternate ASGI and embedding paths cannot
+  silently expose bare routes.
+- **Hardened background startup** - Parent and child coordinate through a
+  randomized private temporary directory and atomically publish only the
+  credential-free base URL; the parent validates it, adds its known access code,
+  and cleans up the rendezvous on every handled exit path. POSIX terminal
+  disconnects (`SIGHUP`) take the same cleanup path as `SIGTERM`, and Windows
+  failed-start cleanup verifies `taskkill` completion before falling back to the
+  retained process handle.
+
 ## [1.0.7] - 2026-08-02
 
 ### Changed
@@ -502,7 +548,8 @@ This release focuses on mobile experience improvements and robust shell support.
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v1.0.7...HEAD
+[Unreleased]: https://github.com/lyehe/porterminal/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/lyehe/porterminal/compare/v1.0.7...v1.1.0
 [1.0.7]: https://github.com/lyehe/porterminal/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/lyehe/porterminal/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/lyehe/porterminal/compare/v1.0.4...v1.0.5

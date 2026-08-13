@@ -17,4 +17,6 @@ Object.defineProperty(globalThis, 'cancelAnimationFrame', {
 
 afterEach(() => {
     document.body.replaceChildren();
+    document.querySelector('meta[name="porterminal-base-path"]')?.remove();
+    window.history.replaceState(null, '', '/');
 });

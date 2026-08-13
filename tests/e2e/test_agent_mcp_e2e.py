@@ -20,6 +20,9 @@ from mcp.client.streamable_http import streamable_http_client
 
 from porterminal.app import create_app
 
+ACCESS_CODE = "AgentAccessCode_123456"
+ACCESS_PATH = f"/{ACCESS_CODE}"
+
 
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -45,7 +48,7 @@ def _payload(result) -> dict:
 @pytest.fixture
 async def mcp_url():
     """Run the real app under uvicorn in a background thread; yield /mcp URL."""
-    app = create_app()
+    app = create_app(access_code=ACCESS_CODE)
     port = _free_port()
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
     server = uvicorn.Server(config)
@@ -60,7 +63,7 @@ async def mcp_url():
         raise RuntimeError("uvicorn did not start")
 
     try:
-        yield f"http://127.0.0.1:{port}/mcp"
+        yield f"http://127.0.0.1:{port}{ACCESS_PATH}/mcp"
     finally:
         server.should_exit = True
         thread.join(timeout=10)
@@ -137,9 +140,25 @@ async def test_llms_txt_and_discovery_hints(mcp_url):
         assert "/llms.txt" in link and "/mcp" in link and "/api/agent/run" in link, link
         assert "<!DOCTYPE html>" in r2.text or "<html" in r2.text
         assert "Porterminal remote computer" in r2.text
-        assert "/api/agent/run" in r2.text
+        assert "advertised REST endpoint" in r2.text
+        assert f'content="{ACCESS_PATH}"' in r2.text
         assert "Terminal screen" in r2.text
         assert "Terminal input" in r2.text
+
+
+async def test_bare_server_address_does_not_expose_terminal_routes(mcp_url):
+    protected_base = mcp_url.removesuffix("/mcp")
+    origin = protected_base.removesuffix(ACCESS_PATH)
+
+    async with httpx.AsyncClient() as client:
+        responses = [
+            await client.get(f"{origin}/"),
+            await client.get(f"{origin}/health"),
+            await client.get(f"{origin}/api/config"),
+            await client.get(f"{origin}/mcp"),
+        ]
+
+    assert [response.status_code for response in responses] == [404, 404, 404, 404]
 
 
 async def test_well_known_mcp_server_json(mcp_url):
@@ -161,7 +180,7 @@ async def test_well_known_mcp_server_json(mcp_url):
 async def base_url_fast(monkeypatch):
     """Same server, but with a 1s reaper so disconnect cleanup is testable."""
     monkeypatch.setenv("PORTERMINAL_AGENT_REAP_INTERVAL", "1")
-    app = create_app()
+    app = create_app(access_code=ACCESS_CODE)
     port = _free_port()
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
     server = uvicorn.Server(config)
@@ -174,7 +193,7 @@ async def base_url_fast(monkeypatch):
     else:
         raise RuntimeError("uvicorn did not start")
     try:
-        yield f"http://127.0.0.1:{port}"
+        yield f"http://127.0.0.1:{port}{ACCESS_PATH}"
     finally:
         server.should_exit = True
         thread.join(timeout=10)

@@ -14,6 +14,7 @@ from rich.console import Console
 from porterminal import __version__
 
 console = Console()
+_URL_FILE_OPTION = "--_url-file"
 
 # Set accent color for help text
 tyro.extras.set_accent_color("cyan")
@@ -66,12 +67,32 @@ class Args:
     keep_qr: Annotated[bool, tyro.conf.arg(aliases=["-k"])] = False
     """Keep QR code visible after first connection."""
 
-    # Internal argument for background mode communication (hidden from help)
-    url_file: Annotated[
-        str | None,
-        tyro.conf.arg(name="_url-file"),
-        tyro.conf.Suppress,
-    ] = None
+    # Populated by parse_args() from a separately parsed internal-only option.
+    url_file: Annotated[str | None, tyro.conf.Suppress] = None
+
+
+def _extract_internal_url_file(arguments: list[str]) -> tuple[list[str], str | None]:
+    """Remove the hidden background handoff option before public parsing."""
+    public_arguments: list[str] = []
+    url_file: str | None = None
+    for index, argument in enumerate(arguments):
+        if argument == "--":
+            # Everything after the end-of-options marker belongs to the public
+            # parser, even if a positional value resembles our internal option.
+            public_arguments.extend(arguments[index:])
+            break
+
+        if argument.startswith(f"{_URL_FILE_OPTION}="):
+            if url_file is not None:
+                raise SystemExit(f"{_URL_FILE_OPTION} may only be specified once")
+            url_file = argument.split("=", 1)[1]
+            if not url_file:
+                raise SystemExit(f"{_URL_FILE_OPTION} requires a path")
+        elif argument == _URL_FILE_OPTION:
+            raise SystemExit(f"{_URL_FILE_OPTION} requires the {_URL_FILE_OPTION}=PATH form")
+        else:
+            public_arguments.append(argument)
+    return public_arguments, url_file
 
 
 def parse_args() -> Args:
@@ -80,16 +101,23 @@ def parse_args() -> Args:
     Returns:
         Parsed Args dataclass with all CLI options.
     """
-    # Check for --version flag manually (tyro doesn't have built-in version action)
-    if "--version" in sys.argv or "-V" in sys.argv:
+    arguments = sys.argv[1:]
+    end_of_options = arguments.index("--") if "--" in arguments else len(arguments)
+
+    # Check for the version flag manually (tyro doesn't have a built-in version
+    # action), while respecting the standard end-of-options marker.
+    if any(argument in {"--version", "-V"} for argument in arguments[:end_of_options]):
         console.print(f"[cyan]ptn[/cyan] [bold]{__version__}[/bold]")
         sys.exit(0)
 
+    public_arguments, url_file = _extract_internal_url_file(arguments)
     args = tyro.cli(
         Args,
         prog="ptn",
         description="Porterminal - Web terminal via Cloudflare Tunnel",
+        args=public_arguments,
     )
+    args.url_file = url_file
 
     # Handle check-update early (before main app starts)
     if args.check_update:

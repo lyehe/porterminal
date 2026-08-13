@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="porterminal-base-path" content="">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -17,9 +18,9 @@
     <!-- Icons (PWA disabled - not useful for tunnel-based access) -->
     <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
 
-    <!-- AI agents: this host runs an MCP terminal at /mcp. Usage: /llms.txt -->
+    <!-- AI agents: use the endpoint links advertised by this protected page. -->
     <link rel="alternate" type="text/markdown" href="/llms.txt" title="AI agent instructions">
-  <script type="module" crossorigin src="/static/assets/app-ONQFNpaK.js"></script>
+  <script type="module" crossorigin src="/static/assets/app-DC8C2Q-m.js"></script>
   <link rel="modulepreload" crossorigin href="/static/assets/terminal-DheoX0HF.js">
   <link rel="stylesheet" crossorigin href="/static/assets/terminal-BrP-ENHg.css">
   <link rel="stylesheet" crossorigin href="/static/assets/app-CKr6Zmtz.css">
@@ -27,8 +28,8 @@
 <body>
     <div id="app">
         <div id="agent-instructions" class="sr-only">
-            Porterminal remote computer. AI agents should use /mcp for reliable terminal control.
-            If MCP is unavailable, use /api/agent/run. Read /llms.txt for instructions.
+            Porterminal remote computer. AI agents should follow the MCP and instruction links
+            advertised by this page. If MCP is unavailable, use the advertised REST endpoint.
             Browser fallback: read Terminal screen and type commands into Terminal input.
         </div>
 

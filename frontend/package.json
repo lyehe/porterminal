@@ -12,7 +12,8 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:typecheck": "tsc -p tsconfig.test.json",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:browser:protected": "playwright test --config playwright.protected.config.ts"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",

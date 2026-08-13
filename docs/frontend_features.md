@@ -343,12 +343,22 @@ Features:
 
 Location: `frontend/src/utils/storage.ts`
 
-Origin-hashed storage key using DJB2 hash:
+The browser stores at most one current credential record per origin:
 ```typescript
-key = `ptn_auth_${hash(window.location.origin).toString(36)}`
+{
+    version: 2,
+    baseUrl: "https://<tunnel>/<access-code>",
+    password: "..."
+}
 ```
 
-Different tunnel URLs get separate credential storage. Graceful fallback when localStorage unavailable (private browsing).
+The complete protected base URL is stored and compared exactly before returning
+the password, avoiding hash collisions between launch paths. Legacy hashed
+`ptn_auth_*` entries are never read. After the current record is written
+successfully, other Porterminal auth entries are removed; a failed write leaves
+the previous record intact. Explicit clear removes every `ptn_auth_*` entry but
+preserves unrelated localStorage data. All operations degrade gracefully when
+localStorage is unavailable (for example, in some private-browsing contexts).
 
 ---
 

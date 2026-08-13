@@ -3,5 +3,14 @@
   "compilerOptions": {
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src", "tests/unit", "tests/setup.ts", "vitest.config.ts"]
+  "include": [
+    "src",
+    "tests/unit",
+    "tests/browser",
+    "tests/protected-browser",
+    "tests/setup.ts",
+    "playwright.config.ts",
+    "playwright.protected.config.ts",
+    "vitest.config.ts"
+  ]
 }

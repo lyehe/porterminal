@@ -45,6 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fail-closed application construction** - Every application factory call now
   requires a valid access code, so alternate ASGI and embedding paths cannot
   silently expose bare routes.
+- **Patched cryptography runtime** - Raised the runtime floor and lock to
+  `cryptography` 50.0.0, closing the high-severity PKCS#7 padding-oracle issue
+  inherited through the MCP authentication dependency graph.
 - **Hardened background startup** - Parent and child coordinate through a
   randomized private temporary directory and atomically publish only the
   credential-free base URL; the parent validates it, adds its known access code,

@@ -43,6 +43,9 @@ dependencies = [
     "rich>=13.0",
     "qrcode>=7.4",
     "bcrypt>=4.0.0",
+    # 50.0.0 fixes a high-severity PKCS#7 padding-oracle vulnerability pulled
+    # in through mcp[crypto] -> pyjwt[crypto]. Keep fresh installs above it.
+    "cryptography>=50.0.0",
     "tyro>=0.9.0",
     "mcp>=2.0.0,<3",
     "pyte>=0.8.2",

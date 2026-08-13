@@ -776,7 +776,7 @@ def _cleanup_process(process: Process | None) -> None:
 
 
 def _cleanup_runtime(runtime: _Runtime) -> None:
-    shutdown_signals = [signal.SIGINT]
+    shutdown_signals: list[int] = [signal.SIGINT]
     if sys.platform != "win32":
         shutdown_signals.extend(_posix_termination_signals())
     old_handlers: dict[int, Any] = {}
@@ -804,7 +804,7 @@ def _run_foreground(runtime: _Runtime, args: Args) -> int:
     def signal_handler(_signum: int, _frame: FrameType | None) -> None:
         state.shutdown.set()
 
-    shutdown_signals = [signal.SIGINT]
+    shutdown_signals: list[int] = [signal.SIGINT]
     if sys.platform != "win32":
         shutdown_signals.extend(_posix_termination_signals())
     try:

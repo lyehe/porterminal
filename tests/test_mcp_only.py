@@ -6,6 +6,7 @@ from unittest.mock import Mock
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from rich.text import Text
 from starlette.websockets import WebSocketDisconnect
 
 from porterminal.app import create_app
@@ -116,7 +117,7 @@ def test_local_ui_keeps_copy_keys_available(monkeypatch, no_tunnel):
 
     with display.console.capture() as capture:
         cli_main._redraw(runtime, args, True, state.copy_feedback)
-    screen = capture.get()
+    screen = Text.from_ansi(capture.get()).plain
     assert "Press 'c':" in screen
     assert "Press 'u':" in screen
     assert "URL copied" in screen

@@ -7,10 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.1] - 2026-09-13
-
-The `v2.0.0` tag did not publish because a terminal-color-sensitive test failed
-on Linux and macOS. This release corrects that test and includes the changes below.
+## [1.2.0] - 2026-09-13
 
 ### Added
 

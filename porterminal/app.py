@@ -24,6 +24,7 @@ from .infrastructure.web.routes import (
     settings_router,
     websocket_router,
 )
+from .infrastructure.web.routes.discovery import ui_router
 from .logging_setup import setup_logging_from_env
 
 logger = logging.getLogger(__name__)
@@ -130,6 +131,7 @@ def create_app(
     container: Container | None = None,
     *,
     access_code: str,
+    mcp_only: bool = False,
 ) -> FastAPI:
     """Create the protected application and mount adapters and route groups."""
     access_code = validate_access_code(access_code)
@@ -138,7 +140,11 @@ def create_app(
         description="Web-based terminal accessible from phone via Cloudflare Tunnel",
         version=__version__,
         lifespan=lifespan,
+        docs_url=None if mcp_only else "/docs",
+        redoc_url=None if mcp_only else "/redoc",
+        openapi_url=None if mcp_only else "/openapi.json",
     )
+    app.state.mcp_only = mcp_only
     if container is not None:
         app.state.container = container
 
@@ -162,12 +168,14 @@ def create_app(
     app.router.routes.append(Route("/mcp", endpoint=_ExactMountEndpoint(mcp_http_app, "/mcp")))
     app.mount("/mcp", mcp_http_app)
 
-    if STATIC_DIR.exists():
+    if not mcp_only and STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     app.include_router(discovery_router)
-    app.include_router(agent_router)
-    app.include_router(settings_router)
-    app.include_router(websocket_router)
+    if not mcp_only:
+        app.include_router(ui_router)
+        app.include_router(agent_router)
+        app.include_router(settings_router)
+        app.include_router(websocket_router)
     app.add_middleware(AccessPathMiddleware, access_code=access_code)
     return app

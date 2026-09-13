@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-13
+
+### Added
+
+- **MCP-only mode** - Run `ptn --mcp-only` to control shells through MCP without
+  a QR code, web terminal, browser WebSockets, or REST API. The local terminal UI
+  stays open with `c` to copy the agent prompt and MCP address, `u` to copy the
+  MCP address, and `Ctrl+C` to stop. Copy keys also work with `--no-tunnel`.
+- **MCP-only discovery** - Connection instructions and MCP discovery describe
+  the available MCP interface while the existing per-launch access path remains
+  required for every endpoint.
+
+### Removed
+
+- **Detached launch (breaking)** - Removed `-b` / `--background` and the internal
+  `--_url-file` handoff. Remove these flags from launch commands; Porterminal now
+  keeps its local terminal UI open. The normal web-terminal mode remains the default.
+
+### Fixed
+
+- **Clipboard fallback** - MCP-only prompt-copy failures display the usable MCP
+  endpoint instead of the disabled browser URL.
+
 ## [1.1.1] - 2026-08-13
 
 ### Fixed

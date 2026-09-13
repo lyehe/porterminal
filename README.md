@@ -80,7 +80,7 @@ ptn ~/projects/myapp   # Start in specific folder
 | Flag | Description |
 |------|-------------|
 | `-n, --no-tunnel` | Local network only (no Cloudflare tunnel) |
-| `-b, --background` | Run in background and return immediately |
+| `--mcp-only` | MCP shell control without a QR code, browser terminal, or REST API |
 | `-p, --password` | Prompt for password to protect this session |
 | `-sp, --save-password` | Save or clear password in config |
 | `-tp, --toggle-password` | Set password requirement (on/off/toggle) |
@@ -95,6 +95,15 @@ ptn ~/projects/myapp   # Start in specific folder
 **While running:** with a tunnel active, the connection URL is hidden on screen for privacy. Press **`c`** to copy agent instructions and URL, including `/mcp`, `/api/agent/run`, and `/llms.txt`; press **`u`** to copy the URL only; or scan the QR to connect. `Ctrl+C` stops the server.
 
 ## Agent access (MCP + REST)
+
+For shell control entirely behind the scenes, run `ptn --mcp-only`.
+The local terminal UI stays open: press `c` to copy the agent prompt and MCP
+address, or `u` to copy just the MCP address. These keys also work with `--no-tunnel`.
+Connect your MCP client to the generated
+`<url>/mcp` endpoint. This mode shows no QR code and disables the web terminal,
+browser WebSockets, and REST API, so commands cannot be watched or entered through
+the browser. MCP discovery and `/llms.txt` remain available.
+The complete MCP URL still grants shell control of the computer.
 
 The same URL also works for AI agents. MCP-capable clients can use **`<url>/mcp`** (Streamable HTTP) for native typed tools. Agents that cannot register an MCP server can use the REST fallback at **`<url>/api/agent/run`** with ordinary HTTP requests. Either path creates a persistent agent shell, shown as a 🤖 tab you can watch and take over from your phone.
 

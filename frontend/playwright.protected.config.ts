@@ -35,6 +35,7 @@ export default defineConfig({
         env: {
             PORTERMINAL_ACCESS_CODE: ACCESS_CODE,
             PORTERMINAL_COMPOSE_MODE: 'false',
+            PORTERMINAL_MCP_ONLY: 'false',
             PORTERMINAL_CONFIG_PATH: path.join(repositoryRoot, '.playwright-missing-config.yaml'),
             PORTERMINAL_CWD: repositoryRoot,
             PORTERMINAL_PASSWORD_HASH: '',

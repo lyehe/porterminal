@@ -14,7 +14,6 @@ from rich.console import Console
 from porterminal import __version__
 
 console = Console()
-_URL_FILE_OPTION = "--_url-file"
 
 # Set accent color for help text
 tyro.extras.set_accent_color("cyan")
@@ -34,14 +33,14 @@ class Args:
     no_tunnel: Annotated[bool, tyro.conf.arg(aliases=["-n"])] = False
     """Start server only, without Cloudflare tunnel."""
 
+    mcp_only: bool = False
+    """Expose only MCP shell control, without QR code, web terminal, or REST access."""
+
     verbose: Annotated[bool, tyro.conf.arg(aliases=["-v"])] = False
     """Show detailed startup logs."""
 
     check_update: Annotated[bool, tyro.conf.arg(aliases=["-u"])] = False
     """Check if a newer version is available."""
-
-    background: Annotated[bool, tyro.conf.arg(aliases=["-b"])] = False
-    """Run in background and return immediately."""
 
     init: Annotated[bool, tyro.conf.arg(aliases=["-i"])] = False
     """Create .ptn/ptn.yaml config with auto-discovered scripts."""
@@ -67,33 +66,6 @@ class Args:
     keep_qr: Annotated[bool, tyro.conf.arg(aliases=["-k"])] = False
     """Keep QR code visible after first connection."""
 
-    # Populated by parse_args() from a separately parsed internal-only option.
-    url_file: Annotated[str | None, tyro.conf.Suppress] = None
-
-
-def _extract_internal_url_file(arguments: list[str]) -> tuple[list[str], str | None]:
-    """Remove the hidden background handoff option before public parsing."""
-    public_arguments: list[str] = []
-    url_file: str | None = None
-    for index, argument in enumerate(arguments):
-        if argument == "--":
-            # Everything after the end-of-options marker belongs to the public
-            # parser, even if a positional value resembles our internal option.
-            public_arguments.extend(arguments[index:])
-            break
-
-        if argument.startswith(f"{_URL_FILE_OPTION}="):
-            if url_file is not None:
-                raise SystemExit(f"{_URL_FILE_OPTION} may only be specified once")
-            url_file = argument.split("=", 1)[1]
-            if not url_file:
-                raise SystemExit(f"{_URL_FILE_OPTION} requires a path")
-        elif argument == _URL_FILE_OPTION:
-            raise SystemExit(f"{_URL_FILE_OPTION} requires the {_URL_FILE_OPTION}=PATH form")
-        else:
-            public_arguments.append(argument)
-    return public_arguments, url_file
-
 
 def parse_args() -> Args:
     """Parse command line arguments.
@@ -104,20 +76,22 @@ def parse_args() -> Args:
     arguments = sys.argv[1:]
     end_of_options = arguments.index("--") if "--" in arguments else len(arguments)
 
+    # Tyro can interpret an unknown short flag as the positional directory.
+    if "-b" in arguments[:end_of_options]:
+        raise SystemExit("The -b/--background option has been removed; run ptn with its local UI.")
+
     # Check for the version flag manually (tyro doesn't have a built-in version
     # action), while respecting the standard end-of-options marker.
     if any(argument in {"--version", "-V"} for argument in arguments[:end_of_options]):
         console.print(f"[cyan]ptn[/cyan] [bold]{__version__}[/bold]")
         sys.exit(0)
 
-    public_arguments, url_file = _extract_internal_url_file(arguments)
     args = tyro.cli(
         Args,
         prog="ptn",
         description="Porterminal - Web terminal via Cloudflare Tunnel",
-        args=public_arguments,
+        args=arguments,
     )
-    args.url_file = url_file
 
     # Handle check-update early (before main app starts)
     if args.check_update:

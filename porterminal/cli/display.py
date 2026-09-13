@@ -187,6 +187,7 @@ def display_startup_screen(
     show_url: bool = True,
     copy_mode: bool = False,
     copy_status: str | None = None,
+    mcp_only: bool = False,
 ) -> None:
     """Display the startup screen with QR code or spiral placeholder.
 
@@ -202,6 +203,23 @@ def display_startup_screen(
             ``copy_mode`` is True.
     """
     console.clear()
+
+    if mcp_only:
+        console.print(f"[bold cyan]{LOGO.strip()}[/bold cyan]")
+        console.print(f"[dim]Porterminal v{__version__}[/dim]\n")
+        console.print("[green]●[/green] MCP-ONLY MODE — shell control behind the scenes")
+        if copy_mode:
+            console.print(
+                "Press 'c': copy agent prompt and MCP address\nPress 'u': copy MCP address"
+            )
+            if copy_status:
+                console.print(copy_status)
+        else:
+            console.print(f"MCP endpoint: {url.rstrip('/')}/mcp", markup=False)
+        if cwd:
+            console.print(cwd, markup=False)
+        console.print("[dim]Ctrl+C to stop[/dim]")
+        return
 
     # Build QR code or spiral placeholder (depends only on show_url).
     if show_url:

@@ -66,6 +66,6 @@ Arguments:
 
 Options:
   --no-tunnel       Start server only, without Cloudflare tunnel
-  -b, --background  Run in background
+  --mcp-only        MCP control with local copy shortcuts, no QR or web terminal
   -v, --verbose     Show detailed startup logs
 ```

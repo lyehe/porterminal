@@ -24,7 +24,7 @@ class TestCopyModeRendering:
         assert display.COPY_URL_HINT in out
 
     def test_without_copy_mode_shows_url(self):
-        """Default (background / non-interactive) still prints the URL."""
+        """Non-interactive mode still prints the URL."""
         out = _render(copy_mode=False)
         assert _TOKEN in out
 

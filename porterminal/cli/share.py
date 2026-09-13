@@ -8,13 +8,21 @@ def _clean_base_url(url: str) -> str:
     return url.rstrip("/")
 
 
-def build_agent_share_text(url: str) -> str:
+def build_agent_share_text(url: str, *, mcp_only: bool = False) -> str:
     """Build the text copied when sharing a tunnel URL with an AI agent.
 
     The base URL remains first-class for humans, while the MCP endpoint and
     /llms.txt instructions are explicit for agents that receive pasted text.
     """
     base = _clean_base_url(url)
+    if mcp_only:
+        return (
+            "Control this computer through Porterminal MCP:\n"
+            f"{base}/mcp\n\n"
+            f"Agent instructions: {base}/llms.txt\n"
+            "Connect using MCP (Streamable HTTP), then call tools/list.\n"
+            "The shell runs behind the scenes; browser and REST access are disabled."
+        )
     return (
         "Use this Porterminal link to control the remote computer:\n"
         f"{base}\n\n"

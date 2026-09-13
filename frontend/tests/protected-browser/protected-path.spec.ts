@@ -29,6 +29,10 @@ test('the packaged server rejects requests outside the credential path', async (
 
 
 test('the built browser client keeps HTTP, WebSocket, and share URLs protected', async ({ page }) => {
+    // A live update notification can cover the share button on older checkouts.
+    await page.addLocatorHandler(page.locator('#update-overlay:not(.hidden)'), async overlay => {
+        await overlay.click();
+    });
     const requestUrls: string[] = [];
     const websocketUrls: string[] = [];
     page.on('request', request => {

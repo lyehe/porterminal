@@ -46,9 +46,9 @@ def _payload(result) -> dict:
 
 
 @pytest.fixture
-async def mcp_url():
+async def mcp_url(request):
     """Run the real app under uvicorn in a background thread; yield /mcp URL."""
-    app = create_app(access_code=ACCESS_CODE)
+    app = create_app(access_code=ACCESS_CODE, mcp_only=getattr(request, "param", False))
     port = _free_port()
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
     server = uvicorn.Server(config)
@@ -69,6 +69,7 @@ async def mcp_url():
         thread.join(timeout=10)
 
 
+@pytest.mark.parametrize("mcp_url", [False, True], indirect=True, ids=["default", "mcp-only"])
 async def test_agent_discovers_tools_and_controls_terminal(mcp_url):
     async with streamable_http_client(mcp_url) as (read, write):
         async with ClientSession(read, write) as session:

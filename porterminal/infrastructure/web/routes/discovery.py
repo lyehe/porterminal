@@ -14,6 +14,7 @@ from .common import get_container
 
 STATIC_DIR = Path(__file__).parents[3] / "static"
 router = APIRouter()
+ui_router = APIRouter()
 _ROOT_RELATIVE_ATTRIBUTE = re.compile(r'(?P<attribute>\b(?:href|src)=["\'])/(?!/)')
 _PUBLIC_TUNNEL_HOST = re.compile(
     r"[a-z0-9-]+\.(?:trycloudflare\.com|cloudflare-tunnel\.com)",
@@ -77,7 +78,7 @@ def _request_base_url(request: Request) -> str:
     return f"{scheme}://{authority}{_request_root_path(request)}"
 
 
-@router.get("/", response_class=HTMLResponse)
+@ui_router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Serve the main page."""
     index_path = STATIC_DIR / "index.html"
@@ -107,6 +108,27 @@ async def llms_txt(request: Request):
     base = _request_base_url(request)
     adapter: McpAdapter = request.app.state.mcp_adapter
     tools = "\n".join(f"- `{name}` - {desc}" for name, desc in adapter.tool_summaries())
+
+    if request.app.state.mcp_only:
+        return PlainTextResponse(
+            f"""# Porterminal - MCP-only mode
+
+Control a persistent shell on this machine through MCP (Streamable HTTP):
+{base}/mcp
+
+Machine-readable discovery: {base}/.well-known/mcp.json
+Call `tools/list` after connecting.
+
+{tools}
+
+Prefer `run_command` for clean output and an exit code. If it returns
+`status: "waiting"`, use `read_screen`, `send_keys`, and `send_signal`.
+Each MCP session has its own shell and is cleaned up after disconnecting.
+The browser terminal and REST API are disabled in this mode.
+The complete URL, including its random access path, grants shell access.
+""",
+            media_type="text/markdown; charset=utf-8",
+        )
 
     body = f"""# Porterminal - AI agent instructions
 
@@ -195,7 +217,9 @@ async def mcp_server_json(request: Request) -> dict:
         "name": "io.github.lyehe.porterminal",
         "title": "Porterminal",
         "description": (
-            "Web terminal + MCP agent terminal on this machine, exposed via a Cloudflare tunnel."
+            "MCP-only shell control on this machine."
+            if request.app.state.mcp_only
+            else "Web terminal + MCP agent terminal on this machine, exposed via a Cloudflare tunnel."
         ),
         "version": __version__,
         "repository": {"url": "https://github.com/lyehe/porterminal", "source": "github"},

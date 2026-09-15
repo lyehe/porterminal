@@ -1,7 +1,7 @@
 """CLI utilities for Porterminal."""
 
 from .args import parse_args
-from .clipboard import copy_to_clipboard
+from .clipboard import CopyResult, clipboard_install_hint, copy_to_clipboard
 from .display import (
     LOGO,
     TAGLINE_PORTABLE,
@@ -15,6 +15,8 @@ from .share import build_agent_share_text
 
 __all__ = [
     "parse_args",
+    "CopyResult",
+    "clipboard_install_hint",
     "copy_to_clipboard",
     "build_agent_share_text",
     "start_key_listener",

@@ -14,6 +14,7 @@ from porterminal.asgi import create_app_from_env
 from porterminal.cli import display
 from porterminal.cli import main as cli_main
 from porterminal.cli.args import Args, parse_args
+from porterminal.cli.clipboard import CopyResult
 from porterminal.cli.share import build_agent_share_text
 
 CODE = "McpOnlyAccess_12345678"
@@ -89,7 +90,7 @@ def test_mcp_only_share_text():
 def test_copy_prompt_failure_displays_usable_mcp_endpoint(monkeypatch):
     runtime = cli_main._Runtime(None, None, "http://localhost", "http://localhost/secret/", ".")
     state = cli_main._ForegroundState()
-    monkeypatch.setattr(cli_main, "copy_to_clipboard", lambda _text: False)
+    monkeypatch.setattr(cli_main, "copy_to_clipboard", lambda _text: CopyResult.UNAVAILABLE)
     cli_main._copy_share_text(runtime, state, mcp_only=True)
     assert "http://localhost/secret/mcp" in state.copy_feedback
     assert state.copy_requested.is_set()
@@ -101,7 +102,7 @@ def test_local_ui_keeps_copy_keys_available(monkeypatch, no_tunnel):
     runtime = cli_main._Runtime(None, None, "http://localhost", "http://localhost/secret/", ".")
     state = cli_main._ForegroundState()
     listener = Mock()
-    clipboard = Mock(return_value=True)
+    clipboard = Mock(return_value=CopyResult.COPIED)
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(cli_main, "start_key_listener", listener)
     monkeypatch.setattr(cli_main, "copy_to_clipboard", clipboard)

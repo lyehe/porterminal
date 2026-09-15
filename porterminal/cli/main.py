@@ -23,7 +23,9 @@ from porterminal.access_path import (
     generate_access_code,
 )
 from porterminal.cli import (
+    CopyResult,
     build_agent_share_text,
+    clipboard_install_hint,
     copy_to_clipboard,
     display_startup_screen,
     parse_args,
@@ -251,21 +253,45 @@ def _redraw(runtime: _Runtime, args: Args, show_url: bool, status: str | None) -
     )
 
 
+def _with_install_hint(feedback: str) -> str:
+    """Append the install hint as a dim trailing line when one applies."""
+    hint = clipboard_install_hint()
+    if hint:
+        feedback += f"\n[dim]{hint}[/dim]"
+    return feedback
+
+
+def _copy_feedback(result: CopyResult, url: str, *, copied_message: str) -> str:
+    """Only a confirmed copy hides the URL; OSC52 is unverifiable, so keep it visible."""
+    if result is CopyResult.COPIED:
+        return f"[green]{copied_message}[/green]"
+    if result is CopyResult.SENT_TO_TERMINAL:
+        return _with_install_hint(
+            "[yellow]Sent to terminal clipboard (OSC 52)[/yellow]"
+            f"\n[dim]If paste is empty:[/dim] [cyan]{url}[/cyan]"
+        )
+    return _with_install_hint(f"[yellow]Clipboard unavailable:[/yellow] [cyan]{url}[/cyan]")
+
+
 def _copy_share_text(runtime: _Runtime, state: _ForegroundState, *, mcp_only: bool = False) -> None:
-    if copy_to_clipboard(build_agent_share_text(runtime.display_url, mcp_only=mcp_only)):
-        state.copy_feedback = "[green]Copied agent instructions and URL[/green]"
-    else:
-        url = f"{runtime.display_url.rstrip('/')}/mcp" if mcp_only else runtime.display_url
-        state.copy_feedback = f"[yellow]Clipboard unavailable:[/yellow] [cyan]{url}[/cyan]"
+    url = f"{runtime.display_url.rstrip('/')}/mcp" if mcp_only else runtime.display_url
+    try:
+        result = copy_to_clipboard(build_agent_share_text(runtime.display_url, mcp_only=mcp_only))
+    except Exception:  # the URL must reach the screen no matter what failed
+        result = CopyResult.UNAVAILABLE
+    state.copy_feedback = _copy_feedback(
+        result, url, copied_message="Copied agent instructions and URL"
+    )
     state.copy_requested.set()
 
 
 def _copy_url(runtime: _Runtime, state: _ForegroundState, *, mcp_only: bool = False) -> None:
     url = f"{runtime.display_url.rstrip('/')}/mcp" if mcp_only else runtime.display_url
-    if copy_to_clipboard(url):
-        state.copy_feedback = "[green]URL copied to clipboard[/green]"
-    else:
-        state.copy_feedback = f"[yellow]Clipboard unavailable:[/yellow] [cyan]{url}[/cyan]"
+    try:
+        result = copy_to_clipboard(url)
+    except Exception:  # the URL must reach the screen no matter what failed
+        result = CopyResult.UNAVAILABLE
+    state.copy_feedback = _copy_feedback(result, url, copied_message="URL copied to clipboard")
     state.copy_requested.set()
 
 

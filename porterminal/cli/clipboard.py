@@ -86,7 +86,10 @@ def _pipe_to_with_retries(
     retry_delays: tuple[float, ...] = (),
 ) -> bool:
     """Retry transient clipboard command failures before giving up."""
-    if _pipe_to(cmd, text, timeout=timeout):
+    outcome = _run_tool(cmd, text, timeout=timeout)
+    if outcome is None:
+        return False  # Nothing to retry: the tool is not installed.
+    if outcome:
         return True
 
     for delay in retry_delays:

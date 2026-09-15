@@ -251,7 +251,7 @@ can take precedence. Run `uv tool upgrade ptn`, or bypass installed tools with
 
 **Shell not detected?** Set your `$SHELL` environment variable or configure shells in `ptn.yaml`.
 
-**`c`/`u` says "Clipboard unavailable" on Linux?** Porterminal copies through the system's own tool, and Ubuntu desktop ships none: install `wl-clipboard` (Wayland) or `xclip`/`xsel` (X11). Without one, Porterminal can only send an OSC 52 terminal-clipboard sequence, which GNOME Terminal and other VTE-based terminals ignore and no terminal ever confirms, so the URL is shown on screen instead.
+**`c`/`u` says "Clipboard unavailable" on Linux?** Porterminal copies through the system's own tool, and Ubuntu desktop ships none: install `wl-clipboard` (Wayland) or `xclip`/`xsel` (X11). Without one, Porterminal can only send an OSC 52 terminal-clipboard sequence, which GNOME Terminal and other VTE-based terminals ignore and no terminal ever confirms, so the URL is shown on screen instead. Set `PORTERMINAL_DISABLE_OSC52_CLIPBOARD=1` to turn the OSC 52 fallback off entirely for terminals that misbehave on it.
 
 ## Contributing
 

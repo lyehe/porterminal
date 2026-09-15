@@ -75,6 +75,24 @@ class TestCopyToClipboard:
         assert copy_to_clipboard("text") is CopyResult.COPIED
         assert calls == [["/usr/bin/pbcopy"], ["/usr/bin/pbcopy"]]
 
+    def test_macos_does_not_retry_when_pbcopy_is_missing(self, monkeypatch):
+        """A missing binary is not a transient failure; retrying only delays the answer."""
+        monkeypatch.setattr(clipboard.sys, "platform", "darwin")
+        monkeypatch.setattr(clipboard.sys, "stdout", _FakeStdout(tty=False))
+        attempted = []
+        sleeps = []
+
+        def fake_run(cmd, **kwargs):
+            attempted.append(cmd)
+            raise FileNotFoundError(cmd[0])
+
+        monkeypatch.setattr(clipboard.subprocess, "run", fake_run)
+        monkeypatch.setattr(clipboard.time, "sleep", sleeps.append)
+
+        assert copy_to_clipboard("text") is CopyResult.UNAVAILABLE
+        assert attempted == [["/usr/bin/pbcopy"]]
+        assert sleeps == []
+
     def test_linux_tries_tools_in_order_until_success(self, monkeypatch):
         """Linux tries wl-copy, then xclip, then xsel, stopping at first success."""
         monkeypatch.setattr(clipboard.sys, "platform", "linux")

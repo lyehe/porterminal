@@ -190,3 +190,19 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 1
+
+  all-checks:
+    name: All checks passed
+    # Runs even when an upstream job fails or is skipped, so the ruleset can
+    # require this single context. A skipped job would otherwise count as a
+    # passing required check.
+    if: always()
+    needs: [backend, frontend, minimum-dependencies, distribution]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail unless every verification job succeeded
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq .
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' > /dev/null

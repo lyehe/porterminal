@@ -12,9 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`c`/`u` clipboard copy on Linux desktops** - `wl-copy` and `xclip` fork a
   background daemon that inherits stdout/stderr; capturing that output made
   every copy hit the 3 s timeout and report failure (9–18 s freeze) even though
-  the clipboard had been set. Output is no longer captured, a hung tool ends
-  the attempt after one timeout, and tools that are not installed are no
-  longer retried.
+  the clipboard had been set. Output is no longer captured. On every platform
+  a hung tool now ends the attempt after one timeout and tools that are not
+  installed are no longer retried.
 - **False "Copied" on GNOME Terminal** - the OSC 52 fallback is skipped in
   VTE-based terminals (which ignore it) and is otherwise reported as
   "Sent to terminal clipboard (OSC 52)" with the URL kept on screen, because no

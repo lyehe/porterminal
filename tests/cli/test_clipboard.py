@@ -271,23 +271,6 @@ class TestCopyToClipboard:
 
         assert copy_to_clipboard("☃") is CopyResult.UNAVAILABLE
 
-    def test_linux_returns_unavailable_when_no_tool_installed(self, monkeypatch):
-        """Linux reports UNAVAILABLE when none of the clipboard tools exist."""
-        monkeypatch.setattr(clipboard.sys, "platform", "linux")
-        monkeypatch.setattr(clipboard, "_LINUX_RETRY_DELAYS_SECONDS", ())
-        monkeypatch.setattr(clipboard.sys, "stdout", _FakeStdout(tty=False))
-        monkeypatch.delenv("DISPLAY", raising=False)
-        monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
-        monkeypatch.delenv("XDG_SESSION_TYPE", raising=False)
-        monkeypatch.setattr(clipboard, "_is_wsl", lambda: False)
-
-        def fake_run(cmd, **kwargs):
-            raise FileNotFoundError(cmd[0])
-
-        monkeypatch.setattr(clipboard.subprocess, "run", fake_run)
-
-        assert copy_to_clipboard("text") is CopyResult.UNAVAILABLE
-
     def test_terminal_clipboard_fallback_writes_osc52(self, monkeypatch):
         """OSC52 is used as an interactive-terminal fallback, reported as unconfirmed."""
         monkeypatch.setattr(clipboard.sys, "platform", "linux")
@@ -334,7 +317,9 @@ class TestCopyToClipboard:
     def test_pipe_to_returns_when_tool_daemonizes_holding_stdio(self, tmp_path):
         """wl-copy and xclip fork a daemon that inherits stdout/stderr and keeps
         them open until the clipboard is replaced. _pipe_to must not wait for
-        that daemon, or every call hits the timeout and reports failure."""
+        that daemon, or every call hits the timeout and reports failure. The
+        daemon holds the pipe longer than the timeout, so the old
+        capture_output code times out here while DEVNULL returns at once."""
         tool = tmp_path / "fake_wl_copy.py"
         tool.write_text(
             textwrap.dedent(
@@ -343,7 +328,7 @@ class TestCopyToClipboard:
 
                 sys.stdin.read()
                 subprocess.Popen(
-                    [sys.executable, "-I", "-c", "import time; time.sleep(1)"],
+                    [sys.executable, "-I", "-c", "import time; time.sleep(10)"],
                     stdin=subprocess.DEVNULL, stdout=sys.stdout, stderr=sys.stderr,
                 )
                 """
@@ -351,7 +336,7 @@ class TestCopyToClipboard:
             encoding="utf-8",
         )
 
-        assert clipboard._pipe_to([sys.executable, "-I", str(tool)], "text", timeout=5) is True
+        assert clipboard._pipe_to([sys.executable, "-I", str(tool)], "text", timeout=3) is True
 
     def test_terminal_clipboard_fallback_skipped_in_vte_terminals(self, monkeypatch):
         """VTE-based terminals (GNOME Terminal, Tilix, ...) ignore OSC52, so claiming

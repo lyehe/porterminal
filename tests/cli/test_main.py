@@ -271,3 +271,22 @@ def test_copy_share_text_failure_omits_hint_when_none(monkeypatch):
         "[yellow]Clipboard unavailable:[/yellow] "
         "[cyan]https://example.trycloudflare.com/code/mcp[/cyan]"
     )
+
+
+def test_copy_url_shows_url_when_clipboard_raises_unexpectedly(monkeypatch):
+    """Whatever breaks, the user must still get the URL on screen."""
+
+    def explode(_text):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cli_main, "copy_to_clipboard", explode)
+    monkeypatch.setattr(cli_main, "clipboard_install_hint", lambda: None)
+    state = cli_main._ForegroundState()
+
+    cli_main._copy_url(_runtime(), state)
+
+    assert state.copy_requested.is_set()
+    assert state.copy_feedback == (
+        "[yellow]Clipboard unavailable:[/yellow] "
+        "[cyan]https://example.trycloudflare.com/code/[/cyan]"
+    )

@@ -275,7 +275,10 @@ def _copy_feedback(result: CopyResult, url: str, *, copied_message: str) -> str:
 
 def _copy_share_text(runtime: _Runtime, state: _ForegroundState, *, mcp_only: bool = False) -> None:
     url = f"{runtime.display_url.rstrip('/')}/mcp" if mcp_only else runtime.display_url
-    result = copy_to_clipboard(build_agent_share_text(runtime.display_url, mcp_only=mcp_only))
+    try:
+        result = copy_to_clipboard(build_agent_share_text(runtime.display_url, mcp_only=mcp_only))
+    except Exception:  # the URL must reach the screen no matter what failed
+        result = CopyResult.UNAVAILABLE
     state.copy_feedback = _copy_feedback(
         result, url, copied_message="Copied agent instructions and URL"
     )
@@ -284,9 +287,11 @@ def _copy_share_text(runtime: _Runtime, state: _ForegroundState, *, mcp_only: bo
 
 def _copy_url(runtime: _Runtime, state: _ForegroundState, *, mcp_only: bool = False) -> None:
     url = f"{runtime.display_url.rstrip('/')}/mcp" if mcp_only else runtime.display_url
-    state.copy_feedback = _copy_feedback(
-        copy_to_clipboard(url), url, copied_message="URL copied to clipboard"
-    )
+    try:
+        result = copy_to_clipboard(url)
+    except Exception:  # the URL must reach the screen no matter what failed
+        result = CopyResult.UNAVAILABLE
+    state.copy_feedback = _copy_feedback(result, url, copied_message="URL copied to clipboard")
     state.copy_requested.set()
 
 

@@ -6,6 +6,7 @@ import pytest
 
 from porterminal.cli import main as cli_main
 from porterminal.cli.args import Args
+from porterminal.cli.clipboard import CopyResult
 
 ACCESS_CODE = "CliAccessCode_12345678"
 
@@ -190,3 +191,67 @@ def test_foreground_posix_signal_requests_cleanup_and_restores_handlers(
     assert cli_main._run_foreground(runtime, Args(no_tunnel=True)) == 0
     assert events == ["loop", "cleanup"]
     assert current_handlers == original_handlers
+
+
+def _runtime(display_url: str = "https://example.trycloudflare.com/code/") -> cli_main._Runtime:
+    return cli_main._Runtime(
+        server_process=None,
+        tunnel_process=None,
+        base_url=display_url,
+        display_url=display_url,
+        display_cwd="/tmp",
+    )
+
+
+def test_copy_share_text_success_reports_copied(monkeypatch):
+    monkeypatch.setattr(cli_main, "copy_to_clipboard", lambda _text: CopyResult.COPIED)
+    state = cli_main._ForegroundState()
+
+    cli_main._copy_share_text(_runtime(), state)
+
+    assert state.copy_requested.is_set()
+    assert state.copy_feedback == "[green]Copied agent instructions and URL[/green]"
+
+
+def test_copy_url_via_terminal_shows_url_because_osc52_is_unconfirmed(monkeypatch):
+    """A terminal never acknowledges OSC 52, so the URL must stay visible as a fallback."""
+    monkeypatch.setattr(cli_main, "copy_to_clipboard", lambda _text: CopyResult.SENT_TO_TERMINAL)
+    monkeypatch.setattr(cli_main, "clipboard_install_hint", lambda: "unused")
+    state = cli_main._ForegroundState()
+
+    cli_main._copy_url(_runtime(), state)
+
+    assert state.copy_requested.is_set()
+    assert state.copy_feedback == (
+        "[yellow]Sent to terminal clipboard (OSC 52)[/yellow]"
+        "\n[dim]If paste is empty:[/dim] [cyan]https://example.trycloudflare.com/code/[/cyan]"
+    )
+
+
+def test_copy_url_failure_shows_url_and_install_hint(monkeypatch):
+    monkeypatch.setattr(cli_main, "copy_to_clipboard", lambda _text: CopyResult.UNAVAILABLE)
+    monkeypatch.setattr(
+        cli_main, "clipboard_install_hint", lambda: "Install wl-clipboard to enable clipboard copy"
+    )
+    state = cli_main._ForegroundState()
+
+    cli_main._copy_url(_runtime(), state)
+
+    assert state.copy_requested.is_set()
+    assert state.copy_feedback == (
+        "[yellow]Clipboard unavailable:[/yellow] [cyan]https://example.trycloudflare.com/code/[/cyan]"
+        "\n[dim]Install wl-clipboard to enable clipboard copy[/dim]"
+    )
+
+
+def test_copy_share_text_failure_omits_hint_when_none(monkeypatch):
+    monkeypatch.setattr(cli_main, "copy_to_clipboard", lambda _text: CopyResult.UNAVAILABLE)
+    monkeypatch.setattr(cli_main, "clipboard_install_hint", lambda: None)
+    state = cli_main._ForegroundState()
+
+    cli_main._copy_share_text(_runtime(), state, mcp_only=True)
+
+    assert state.copy_feedback == (
+        "[yellow]Clipboard unavailable:[/yellow] "
+        "[cyan]https://example.trycloudflare.com/code/mcp[/cyan]"
+    )

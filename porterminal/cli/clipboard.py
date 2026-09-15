@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import base64
 import os
+import shutil
 import subprocess
 import sys
 import time
+from enum import Enum
 
 # Linux clipboard utilities, tried in order after session-specific commands.
 # None is guaranteed to be installed, so we try each and report failure if all miss.
@@ -31,21 +33,49 @@ _OSC52_DISABLE_ENV = "PORTERMINAL_DISABLE_OSC52_CLIPBOARD"
 _TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
 
 
-def _pipe_to(cmd: list[str], text: str, *, timeout: float = 3) -> bool:
-    """Pipe ``text`` into a clipboard command's stdin. Return True on success."""
+class CopyResult(Enum):
+    """Outcome of :func:`copy_to_clipboard`, from most to least certain."""
+
+    COPIED = "copied"
+    """A system clipboard tool confirmed the write."""
+
+    SENT_TO_TERMINAL = "sent_to_terminal"
+    """An OSC52 sequence was written; terminals never acknowledge it, so the
+    clipboard may or may not hold the text."""
+
+    UNAVAILABLE = "unavailable"
+    """No clipboard path worked."""
+
+
+def _run_tool(cmd: list[str], text: str, *, timeout: float) -> bool | None:
+    """Pipe ``text`` into a clipboard command's stdin.
+
+    Returns True on success, False on a failed run (non-zero exit, timeout,
+    or other OS error), and None when the tool is not installed at all.
+    """
     try:
+        # Never capture stdout/stderr: wl-copy and xclip fork a daemon that
+        # inherits them and keeps serving the clipboard until it is replaced,
+        # so a captured pipe never reaches EOF and every call hits the timeout.
         subprocess.run(
             cmd,
             input=text,
             text=True,
             check=True,
-            capture_output=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             timeout=timeout,
         )
         return True
+    except FileNotFoundError:
+        return None
     except (OSError, subprocess.SubprocessError):
-        # FileNotFoundError (tool missing), non-zero exit, or timeout.
         return False
+
+
+def _pipe_to(cmd: list[str], text: str, *, timeout: float = 3) -> bool:
+    """Pipe ``text`` into a clipboard command's stdin. Return True on success."""
+    return _run_tool(cmd, text, timeout=timeout) is True
 
 
 def _pipe_to_with_retries(
@@ -78,9 +108,14 @@ def _copy_to_first_available(
     for attempt in range(len(retry_delays) + 1):
         if attempt > 0:
             time.sleep(retry_delays[attempt - 1])
+        any_installed = False
         for cmd in commands:
-            if _pipe_to(cmd, text, timeout=timeout):
+            outcome = _run_tool(cmd, text, timeout=timeout)
+            if outcome:
                 return True
+            any_installed |= outcome is not None
+        if not any_installed:
+            return False  # Nothing to retry: no tool is installed.
     return False
 
 
@@ -120,9 +155,32 @@ def _linux_clipboard_commands() -> tuple[list[str], ...]:
     return tuple(commands)
 
 
+def clipboard_install_hint() -> str | None:
+    """Return a one-line install hint when Linux has no clipboard tool at all.
+
+    Ubuntu desktop ships none of wl-clipboard/xclip/xsel, so a copy failure there
+    is almost always a missing tool rather than a transient error. Windows,
+    macOS and WSL always have a built-in command, so they get no hint.
+    """
+    if sys.platform in ("win32", "darwin") or _is_wsl():
+        return None
+    if any(shutil.which(cmd[0]) for cmd in _LINUX_CLIPBOARD_COMMANDS):
+        return None
+
+    session_type = os.environ.get("XDG_SESSION_TYPE", "").lower()
+    if os.environ.get("WAYLAND_DISPLAY") or session_type == "wayland":
+        return "Install wl-clipboard to enable clipboard copy"
+    return "Install xclip or xsel to enable clipboard copy"
+
+
 def _copy_to_terminal_clipboard(text: str) -> bool:
     """Send an OSC52 clipboard sequence to an interactive terminal."""
     if os.environ.get(_OSC52_DISABLE_ENV, "").lower() in _TRUE_ENV_VALUES:
+        return False
+    # VTE-based terminals (GNOME Terminal, Tilix, Ptyxis, ...) export VTE_VERSION
+    # and silently drop OSC52 (https://gitlab.gnome.org/GNOME/vte/-/issues/2495),
+    # so reporting success here would hide the URL behind a false "Copied".
+    if os.environ.get("VTE_VERSION"):
         return False
 
     raw = text.encode("utf-8")
@@ -163,7 +221,7 @@ def _copy_to_system_clipboard(text: str) -> bool:
     )
 
 
-def copy_to_clipboard(text: str) -> bool:
+def copy_to_clipboard(text: str) -> CopyResult:
     """Copy ``text`` to the system clipboard using built-in OS utilities.
 
     Platform tools used (no third-party dependency):
@@ -171,12 +229,17 @@ def copy_to_clipboard(text: str) -> bool:
     - macOS:   ``pbcopy``
     - Linux:   WSL clipboard, Wayland, then X11 tools (first one available)
     - Fallback: OSC52 terminal clipboard sequence when running interactively
+      (skipped in VTE-based terminals, which ignore it)
 
     Args:
         text: The text to place on the clipboard.
 
     Returns:
-        True if a platform tool succeeded or an OSC52 terminal clipboard
-        sequence was sent; False if no clipboard path was available.
+        ``COPIED`` if a platform tool succeeded, ``SENT_TO_TERMINAL`` if only
+        the unconfirmable OSC52 sequence was written, else ``UNAVAILABLE``.
     """
-    return _copy_to_system_clipboard(text) or _copy_to_terminal_clipboard(text)
+    if _copy_to_system_clipboard(text):
+        return CopyResult.COPIED
+    if _copy_to_terminal_clipboard(text):
+        return CopyResult.SENT_TO_TERMINAL
+    return CopyResult.UNAVAILABLE

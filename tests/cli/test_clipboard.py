@@ -58,7 +58,7 @@ class TestCopyToClipboard:
         assert calls == [["/usr/bin/pbcopy"]]
 
     def test_macos_retries_transient_pbcopy_failure(self, monkeypatch):
-        """macOS retries pbcopy before reporting the clipboard as unavailable."""
+        """macOS retries a failed pbcopy run before reporting the clipboard as unavailable."""
         monkeypatch.setattr(clipboard.sys, "platform", "darwin")
         monkeypatch.setattr(clipboard, "_MACOS_RETRY_DELAYS_SECONDS", (0,))
         calls = []
@@ -66,7 +66,7 @@ class TestCopyToClipboard:
         def fake_run(cmd, **kwargs):
             calls.append(cmd)
             if len(calls) == 1:
-                raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout", 3))
+                raise subprocess.CalledProcessError(1, cmd)
             return subprocess.CompletedProcess(cmd, 0)
 
         monkeypatch.setattr(clipboard.subprocess, "run", fake_run)
@@ -74,6 +74,24 @@ class TestCopyToClipboard:
 
         assert copy_to_clipboard("text") is CopyResult.COPIED
         assert calls == [["/usr/bin/pbcopy"], ["/usr/bin/pbcopy"]]
+
+    def test_macos_does_not_retry_when_pbcopy_hangs(self, monkeypatch):
+        """A hang is not transient; retrying would only multiply the freeze."""
+        monkeypatch.setattr(clipboard.sys, "platform", "darwin")
+        monkeypatch.setattr(clipboard.sys, "stdout", _FakeStdout(tty=False))
+        calls = []
+        sleeps = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout", 3))
+
+        monkeypatch.setattr(clipboard.subprocess, "run", fake_run)
+        monkeypatch.setattr(clipboard.time, "sleep", sleeps.append)
+
+        assert copy_to_clipboard("text") is CopyResult.UNAVAILABLE
+        assert calls == [["/usr/bin/pbcopy"]]
+        assert sleeps == []
 
     def test_macos_does_not_retry_when_pbcopy_is_missing(self, monkeypatch):
         """A missing binary is not a transient failure; retrying only delays the answer."""
@@ -216,6 +234,42 @@ class TestCopyToClipboard:
         assert copy_to_clipboard("text") is CopyResult.UNAVAILABLE
         assert attempted == ["wl-copy", "xclip", "xsel"]
         assert sleeps == []
+
+    def test_linux_stops_at_the_first_hung_tool(self, monkeypatch):
+        """A hung tool means a broken session: bail out instead of trying and retrying."""
+        monkeypatch.setattr(clipboard.sys, "platform", "linux")
+        monkeypatch.setattr(clipboard.sys, "stdout", _FakeStdout(tty=False))
+        monkeypatch.delenv("DISPLAY", raising=False)
+        monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+        monkeypatch.delenv("XDG_SESSION_TYPE", raising=False)
+        monkeypatch.setattr(clipboard, "_is_wsl", lambda: False)
+        attempted = []
+        sleeps = []
+
+        def fake_run(cmd, **kwargs):
+            attempted.append(cmd[0])
+            if cmd[0] == "wl-copy":
+                raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout", 3))
+            return subprocess.CompletedProcess(cmd, 0)
+
+        monkeypatch.setattr(clipboard.subprocess, "run", fake_run)
+        monkeypatch.setattr(clipboard.time, "sleep", sleeps.append)
+
+        assert copy_to_clipboard("text") is CopyResult.UNAVAILABLE
+        assert attempted == ["wl-copy"]
+        assert sleeps == []
+
+    def test_returns_unavailable_when_text_cannot_be_encoded(self, monkeypatch):
+        """An encoding error must become feedback, not an exception the key thread swallows."""
+        monkeypatch.setattr(clipboard.sys, "platform", "win32")
+        monkeypatch.setattr(clipboard.sys, "stdout", _FakeStdout(tty=False))
+
+        def fake_run(cmd, **kwargs):
+            raise UnicodeEncodeError("charmap", "☃", 0, 1, "character maps to <undefined>")
+
+        monkeypatch.setattr(clipboard.subprocess, "run", fake_run)
+
+        assert copy_to_clipboard("☃") is CopyResult.UNAVAILABLE
 
     def test_linux_returns_false_when_no_tool_available(self, monkeypatch):
         """Linux returns False when none of the clipboard tools exist."""

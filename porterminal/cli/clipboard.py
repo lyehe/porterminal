@@ -51,12 +51,17 @@ class CopyResult(Enum):
         return self is CopyResult.COPIED
 
 
-def _run_tool(cmd: list[str], text: str, *, timeout: float) -> bool | None:
-    """Pipe ``text`` into a clipboard command's stdin.
+class _ToolOutcome(Enum):
+    """Result of one clipboard-tool invocation."""
 
-    Returns True on success, False on a failed run (non-zero exit, timeout,
-    or other OS error), and None when the tool is not installed at all.
-    """
+    OK = "ok"
+    FAILED = "failed"  # non-zero exit or OS error: worth one retry
+    MISSING = "missing"  # binary not installed: retrying cannot help
+    TIMED_OUT = "timed_out"  # hung: retrying would only multiply the freeze
+
+
+def _run_tool(cmd: list[str], text: str, *, timeout: float) -> _ToolOutcome:
+    """Pipe ``text`` into a clipboard command's stdin and classify the outcome."""
     try:
         # Never capture stdout/stderr: wl-copy and xclip fork a daemon that
         # inherits them and keeps serving the clipboard until it is replaced,
@@ -70,16 +75,19 @@ def _run_tool(cmd: list[str], text: str, *, timeout: float) -> bool | None:
             stderr=subprocess.DEVNULL,
             timeout=timeout,
         )
-        return True
+        return _ToolOutcome.OK
     except FileNotFoundError:
-        return None
-    except (OSError, subprocess.SubprocessError):
-        return False
+        return _ToolOutcome.MISSING
+    except subprocess.TimeoutExpired:
+        return _ToolOutcome.TIMED_OUT
+    except (OSError, ValueError, subprocess.SubprocessError):
+        # ValueError covers UnicodeEncodeError from text=True.
+        return _ToolOutcome.FAILED
 
 
 def _pipe_to(cmd: list[str], text: str, *, timeout: float = 3) -> bool:
     """Pipe ``text`` into a clipboard command's stdin. Return True on success."""
-    return _run_tool(cmd, text, timeout=timeout) is True
+    return _run_tool(cmd, text, timeout=timeout) is _ToolOutcome.OK
 
 
 def _pipe_to_with_retries(
@@ -89,19 +97,14 @@ def _pipe_to_with_retries(
     timeout: float = 3,
     retry_delays: tuple[float, ...] = (),
 ) -> bool:
-    """Retry transient clipboard command failures before giving up."""
+    """Retry a failed run; a missing or hung tool is not worth retrying."""
     outcome = _run_tool(cmd, text, timeout=timeout)
-    if outcome is None:
-        return False  # Nothing to retry: the tool is not installed.
-    if outcome:
-        return True
-
     for delay in retry_delays:
+        if outcome is not _ToolOutcome.FAILED:
+            break
         time.sleep(delay)
-        if _pipe_to(cmd, text, timeout=timeout):
-            return True
-
-    return False
+        outcome = _run_tool(cmd, text, timeout=timeout)
+    return outcome is _ToolOutcome.OK
 
 
 def _copy_to_first_available(
@@ -111,18 +114,22 @@ def _copy_to_first_available(
     timeout: float = 3,
     retry_delays: tuple[float, ...] = (),
 ) -> bool:
-    """Try fallback commands and retry the full list on transient failures."""
+    """Try fallback commands and retry the full list only on transient failures."""
     for attempt in range(len(retry_delays) + 1):
         if attempt > 0:
             time.sleep(retry_delays[attempt - 1])
-        any_installed = False
+        retryable = False
         for cmd in commands:
             outcome = _run_tool(cmd, text, timeout=timeout)
-            if outcome:
+            if outcome is _ToolOutcome.OK:
                 return True
-            any_installed |= outcome is not None
-        if not any_installed:
-            return False  # Nothing to retry: no tool is installed.
+            if outcome is _ToolOutcome.TIMED_OUT:
+                # A hung tool means a broken display session; the next tool
+                # would hang too, so cap the freeze at one timeout.
+                return False
+            retryable |= outcome is _ToolOutcome.FAILED
+        if not retryable:
+            return False  # Nothing installed, or nothing worth retrying.
     return False
 
 

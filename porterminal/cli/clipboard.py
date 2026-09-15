@@ -170,19 +170,24 @@ def _linux_clipboard_commands() -> tuple[list[str], ...]:
 
 
 def clipboard_install_hint() -> str | None:
-    """Return a one-line install hint when Linux has no clipboard tool at all.
+    """Return a one-line install hint when a Linux desktop has no clipboard tool.
 
     Ubuntu desktop ships none of wl-clipboard/xclip/xsel, so a copy failure there
     is almost always a missing tool rather than a transient error. Windows,
-    macOS and WSL always have a built-in command, so they get no hint.
+    macOS and WSL always have a built-in command, and a headless or SSH session
+    has no display for any tool to talk to, so those get no hint.
     """
     if sys.platform in ("win32", "darwin") or _is_wsl():
         return None
-    if any(shutil.which(cmd[0]) for cmd in _LINUX_CLIPBOARD_COMMANDS):
-        return None
 
     session_type = os.environ.get("XDG_SESSION_TYPE", "").lower()
-    if os.environ.get("WAYLAND_DISPLAY") or session_type == "wayland":
+    wayland = bool(os.environ.get("WAYLAND_DISPLAY")) or session_type == "wayland"
+    x11 = bool(os.environ.get("DISPLAY")) or session_type == "x11"
+    if not (wayland or x11):
+        return None
+    if any(shutil.which(cmd[0]) for cmd in _LINUX_CLIPBOARD_COMMANDS):
+        return None
+    if wayland:
         return "Install wl-clipboard to enable clipboard copy"
     return "Install xclip or xsel to enable clipboard copy"
 

@@ -438,6 +438,13 @@ class TestClipboardInstallHint:
 
         assert clipboard_install_hint() is None
 
+    def test_no_hint_without_a_display(self, monkeypatch):
+        """Headless/SSH sessions have no display, so no clipboard tool could help."""
+        self._linux_desktop(monkeypatch, session="none")
+        monkeypatch.setattr(clipboard.shutil, "which", lambda _name: None)
+
+        assert clipboard_install_hint() is None
+
     def test_no_hint_on_platforms_with_builtin_tools(self, monkeypatch):
         """Windows, macOS and WSL always ship a clipboard command."""
         monkeypatch.setattr(clipboard.shutil, "which", lambda _name: None)

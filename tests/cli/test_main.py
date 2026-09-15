@@ -213,15 +213,31 @@ def test_copy_share_text_success_reports_copied(monkeypatch):
     assert state.copy_feedback == "[green]Copied agent instructions and URL[/green]"
 
 
-def test_copy_url_via_terminal_shows_url_because_osc52_is_unconfirmed(monkeypatch):
-    """A terminal never acknowledges OSC 52, so the URL must stay visible as a fallback."""
+def test_copy_url_via_terminal_shows_url_and_hint_because_osc52_is_unconfirmed(monkeypatch):
+    """A terminal never acknowledges OSC 52, so the URL (and the install hint) stay visible."""
     monkeypatch.setattr(cli_main, "copy_to_clipboard", lambda _text: CopyResult.SENT_TO_TERMINAL)
-    monkeypatch.setattr(cli_main, "clipboard_install_hint", lambda: "unused")
+    monkeypatch.setattr(
+        cli_main, "clipboard_install_hint", lambda: "Install wl-clipboard to enable clipboard copy"
+    )
     state = cli_main._ForegroundState()
 
     cli_main._copy_url(_runtime(), state)
 
     assert state.copy_requested.is_set()
+    assert state.copy_feedback == (
+        "[yellow]Sent to terminal clipboard (OSC 52)[/yellow]"
+        "\n[dim]If paste is empty:[/dim] [cyan]https://example.trycloudflare.com/code/[/cyan]"
+        "\n[dim]Install wl-clipboard to enable clipboard copy[/dim]"
+    )
+
+
+def test_copy_url_via_terminal_omits_hint_when_none(monkeypatch):
+    monkeypatch.setattr(cli_main, "copy_to_clipboard", lambda _text: CopyResult.SENT_TO_TERMINAL)
+    monkeypatch.setattr(cli_main, "clipboard_install_hint", lambda: None)
+    state = cli_main._ForegroundState()
+
+    cli_main._copy_url(_runtime(), state)
+
     assert state.copy_feedback == (
         "[yellow]Sent to terminal clipboard (OSC 52)[/yellow]"
         "\n[dim]If paste is empty:[/dim] [cyan]https://example.trycloudflare.com/code/[/cyan]"

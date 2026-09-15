@@ -253,9 +253,8 @@ def _redraw(runtime: _Runtime, args: Args, show_url: bool, status: str | None) -
     )
 
 
-def _clipboard_unavailable_feedback(url: str) -> str:
-    """Show the URL so it can be copied by hand, plus an install hint if one applies."""
-    feedback = f"[yellow]Clipboard unavailable:[/yellow] [cyan]{url}[/cyan]"
+def _with_install_hint(feedback: str) -> str:
+    """Append the install hint as a dim trailing line when one applies."""
     hint = clipboard_install_hint()
     if hint:
         feedback += f"\n[dim]{hint}[/dim]"
@@ -267,11 +266,11 @@ def _copy_feedback(result: CopyResult, url: str, *, copied_message: str) -> str:
     if result is CopyResult.COPIED:
         return f"[green]{copied_message}[/green]"
     if result is CopyResult.SENT_TO_TERMINAL:
-        return (
+        return _with_install_hint(
             "[yellow]Sent to terminal clipboard (OSC 52)[/yellow]"
             f"\n[dim]If paste is empty:[/dim] [cyan]{url}[/cyan]"
         )
-    return _clipboard_unavailable_feedback(url)
+    return _with_install_hint(f"[yellow]Clipboard unavailable:[/yellow] [cyan]{url}[/cyan]")
 
 
 def _copy_share_text(runtime: _Runtime, state: _ForegroundState, *, mcp_only: bool = False) -> None:

@@ -397,6 +397,15 @@ class TestClipboardInstallHint:
         assert clipboard_install_hint() is None
 
 
+class TestCopyResult:
+    """Truthiness must mean "confirmed", so a bool check can never lie."""
+
+    def test_only_a_confirmed_copy_is_truthy(self):
+        assert bool(CopyResult.COPIED) is True
+        assert bool(CopyResult.SENT_TO_TERMINAL) is False
+        assert bool(CopyResult.UNAVAILABLE) is False
+
+
 class TestAgentShareText:
     """Tests for the agent-ready text copied by the `c` hotkey."""
 

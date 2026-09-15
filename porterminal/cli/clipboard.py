@@ -46,6 +46,10 @@ class CopyResult(Enum):
     UNAVAILABLE = "unavailable"
     """No clipboard path worked."""
 
+    def __bool__(self) -> bool:
+        """Truthy only for a confirmed copy, so ``if copy_to_clipboard(...)`` cannot lie."""
+        return self is CopyResult.COPIED
+
 
 def _run_tool(cmd: list[str], text: str, *, timeout: float) -> bool | None:
     """Pipe ``text`` into a clipboard command's stdin.

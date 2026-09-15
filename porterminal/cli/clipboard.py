@@ -197,8 +197,10 @@ def _copy_to_terminal_clipboard(text: str) -> bool:
     if os.environ.get(_OSC52_DISABLE_ENV, "").lower() in _TRUE_ENV_VALUES:
         return False
     # VTE-based terminals (GNOME Terminal, Tilix, Ptyxis, ...) export VTE_VERSION
-    # and silently drop OSC52 (https://gitlab.gnome.org/GNOME/vte/-/issues/2495),
-    # so reporting success here would hide the URL behind a false "Copied".
+    # and silently drop OSC52 (https://gitlab.gnome.org/GNOME/vte/-/issues/2495).
+    # This is a heuristic, not a detector: tmux and ssh can hide or forward the
+    # variable. It only avoids a pointless write; the real safety net is that
+    # every non-COPIED result keeps the URL visible on screen.
     if os.environ.get("VTE_VERSION"):
         return False
 

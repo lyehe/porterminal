@@ -271,8 +271,8 @@ class TestCopyToClipboard:
 
         assert copy_to_clipboard("☃") is CopyResult.UNAVAILABLE
 
-    def test_linux_returns_false_when_no_tool_available(self, monkeypatch):
-        """Linux returns False when none of the clipboard tools exist."""
+    def test_linux_returns_unavailable_when_no_tool_installed(self, monkeypatch):
+        """Linux reports UNAVAILABLE when none of the clipboard tools exist."""
         monkeypatch.setattr(clipboard.sys, "platform", "linux")
         monkeypatch.setattr(clipboard, "_LINUX_RETRY_DELAYS_SECONDS", ())
         monkeypatch.setattr(clipboard.sys, "stdout", _FakeStdout(tty=False))
@@ -343,7 +343,7 @@ class TestCopyToClipboard:
 
                 sys.stdin.read()
                 subprocess.Popen(
-                    [sys.executable, "-c", "import time; time.sleep(2)"],
+                    [sys.executable, "-I", "-c", "import time; time.sleep(1)"],
                     stdin=subprocess.DEVNULL, stdout=sys.stdout, stderr=sys.stderr,
                 )
                 """
@@ -351,7 +351,7 @@ class TestCopyToClipboard:
             encoding="utf-8",
         )
 
-        assert clipboard._pipe_to([sys.executable, str(tool)], "text", timeout=1) is True
+        assert clipboard._pipe_to([sys.executable, "-I", str(tool)], "text", timeout=5) is True
 
     def test_terminal_clipboard_fallback_skipped_in_vte_terminals(self, monkeypatch):
         """VTE-based terminals (GNOME Terminal, Tilix, ...) ignore OSC52, so claiming
@@ -375,8 +375,8 @@ class TestCopyToClipboard:
         assert copy_to_clipboard("hello") is CopyResult.UNAVAILABLE
         assert fake_stdout.writes == []
 
-    def test_returns_false_on_command_failure(self, monkeypatch):
-        """A non-zero exit (CalledProcessError) is reported as failure, not raised."""
+    def test_returns_unavailable_on_command_failure(self, monkeypatch):
+        """A non-zero exit (CalledProcessError) is reported as UNAVAILABLE, not raised."""
         monkeypatch.setattr(clipboard.sys, "platform", "darwin")
         monkeypatch.setattr(clipboard.sys, "stdout", _FakeStdout(tty=False))
 
@@ -387,8 +387,8 @@ class TestCopyToClipboard:
 
         assert copy_to_clipboard("text") is CopyResult.UNAVAILABLE
 
-    def test_returns_false_on_timeout(self, monkeypatch):
-        """A timeout is reported as failure, not raised."""
+    def test_returns_unavailable_on_timeout(self, monkeypatch):
+        """A timeout is reported as UNAVAILABLE, not raised."""
         monkeypatch.setattr(clipboard.sys, "platform", "win32")
         monkeypatch.setattr(clipboard.sys, "stdout", _FakeStdout(tty=False))
 

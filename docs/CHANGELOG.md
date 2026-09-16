@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-09-15
+
 ### Added
 
 - **`s` shows the agent prompt** - Press `s` in the startup screen to replace it
@@ -18,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Clipboard install hint** - When a Linux desktop has no clipboard tool, the
   hint now shows the exact command for the detected package manager, e.g.
   `sudo apt install wl-clipboard` (apt, dnf, pacman and zypper are recognised).
+
+### Security
+
+- Bumped transitive dependencies flagged by Dependabot: `httpx2`/`httpcore2`
+  2.9.1 → 2.13.0 (via `mcp`), `vitest` 4.1.10 → 4.1.11, `nanoid` 3.3.16 → 3.3.19.
 
 ## [1.2.1] - 2026-09-15
 

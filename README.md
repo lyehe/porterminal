@@ -50,7 +50,7 @@ Then it clicked: the same trick (one command, one URL) is the easiest way to giv
 - **Full terminal apps** - vim, htop, less, tmux all work correctly with proper alt-screen buffer handling.
 - **Persistent multi-tab sessions** - Sessions survive disconnects. Close the browser, switch networks, reconnect from another device, and your shell and running processes are still there. You and an agent can share one session: watch it work, or take over.
 - **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish, Nushell, and any shell via `$SHELL`). Auto-detects your shells.
-- **Hard to guess by default** - Every launch adds an independent 128-bit random access path. The bare tunnel hostname and every wrong path return 404. The URL is hidden on screen, but the QR contains the complete credential, so keep both private. Press `c` to copy agent instructions and URL, or `u` to copy the URL only.
+- **Hard to guess by default** - Every launch adds an independent 128-bit random access path. The bare tunnel hostname and every wrong path return 404. The URL is hidden on screen, but the QR contains the complete credential, so keep both private. Press `c` to copy agent instructions and URL, `u` to copy the URL only, or `s` to show the agent prompt on screen (`q` closes it).
 
 ## Install
 
@@ -92,13 +92,14 @@ ptn ~/projects/myapp   # Start in specific folder
 | `-u, --check-update` | Check if a newer version is available |
 | `-V, --version` | Show version |
 
-**While running:** with a tunnel active, the connection URL is hidden on screen for privacy. Press **`c`** to copy agent instructions and URL, including `/mcp`, `/api/agent/run`, and `/llms.txt`; press **`u`** to copy the URL only; or scan the QR to connect. `Ctrl+C` stops the server.
+**While running:** with a tunnel active, the connection URL is hidden on screen for privacy. Press **`c`** to copy agent instructions and URL, including `/mcp`, `/api/agent/run`, and `/llms.txt`; press **`u`** to copy the URL only; press **`s`** to show the full agent prompt as selectable text (**`q`** closes it); or scan the QR to connect. `Ctrl+C` stops the server.
 
 ## Agent access (MCP + REST)
 
 For shell control entirely behind the scenes, run `ptn --mcp-only`.
 The local terminal UI stays open: press `c` to copy the agent prompt and MCP
-address, or `u` to copy just the MCP address. These keys also work with `--no-tunnel`.
+address, `u` to copy just the MCP address, or `s` to show the prompt on screen
+(`q` closes it). These keys also work with `--no-tunnel`.
 Connect your MCP client to the generated
 `<url>/mcp` endpoint. This mode shows no QR code and disables the web terminal,
 browser WebSockets, and REST API, so commands cannot be watched or entered through

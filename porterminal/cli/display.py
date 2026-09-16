@@ -39,6 +39,8 @@ TAGLINE_TERMINAL = r"""
 
 COPY_AGENT_HINT = "Press 'c': copy agent instructions and URL"
 COPY_URL_HINT = "Press 'u': copy URL only"
+SHOW_PROMPT_HINT = "Press 's': show agent prompt"
+CLOSE_PROMPT_HINT = "Press 'q' to close"
 
 
 def _apply_gradient(lines: Sequence[str], colors: Sequence[str]) -> list[str]:
@@ -180,6 +182,18 @@ def get_qr_placeholder(url: str) -> str:
     return _generate_spiral(width, height)
 
 
+def display_prompt_screen(text: str) -> None:
+    """Replace the screen with ``text`` as plain, selectable lines.
+
+    No markup, highlighting, borders or hard wrapping: the reader is expected to
+    select the text with the mouse, so nothing may be inserted into it.
+    """
+    console.clear()
+    console.print(text, markup=False, highlight=False, soft_wrap=True)
+    console.print()
+    console.print(f"[dim]{CLOSE_PROMPT_HINT}[/dim]", highlight=False)
+
+
 def display_startup_screen(
     url: str,
     is_tunnel: bool = True,
@@ -210,7 +224,9 @@ def display_startup_screen(
         console.print("[green]●[/green] MCP-ONLY MODE — shell control behind the scenes")
         if copy_mode:
             console.print(
-                "Press 'c': copy agent prompt and MCP address\nPress 'u': copy MCP address"
+                "Press 'c': copy agent prompt and MCP address\nPress 'u': copy MCP address\n"
+                f"{SHOW_PROMPT_HINT}",
+                highlight=False,
             )
             if copy_status:
                 console.print(copy_status)
@@ -233,7 +249,9 @@ def display_startup_screen(
     # URL area. In copy mode the plaintext URL is never shown - the user copies
     # it with a hotkey - so this is a hint or transient feedback.
     if copy_mode:
-        url_area = copy_status or (f"[dim]{COPY_AGENT_HINT}[/dim]\n[dim]{COPY_URL_HINT}[/dim]")
+        url_area = copy_status or (
+            f"[dim]{COPY_AGENT_HINT}[/dim]\n[dim]{COPY_URL_HINT}[/dim]\n[dim]{SHOW_PROMPT_HINT}[/dim]"
+        )
     elif show_url:
         url_area = f"[bold cyan]{url}[/bold cyan]"
     else:

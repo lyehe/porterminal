@@ -115,11 +115,16 @@ def test_local_ui_keeps_copy_keys_available(monkeypatch, no_tunnel):
     assert "http://localhost/secret/mcp" in prompt
     keys["u"]()
     clipboard.assert_called_with("http://localhost/secret/mcp")
+    keys["s"]()
+    assert state.prompt_visible is True
+    keys["q"]()
+    assert state.prompt_visible is False
 
     with display.console.capture() as capture:
         cli_main._redraw(runtime, args, True, state.copy_feedback)
     screen = Text.from_ansi(capture.get()).plain
     assert "Press 'c':" in screen
     assert "Press 'u':" in screen
+    assert "Press 's':" in screen
     assert "URL copied" in screen
     assert "http://localhost" not in screen

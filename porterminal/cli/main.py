@@ -27,6 +27,7 @@ from porterminal.cli import (
     build_agent_share_text,
     clipboard_install_hint,
     copy_to_clipboard,
+    display_prompt_screen,
     display_startup_screen,
     parse_args,
     start_key_listener,
@@ -78,8 +79,10 @@ class _ForegroundState:
     connected: Event = field(default_factory=Event)
     visibility_changed: Event = field(default_factory=Event)
     copy_requested: Event = field(default_factory=Event)
+    prompt_toggled: Event = field(default_factory=Event)
     url_visible: bool = True
     copy_feedback: str | None = None
+    prompt_visible: bool = False
 
 
 def _posix_termination_signals() -> list[int]:
@@ -295,6 +298,20 @@ def _copy_url(runtime: _Runtime, state: _ForegroundState, *, mcp_only: bool = Fa
     state.copy_requested.set()
 
 
+def _show_prompt(state: _ForegroundState) -> None:
+    """'s': replace the startup screen with the agent prompt as selectable text."""
+    state.prompt_visible = True
+    state.prompt_toggled.set()
+
+
+def _hide_prompt(state: _ForegroundState) -> None:
+    """'q': restore the startup screen. A no-op unless the prompt is showing."""
+    if not state.prompt_visible:
+        return
+    state.prompt_visible = False
+    state.prompt_toggled.set()
+
+
 def _start_background_drainers(
     runtime: _Runtime,
     args: Args,
@@ -332,6 +349,8 @@ def _start_interactive_listener(
         {
             "c": lambda: _copy_share_text(runtime, state, mcp_only=args.mcp_only),
             "u": lambda: _copy_url(runtime, state, mcp_only=args.mcp_only),
+            "s": lambda: _show_prompt(state),
+            "q": lambda: _hide_prompt(state),
         },
     )
 
@@ -357,12 +376,16 @@ def _handle_display_events(
     args: Args,
     state: _ForegroundState,
     redraw: Redraw,
+    show_prompt: Callable[[], None],
     *,
     qr_hidden: bool,
     current_show_url: bool,
 ) -> tuple[bool, bool]:
+    # Every startup-screen repaint replaces the prompt view, so it is no longer
+    # showing afterwards regardless of which event triggered the repaint.
     if state.visibility_changed.is_set():
         state.visibility_changed.clear()
+        state.prompt_visible = False
         current_show_url = state.url_visible
         redraw(current_show_url, None)
         qr_hidden = not state.url_visible
@@ -371,12 +394,22 @@ def _handle_display_events(
         return qr_hidden, current_show_url
 
     if not qr_hidden and state.connected.is_set():
+        state.prompt_visible = False
         redraw(False, None)
         return True, False
 
     if state.copy_requested.is_set():
         state.copy_requested.clear()
+        state.prompt_visible = False
         redraw(current_show_url, state.copy_feedback)
+        return qr_hidden, current_show_url
+
+    if state.prompt_toggled.is_set():
+        state.prompt_toggled.clear()
+        if state.prompt_visible:
+            show_prompt()
+        else:
+            redraw(current_show_url, None)
 
     return qr_hidden, current_show_url
 
@@ -386,6 +419,7 @@ def _run_foreground_loop(
     args: Args,
     state: _ForegroundState,
     redraw: Redraw,
+    show_prompt: Callable[[], None],
 ) -> None:
     qr_hidden = args.keep_qr or args.mcp_only
     current_show_url = True
@@ -406,6 +440,7 @@ def _run_foreground_loop(
             args,
             state,
             redraw,
+            show_prompt,
             qr_hidden=qr_hidden,
             current_show_url=current_show_url,
         )
@@ -466,6 +501,9 @@ def _run_foreground(runtime: _Runtime, args: Args) -> int:
     def redraw(show_url: bool = True, status: str | None = None) -> None:
         _redraw(runtime, args, show_url, status)
 
+    def show_prompt() -> None:
+        display_prompt_screen(build_agent_share_text(runtime.display_url, mcp_only=args.mcp_only))
+
     def signal_handler(_signum: int, _frame: FrameType | None) -> None:
         state.shutdown.set()
 
@@ -480,7 +518,7 @@ def _run_foreground(runtime: _Runtime, args: Args) -> int:
         _redraw(runtime, args, True, None)
         _start_background_drainers(runtime, args, state)
         listener = _start_interactive_listener(runtime, args, state)
-        _run_foreground_loop(runtime, args, state, redraw)
+        _run_foreground_loop(runtime, args, state, redraw, show_prompt)
 
         if state.shutdown.is_set():
             console.print("\n[dim]Shutting down...[/dim]")

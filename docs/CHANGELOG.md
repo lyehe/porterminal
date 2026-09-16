@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`s` shows the agent prompt** - Press `s` in the startup screen to replace it
+  with the full agent prompt as plain, selectable text (the same text `c`
+  copies); press `q` to return. Useful when no clipboard is available.
+
+### Changed
+
+- **Clipboard install hint** - When a Linux desktop has no clipboard tool, the
+  hint now shows the exact command for the detected package manager, e.g.
+  `sudo apt install wl-clipboard` (apt, dnf, pacman and zypper are recognised).
+
 ## [1.2.1] - 2026-09-15
 
 ### Fixed

@@ -7,6 +7,7 @@ from .display import (
     TAGLINE_PORTABLE,
     TAGLINE_TERMINAL,
     display_connected_screen,
+    display_prompt_screen,
     display_startup_screen,
     get_qr_code,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "build_agent_share_text",
     "start_key_listener",
     "display_connected_screen",
+    "display_prompt_screen",
     "display_startup_screen",
     "get_qr_code",
     "LOGO",

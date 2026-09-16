@@ -401,18 +401,49 @@ class TestClipboardInstallHint:
             monkeypatch.setenv("DISPLAY", ":0")
 
     def test_wayland_without_tools_suggests_wl_clipboard(self, monkeypatch):
-        """Stock Ubuntu (Wayland, no tools) is told to install wl-clipboard."""
+        """Without a known package manager, Wayland gets the generic wl-clipboard hint."""
         self._linux_desktop(monkeypatch, session="wayland")
         monkeypatch.setattr(clipboard.shutil, "which", lambda _name: None)
 
         assert clipboard_install_hint() == "Install wl-clipboard to enable clipboard copy"
 
     def test_x11_without_tools_suggests_xclip(self, monkeypatch):
-        """An X11 session without tools is told to install xclip or xsel."""
+        """Without a known package manager, X11 gets the generic xclip/xsel hint."""
         self._linux_desktop(monkeypatch, session="x11")
         monkeypatch.setattr(clipboard.shutil, "which", lambda _name: None)
 
         assert clipboard_install_hint() == "Install xclip or xsel to enable clipboard copy"
+
+    def test_wayland_with_apt_suggests_the_install_command(self, monkeypatch):
+        """Ubuntu/Debian users get a copy-pasteable apt command."""
+        self._linux_desktop(monkeypatch, session="wayland")
+        monkeypatch.setattr(
+            clipboard.shutil, "which", lambda name: "/usr/bin/apt" if name == "apt" else None
+        )
+
+        assert clipboard_install_hint() == (
+            'Run "sudo apt install wl-clipboard" to enable clipboard copy'
+        )
+
+    def test_x11_with_apt_suggests_xclip_install_command(self, monkeypatch):
+        """On X11 the apt command installs xclip."""
+        self._linux_desktop(monkeypatch, session="x11")
+        monkeypatch.setattr(
+            clipboard.shutil, "which", lambda name: "/usr/bin/apt" if name == "apt" else None
+        )
+
+        assert clipboard_install_hint() == 'Run "sudo apt install xclip" to enable clipboard copy'
+
+    def test_other_package_managers_are_recognised(self, monkeypatch):
+        """Fedora-style dnf gets its own command; the package name is the same."""
+        self._linux_desktop(monkeypatch, session="wayland")
+        monkeypatch.setattr(
+            clipboard.shutil, "which", lambda name: "/usr/bin/dnf" if name == "dnf" else None
+        )
+
+        assert clipboard_install_hint() == (
+            'Run "sudo dnf install wl-clipboard" to enable clipboard copy'
+        )
 
     def test_no_hint_when_a_tool_is_installed(self, monkeypatch):
         """If a tool exists, the failure is not an install problem."""

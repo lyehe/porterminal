@@ -28,6 +28,14 @@ _LINUX_WSL_CLIPBOARD_COMMANDS: tuple[list[str], ...] = (
 _LINUX_RETRY_DELAYS_SECONDS = (0.1, 0.3)
 _MACOS_PBCOPY_COMMAND = ["/usr/bin/pbcopy"]
 _MACOS_RETRY_DELAYS_SECONDS = (0.1, 0.3)
+# Package managers checked in order when suggesting how to install a clipboard
+# tool. The package names (wl-clipboard, xclip) are the same across all of them.
+_LINUX_PACKAGE_MANAGERS: tuple[tuple[str, str], ...] = (
+    ("apt", "sudo apt install"),
+    ("dnf", "sudo dnf install"),
+    ("pacman", "sudo pacman -S"),
+    ("zypper", "sudo zypper install"),
+)
 _OSC52_CLIPBOARD_MAX_BYTES = 100_000
 _OSC52_DISABLE_ENV = "PORTERMINAL_DISABLE_OSC52_CLIPBOARD"
 _TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
@@ -187,9 +195,14 @@ def clipboard_install_hint() -> str | None:
         return None
     if any(shutil.which(cmd[0]) for cmd in _LINUX_CLIPBOARD_COMMANDS):
         return None
-    if wayland:
-        return "Install wl-clipboard to enable clipboard copy"
-    return "Install xclip or xsel to enable clipboard copy"
+
+    package, alternatives = (
+        ("wl-clipboard", "wl-clipboard") if wayland else ("xclip", "xclip or xsel")
+    )
+    for manager, install in _LINUX_PACKAGE_MANAGERS:
+        if shutil.which(manager):
+            return f'Run "{install} {package}" to enable clipboard copy'
+    return f"Install {alternatives} to enable clipboard copy"
 
 
 def _copy_to_terminal_clipboard(text: str) -> bool:

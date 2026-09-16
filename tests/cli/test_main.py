@@ -175,7 +175,7 @@ def test_foreground_posix_signal_requests_cleanup_and_restores_handlers(
         current_handlers[signum] = handler
         return previous
 
-    def run_loop(_runtime, _args, state, _redraw):
+    def run_loop(_runtime, _args, state, _redraw, _show_prompt):
         events.append("loop")
         current_handlers[shutdown_signal](shutdown_signal, None)
         assert state.shutdown.is_set()
@@ -290,3 +290,82 @@ def test_copy_url_shows_url_when_clipboard_raises_unexpectedly(monkeypatch):
         "[yellow]Clipboard unavailable:[/yellow] "
         "[cyan]https://example.trycloudflare.com/code/[/cyan]"
     )
+
+
+def test_show_prompt_marks_prompt_visible_and_requests_redraw():
+    state = cli_main._ForegroundState()
+
+    cli_main._show_prompt(state)
+
+    assert state.prompt_visible is True
+    assert state.prompt_toggled.is_set()
+
+
+def test_hide_prompt_clears_visibility_and_requests_redraw():
+    state = cli_main._ForegroundState()
+    state.prompt_visible = True
+
+    cli_main._hide_prompt(state)
+
+    assert state.prompt_visible is False
+    assert state.prompt_toggled.is_set()
+
+
+def test_hide_prompt_is_a_no_op_when_nothing_is_shown():
+    state = cli_main._ForegroundState()
+
+    cli_main._hide_prompt(state)
+
+    assert state.prompt_visible is False
+    assert not state.prompt_toggled.is_set()
+
+
+def test_display_events_show_prompt_then_restore_screen_on_q():
+    state = cli_main._ForegroundState()
+    calls: list[str] = []
+    redraw = lambda show_url, status: calls.append(f"redraw:{show_url}:{status}")  # noqa: E731
+    show_prompt = lambda: calls.append("prompt")  # noqa: E731
+
+    cli_main._show_prompt(state)
+    cli_main._handle_display_events(
+        Args(), state, redraw, show_prompt, qr_hidden=True, current_show_url=False
+    )
+    cli_main._hide_prompt(state)
+    cli_main._handle_display_events(
+        Args(), state, redraw, show_prompt, qr_hidden=True, current_show_url=False
+    )
+
+    assert calls == ["prompt", "redraw:False:None"]
+    assert not state.prompt_toggled.is_set()
+
+
+def test_any_other_redraw_dismisses_the_prompt_view():
+    """Copy feedback (or a tunnel event) repaints the startup screen, so the prompt is gone."""
+    state = cli_main._ForegroundState()
+    state.prompt_visible = True
+    state.copy_feedback = "[green]URL copied to clipboard[/green]"
+    state.copy_requested.set()
+
+    cli_main._handle_display_events(
+        Args(), state, lambda *_a: None, lambda: None, qr_hidden=True, current_show_url=False
+    )
+
+    assert state.prompt_visible is False
+
+
+def test_interactive_listener_wires_s_and_q(monkeypatch):
+    state = cli_main._ForegroundState()
+    captured: dict = {}
+    monkeypatch.setattr(cli_main.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(
+        cli_main, "start_key_listener", lambda _ev, keys: captured.setdefault("keys", keys)
+    )
+
+    cli_main._start_interactive_listener(_runtime(), Args(), state)
+
+    keys = captured["keys"]
+    assert set(keys) >= {"c", "u", "s", "q"}
+    keys["s"]()
+    assert state.prompt_visible is True
+    keys["q"]()
+    assert state.prompt_visible is False

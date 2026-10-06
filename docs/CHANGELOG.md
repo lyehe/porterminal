@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Update repository, package metadata, documentation, and installer links after moving to `porterminal/porterminal`.
+- Redesign the README around "Give your agent any computer" and add a repeatable shared-terminal demo with a recording guide.
+
+### Fixed
+
+- Keep draining terminal output while disconnected so output-heavy commands can finish.
+- Queue output during client flow-control pauses and replay buffered output on reconnect.
+- Preserve UTF-8 characters split across output messages, with independent decoding per tab.
+- Clean up connections when terminal buffer replay is cancelled.
+- Discard queued sends after their connection is unregistered.
+- Support agent command completion in Fish and Nushell, including terminal query responses.
+- Close PTYs without blocking other sessions during shutdown.
+- Provide labelled keyboard-accessible tab controls, confirmation, and focus restoration.
+- Restore terminal connections and allow retry when a tab-close request fails.
+
 ## [1.2.2] - 2026-09-15
 
 ### Added
@@ -314,7 +331,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Nushell/Fish compatibility** - Added missing environment variables (`USER`, `SHELL`, `XDG_*`) that modern shells need for proper initialization ([#13](https://github.com/lyehe/porterminal/issues/13))
+- **Nushell/Fish compatibility** - Added missing environment variables (`USER`, `SHELL`, `XDG_*`) that modern shells need for proper initialization ([#13](https://github.com/porterminal/porterminal/issues/13))
 - Code simplification: Extracted button creation helpers in frontend for better maintainability
 
 ## [0.4.0] - 2026-01-12
@@ -324,7 +341,7 @@ This release focuses on mobile experience improvements and robust shell support.
 ### Added
 
 #### Shell Support
-- **Dynamic shell detection** - Supports any shell (Nushell, Xonsh, Elvish, Ion, Oil, etc.) by automatically detecting shells from the `$SHELL` environment variable ([#13](https://github.com/lyehe/porterminal/issues/13))
+- **Dynamic shell detection** - Supports any shell (Nushell, Xonsh, Elvish, Ion, Oil, etc.) by automatically detecting shells from the `$SHELL` environment variable ([#13](https://github.com/porterminal/porterminal/issues/13))
   - Unknown shells are dynamically added to the shell list
   - User's preferred shell appears first in the dropdown
   - Validates shell exists before adding to list
@@ -422,7 +439,7 @@ This release focuses on mobile experience improvements and robust shell support.
 ## [0.3.2] - 2026-01-03
 
 ### Fixed
-- Respect user's `$SHELL` environment variable for default shell on macOS/Linux ([#12](https://github.com/lyehe/porterminal/pull/12) by [@iamd3vil](https://github.com/iamd3vil))
+- Respect user's `$SHELL` environment variable for default shell on macOS/Linux ([#12](https://github.com/porterminal/porterminal/pull/12) by [@iamd3vil](https://github.com/iamd3vil))
 
 ## [0.3.1] - 2026-01-03
 
@@ -450,7 +467,7 @@ This release focuses on mobile experience improvements and robust shell support.
 
 ### Fixed
 - Cloudflared auto-install now works on Linux Mint and other Ubuntu derivatives
-- Uses Cloudflare's "any" distribution instead of codename detection (fixes [#11](https://github.com/lyehe/porterminal/issues/11))
+- Uses Cloudflare's "any" distribution instead of codename detection (fixes [#11](https://github.com/porterminal/porterminal/issues/11))
 
 ## [0.2.6] - 2026-01-03
 
@@ -631,35 +648,35 @@ This release focuses on mobile experience improvements and robust shell support.
 - Rate limiting on WebSocket input
 - Admin privilege warnings on Windows
 
-[Unreleased]: https://github.com/lyehe/porterminal/compare/v1.1.1...HEAD
-[1.1.1]: https://github.com/lyehe/porterminal/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/lyehe/porterminal/compare/v1.0.7...v1.1.0
-[1.0.7]: https://github.com/lyehe/porterminal/compare/v1.0.6...v1.0.7
-[1.0.6]: https://github.com/lyehe/porterminal/compare/v1.0.5...v1.0.6
-[1.0.5]: https://github.com/lyehe/porterminal/compare/v1.0.4...v1.0.5
-[1.0.2]: https://github.com/lyehe/porterminal/compare/v1.0.1...v1.0.2
-[0.5.0]: https://github.com/lyehe/porterminal/compare/v0.4.8...v0.5.0
-[0.4.8]: https://github.com/lyehe/porterminal/compare/v0.4.1...v0.4.8
-[0.4.1]: https://github.com/lyehe/porterminal/compare/v0.4.0...v0.4.1
-[0.4.0]: https://github.com/lyehe/porterminal/compare/v0.3.4...v0.4.0
-[0.3.4]: https://github.com/lyehe/porterminal/compare/v0.3.3...v0.3.4
-[0.3.3]: https://github.com/lyehe/porterminal/compare/v0.3.2...v0.3.3
-[0.3.2]: https://github.com/lyehe/porterminal/compare/v0.3.1...v0.3.2
-[0.3.1]: https://github.com/lyehe/porterminal/compare/v0.3.0...v0.3.1
-[0.3.0]: https://github.com/lyehe/porterminal/compare/v0.2.7...v0.3.0
-[0.2.7]: https://github.com/lyehe/porterminal/compare/v0.2.6...v0.2.7
-[0.2.6]: https://github.com/lyehe/porterminal/compare/v0.2.5...v0.2.6
-[0.2.5]: https://github.com/lyehe/porterminal/compare/v0.2.4...v0.2.5
-[0.2.4]: https://github.com/lyehe/porterminal/compare/v0.2.3...v0.2.4
-[0.2.3]: https://github.com/lyehe/porterminal/compare/v0.2.2...v0.2.3
-[0.2.2]: https://github.com/lyehe/porterminal/compare/v0.2.1...v0.2.2
-[0.2.1]: https://github.com/lyehe/porterminal/compare/v0.2.0...v0.2.1
-[0.2.0]: https://github.com/lyehe/porterminal/compare/v0.1.8...v0.2.0
-[0.1.8]: https://github.com/lyehe/porterminal/compare/v0.1.7...v0.1.8
-[0.1.7]: https://github.com/lyehe/porterminal/compare/v0.1.6...v0.1.7
-[0.1.6]: https://github.com/lyehe/porterminal/compare/v0.1.5...v0.1.6
-[0.1.5]: https://github.com/lyehe/porterminal/compare/v0.1.4...v0.1.5
-[0.1.4]: https://github.com/lyehe/porterminal/compare/v0.1.2...v0.1.4
-[0.1.2]: https://github.com/lyehe/porterminal/compare/v0.1.1...v0.1.2
-[0.1.1]: https://github.com/lyehe/porterminal/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/lyehe/porterminal/releases/tag/v0.1.0
+[Unreleased]: https://github.com/porterminal/porterminal/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/porterminal/porterminal/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/porterminal/porterminal/compare/v1.0.7...v1.1.0
+[1.0.7]: https://github.com/porterminal/porterminal/compare/v1.0.6...v1.0.7
+[1.0.6]: https://github.com/porterminal/porterminal/compare/v1.0.5...v1.0.6
+[1.0.5]: https://github.com/porterminal/porterminal/compare/v1.0.4...v1.0.5
+[1.0.2]: https://github.com/porterminal/porterminal/compare/v1.0.1...v1.0.2
+[0.5.0]: https://github.com/porterminal/porterminal/compare/v0.4.8...v0.5.0
+[0.4.8]: https://github.com/porterminal/porterminal/compare/v0.4.1...v0.4.8
+[0.4.1]: https://github.com/porterminal/porterminal/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/porterminal/porterminal/compare/v0.3.4...v0.4.0
+[0.3.4]: https://github.com/porterminal/porterminal/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/porterminal/porterminal/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/porterminal/porterminal/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/porterminal/porterminal/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/porterminal/porterminal/compare/v0.2.7...v0.3.0
+[0.2.7]: https://github.com/porterminal/porterminal/compare/v0.2.6...v0.2.7
+[0.2.6]: https://github.com/porterminal/porterminal/compare/v0.2.5...v0.2.6
+[0.2.5]: https://github.com/porterminal/porterminal/compare/v0.2.4...v0.2.5
+[0.2.4]: https://github.com/porterminal/porterminal/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/porterminal/porterminal/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/porterminal/porterminal/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/porterminal/porterminal/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/porterminal/porterminal/compare/v0.1.8...v0.2.0
+[0.1.8]: https://github.com/porterminal/porterminal/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/porterminal/porterminal/compare/v0.1.6...v0.1.7
+[0.1.6]: https://github.com/porterminal/porterminal/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/porterminal/porterminal/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/porterminal/porterminal/compare/v0.1.2...v0.1.4
+[0.1.2]: https://github.com/porterminal/porterminal/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/porterminal/porterminal/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/porterminal/porterminal/releases/tag/v0.1.0

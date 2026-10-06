@@ -50,6 +50,7 @@ export interface ConnectionService {
 /** Internal state for each tab's connection */
 interface TabConnectionState {
     state: ConnectionState;
+    decoder: TextDecoder;
     pendingReconnect: ReturnType<typeof setTimeout> | null;
     earlyBuffer: string[];
     // Watermark-based flow control (xterm.js recommended approach)
@@ -120,7 +121,6 @@ export function createConnectionService(
     }
 ): ConnectionService {
     const textEncoder = new TextEncoder();
-    const textDecoder = new TextDecoder();
     const tabStates = new Map<number, TabConnectionState>();
 
     // Auth password (set by main.ts after successful management auth)
@@ -130,6 +130,7 @@ export function createConnectionService(
         if (!tabStates.has(tabId)) {
             tabStates.set(tabId, {
                 state: 'disconnected',
+                decoder: new TextDecoder(),
                 pendingReconnect: null,
                 earlyBuffer: [],
                 watermark: 0,
@@ -354,6 +355,8 @@ export function createConnectionService(
             }
 
             state.state = 'connecting';
+            state.decoder = new TextDecoder();
+            if (!skipBuffer) tab.term.reset();
             state.earlyBuffer = [];
             // Reset flow control state for new connection
             state.connectionGen++;
@@ -459,7 +462,7 @@ export function createConnectionService(
 
             ws.onmessage = (event: MessageEvent) => {
                 if (event.data instanceof ArrayBuffer) {
-                    const text = textDecoder.decode(event.data);
+                    const text = state.decoder.decode(event.data, { stream: true });
                     if (state.state === 'connecting') {
                         state.earlyBuffer.push(text);
                         trimBuffer(state.earlyBuffer, MAX_EARLY_BUFFER_SIZE);
@@ -541,7 +544,7 @@ export function createConnectionService(
                     const delay = config.reconnectDelayMs * Math.min(tab.reconnectAttempts, 5);
                     state.pendingReconnect = setTimeout(() => {
                         state.pendingReconnect = null;
-                        service.connect(tab, true);
+                        service.connect(tab);
                     }, delay);
                 } else {
                     callbacks.onReconnectFailed();

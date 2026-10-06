@@ -62,6 +62,10 @@ def _family(shell_id: str) -> str:
         return "ps"
     if "cmd" in sid or "command" in sid or "devcmd" in sid:
         return "cmd"
+    if sid == "fish":
+        return "fish"
+    if sid in {"nu", "nushell"}:
+        return "nu"
     return "posix"
 
 
@@ -85,6 +89,10 @@ def _probe_command(shell_id: str, marker: str) -> str:
         )
     if fam == "cmd":
         return f"echo {marker}%errorlevel%"
+    if fam == "fish":
+        return f"printf '{marker}%d\\n' $status"
+    if fam == "nu":
+        return f'print $"{marker}($env.LAST_EXIT_CODE)"'
     return f"printf '{marker}%d\\n' \"$?\""
 
 

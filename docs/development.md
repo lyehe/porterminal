@@ -3,7 +3,7 @@
 ## Setup
 
 ```bash
-git clone https://github.com/lyehe/porterminal
+git clone https://github.com/porterminal/porterminal
 cd porterminal
 uv sync --frozen
 uv run --frozen ptn
@@ -61,6 +61,25 @@ frontend/
 ## Release Process
 
 Versioning uses `hatch-vcs` - version is derived from git tags (single source of truth).
+
+### PyPI Trusted Publisher
+
+Configure the existing `ptn` project's publisher on its
+[Publishing page](https://pypi.org/manage/project/ptn/settings/publishing/):
+
+| GitHub setting | Value |
+|----------------|-------|
+| Owner | `porterminal` |
+| Repository | `porterminal` |
+| Workflow filename | `publish.yml` |
+| Environment | `pypi` |
+
+After a repository transfer, add a publisher matching the new owner before
+pushing a release tag, then remove the obsolete publisher. The PyPI package
+remains `ptn`. Project links come from `[project.urls]` in `pyproject.toml` and
+are published with the next release.
+
+See [PyPI's Trusted Publisher setup](https://docs.pypi.org/trusted-publishers/adding-a-publisher/).
 
 ### Creating a Release
 

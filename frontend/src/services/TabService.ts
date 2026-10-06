@@ -136,10 +136,17 @@ export function createTabService(
 
         // Create tab buttons
         tabs.forEach((tab, index) => {
-            const tabBtn = document.createElement('button');
+            const tabBtn = document.createElement('div');
             tabBtn.className = 'tab-btn'
                 + (tab.id === activeTabId ? ' active' : '')
                 + (tab.origin === 'agent' ? ' tab-agent' : '');
+            const selectBtn = document.createElement('button');
+            selectBtn.type = 'button';
+            selectBtn.className = 'tab-select';
+            selectBtn.setAttribute('aria-label',
+                `Select terminal tab ${index + 1}, ${tab.shellId}${tab.origin === 'agent' ? ', agent controlled' : ''}`);
+            selectBtn.setAttribute('aria-pressed', String(tab.id === activeTabId));
+            tabBtn.appendChild(selectBtn);
 
             // Agent-driven tabs get a robot badge so you can tell at a glance
             // which terminals an AI agent is controlling.
@@ -148,45 +155,56 @@ export function createTabService(
                 badge.className = 'tab-badge';
                 badge.textContent = '🤖';
                 badge.title = 'Agent-controlled terminal';
-                tabBtn.appendChild(badge);
+                selectBtn.appendChild(badge);
             }
 
             const label = document.createElement('span');
             label.className = 'tab-label';
             // Display position (1-based) for stable ordering across reloads
             label.textContent = `${index + 1}`;
-            tabBtn.appendChild(label);
+            selectBtn.appendChild(label);
 
             if (tabs.length > 1) {
-                const closeBtn = document.createElement('span');
+                const closeBtn = document.createElement('button');
+                closeBtn.type = 'button';
                 closeBtn.className = 'tab-close';
                 closeBtn.textContent = '×';
+                closeBtn.setAttribute('aria-label', `Close terminal tab ${index + 1}`);
+                closeBtn.title = 'Hold to close, or activate for confirmation';
 
                 // Hold-to-close: prevents accidental tab closure
                 const HOLD_DURATION_MS = 400;
                 let holdTimer: ReturnType<typeof setTimeout> | null = null;
                 let isClosing = false;
 
+                const cancelHold = () => {
+                    if (holdTimer !== null) {
+                        clearTimeout(holdTimer);
+                        holdTimer = null;
+                    }
+                    closeBtn.classList.remove('holding');
+                };
+
+                const closeTab = () => {
+                    if (isClosing) return;
+                    isClosing = true;
+                    cancelHold();
+                    closeBtn.classList.add('ready');
+                    service.requestCloseTab(tab.id).catch(error => {
+                        isClosing = false;
+                        closeBtn.classList.remove('ready');
+                        console.error(error);
+                    });
+                };
+
                 const startHold = (e: Event) => {
                     e.preventDefault();
                     e.stopPropagation();
                     if (isClosing) return;
 
+                    cancelHold();
                     closeBtn.classList.add('holding');
-                    holdTimer = setTimeout(() => {
-                        isClosing = true;
-                        closeBtn.classList.remove('holding');
-                        closeBtn.classList.add('ready');
-                        service.requestCloseTab(tab.id).catch(console.error);
-                    }, HOLD_DURATION_MS);
-                };
-
-                const cancelHold = () => {
-                    if (holdTimer) {
-                        clearTimeout(holdTimer);
-                        holdTimer = null;
-                    }
-                    closeBtn.classList.remove('holding');
+                    holdTimer = setTimeout(closeTab, HOLD_DURATION_MS);
                 };
 
                 // Pointer events for unified touch/mouse handling
@@ -195,15 +213,20 @@ export function createTabService(
                 closeBtn.addEventListener('pointercancel', cancelHold);
                 closeBtn.addEventListener('pointerleave', cancelHold);
 
-                // Prevent click from switching tabs
+                // Native button activation supports both clicks and keyboard input.
                 closeBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    if (!isClosing && window.confirm(
+                        `Close terminal tab ${index + 1}? This stops its shell and running commands.`
+                    )) {
+                        closeTab();
+                    }
                 });
 
                 tabBtn.appendChild(closeBtn);
             }
 
-            tabBtn.addEventListener('click', () => service.switchToTab(tab.id));
+            selectBtn.addEventListener('click', () => service.switchToTab(tab.id));
             tabBar.insertBefore(tabBtn, shellSelector);
         });
 
@@ -485,6 +508,8 @@ export function createTabService(
             if (!tab || !tab.tabId) {
                 throw new Error('Tab not found or has no server ID');
             }
+            const restoreTabFocus = document.getElementById('tab-bar')
+                ?.contains(document.activeElement) ?? false;
 
             // If this is the last tab, create a new one first
             if (tabs.length === 1) {
@@ -495,12 +520,20 @@ export function createTabService(
             connectionService.disconnect(tab);
 
             // 2. Request close from server
-            await managementService.closeTab(tab.tabId);
+            try {
+                await managementService.closeTab(tab.tabId);
+            } catch (error) {
+                if (tabs.includes(tab)) connectionService.connect(tab);
+                throw error;
+            }
 
             // 3. Server confirmed - remove local rendering
             removeLocalRender(tab.tabId);
 
             renderTabs();
+            if (restoreTabFocus) {
+                document.querySelector<HTMLButtonElement>('.tab-btn.active .tab-select')?.focus();
+            }
         },
 
         switchToTab(tabId: number): void {

@@ -2,17 +2,17 @@
 
 import asyncio
 import logging
-import re
-import time
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from time import monotonic
 from typing import Any
 
 from porterminal.domain import (
     PTYPort,
     RateLimitConfig,
     Session,
+    SessionId,
     TerminalDimensions,
     TokenBucketRateLimiter,
 )
@@ -31,20 +31,11 @@ class ConnectionFlowState:
     When client sends 'ack', we resume sending.
     """
 
-    paused: bool = False
-    pause_time: float | None = None
+    paused_at: float | None = None
+    pending_output: bytearray = field(default_factory=bytearray)
+    send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    failed: bool = False
 
-
-# Terminal response sequences that should NOT be written to PTY.
-# These are responses from the terminal emulator to queries from applications.
-# If written to PTY, they get echoed back and displayed as garbage.
-#
-# Note: We only filter DA responses. CPR responses (\x1b[...R) are needed by
-# some shells like Nushell that query cursor position during startup.
-#
-# Patterns:
-#   \x1b[?...c  - Device Attributes (DA) response
-TERMINAL_RESPONSE_PATTERN = re.compile(rb"\x1b\[\?[\d;]*c")
 
 # Constants
 HEARTBEAT_INTERVAL = 30  # seconds
@@ -62,7 +53,9 @@ OUTPUT_BATCH_SIZE_THRESHOLD = 256  # Bytes - threshold for interactive vs bulk
 OUTPUT_BATCH_MAX_SIZE = 16384  # Flush if batch exceeds 16KB
 INTERACTIVE_THRESHOLD = 64  # Bytes - flush immediately for very small data
 MAX_INPUT_SIZE = 4096
-FLOW_PAUSE_TIMEOUT = 5.0  # seconds - auto-resume if client stops sending ACKs (was 15s)
+FLOW_PAUSE_TIMEOUT = 5.0  # seconds - auto-resume if client stops sending ACKs
+FLOW_BUFFER_MAX_BYTES = 1_000_000
+OUTPUT_SEND_TIMEOUT = 5.0
 
 
 class AsyncioClock:
@@ -103,10 +96,6 @@ class TerminalService:
         """Get or create a lock for a session."""
         return self._session_locks.setdefault(session_id, asyncio.Lock())
 
-    def _cleanup_session_lock(self, session_id: str) -> None:
-        """Remove session lock when no longer needed."""
-        self._session_locks.pop(session_id, None)
-
     def _register_connection(self, session_id: str, connection: ConnectionPort) -> int:
         """Register a connection for a session. Returns connection count."""
         connections = self._session_connections.setdefault(session_id, set())
@@ -128,28 +117,74 @@ class TerminalService:
             del self._session_connections[session_id]
         return count
 
-    async def _send_to_connections(self, connections: list[ConnectionPort], data: bytes) -> None:
-        """Send data to connections, respecting flow control.
+    def start_session(self, session: Session[PTYPort]) -> None:
+        """Drain output for the session's lifetime, including when nobody is viewing."""
+        session_id = str(session.id)
+        existing = self._session_read_tasks.get(session_id)
+        if existing and not existing.done():
+            return
 
-        Skips paused connections (client overwhelmed) but auto-resumes
-        after FLOW_PAUSE_TIMEOUT to prevent permanent pause from dead clients.
-        """
-        current_time = time.time()
-        for conn in connections:
-            flow = self._flow_state.get(conn)
-            if flow and flow.paused:
-                # Check timeout - auto-resume if client stopped responding
-                if flow.pause_time and (current_time - flow.pause_time) > FLOW_PAUSE_TIMEOUT:
-                    flow.paused = False
-                    flow.pause_time = None
-                    logger.debug("Auto-resumed paused connection after timeout")
-                else:
-                    continue  # Skip paused connection
+        self._session_read_tasks[session_id] = asyncio.create_task(
+            self._read_pty_broadcast_loop(session, session_id)
+        )
+        logger.debug("Started broadcast read loop session_id=%s", session_id)
 
+    async def stop_session(self, session_id: SessionId) -> None:
+        """Stop PTY reads before the session's handle is closed."""
+        key = str(session_id)
+        task = self._session_read_tasks.pop(key, None)
+        if task and not task.done():
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+        self._session_locks.pop(key, None)
+        logger.debug("Stopped broadcast read loop session_id=%s", session_id)
+
+    async def _close_output_connection(
+        self, connection: ConnectionPort, *, code: int, reason: str
+    ) -> None:
+        with suppress(Exception):
+            await asyncio.wait_for(connection.close(code=code, reason=reason), OUTPUT_SEND_TIMEOUT)
+
+    async def _send_connection_output(self, connection: ConnectionPort, data: bytes) -> None:
+        flow = self._flow_state.get(connection)
+        if flow is None:
+            return
+
+        async with flow.send_lock:
+            if flow.failed or self._flow_state.get(connection) is not flow:
+                return
+            if flow.paused_at is not None and monotonic() - flow.paused_at > FLOW_PAUSE_TIMEOUT:
+                flow.paused_at = None
+
+            if flow.paused_at is not None:
+                if len(flow.pending_output) + len(data) <= FLOW_BUFFER_MAX_BYTES:
+                    flow.pending_output.extend(data)
+                    return
+                # Bound each viewer's queue. Reconnection replays the session buffer.
+                flow.failed = True
+                flow.pending_output.clear()
+                await self._close_output_connection(
+                    connection, code=1013, reason="Output backlog full; reconnect to replay"
+                )
+                return
+
+            payload = bytes(flow.pending_output) + data
+            flow.pending_output.clear()
+            if not payload:
+                return
             try:
-                await conn.send_output(data)
-            except Exception as e:
-                logger.debug("Failed to send output to connection: %s", e)
+                await asyncio.wait_for(connection.send_output(payload), OUTPUT_SEND_TIMEOUT)
+            except Exception as error:
+                flow.failed = True
+                logger.debug("Failed to send output to connection: %s", error)
+                await self._close_output_connection(
+                    connection, code=1011, reason="Terminal output delivery failed"
+                )
+
+    async def _send_to_connections(self, connections: list[ConnectionPort], data: bytes) -> None:
+        """Deliver or queue output independently for each viewer, preserving byte order."""
+        await asyncio.gather(*(self._send_connection_output(conn, data) for conn in connections))
 
     async def _broadcast_output(self, session_id: str, data: bytes) -> None:
         """Broadcast PTY output to all connections for a session.
@@ -158,15 +193,9 @@ class TerminalService:
         condition doesn't matter. For PTY data, use _send_to_connections
         with a lock-protected snapshot.
         """
-        connections = self._session_connections.get(session_id, set())
-        dead: list[ConnectionPort] = []
-        for conn in list(connections):  # Copy to avoid mutation during iteration
-            try:
-                await conn.send_output(data)
-            except Exception:
-                dead.append(conn)
-        for conn in dead:
-            connections.discard(conn)
+        await self._send_to_connections(
+            list(self._session_connections.get(session_id, set())), data
+        )
 
     async def _broadcast_message(self, session_id: str, message: dict[str, Any]) -> None:
         """Broadcast JSON message to all connections for a session."""
@@ -190,7 +219,7 @@ class TerminalService:
         """Handle terminal session I/O with multi-client support.
 
         Multiple clients can connect to the same session simultaneously.
-        The first client starts the PTY read loop; the last client stops it.
+        The PTY reader belongs to the session and keeps draining after clients disconnect.
 
         Args:
             session: Terminal session to handle.
@@ -207,39 +236,33 @@ class TerminalService:
         rate_limiter = TokenBucketRateLimiter(rate_limit_config or self._rate_limit_config, clock)
         lock = self._get_session_lock(session_id)
 
-        # Register atomically to prevent race with broadcast.
-        # Without this lock, a new client could register between add_output and
-        # broadcast, receiving the same data twice (once from buffer, once broadcast).
-        #
-        # Buffer snapshot and read loop start are also under lock to ensure:
-        # - Buffer is captured before any new data arrives
-        # - Only one read loop starts per session (prevents duplicate PTY reads)
-        # - I/O (send_output) happens OUTSIDE lock to avoid blocking other clients
+        # Register and snapshot together so replay cannot duplicate a live broadcast.
+        # Network I/O happens after releasing the session lock.
         buffered = None
         async with lock:
             connection_count = self._register_connection(session_id, connection)
-            is_first_client = connection_count == 1
-
             logger.info(
                 "Client connected session_id=%s connection_count=%d",
                 session_id,
                 connection_count,
             )
 
-            # First client starts the shared PTY read loop (under lock to prevent duplicates)
-            if is_first_client:
-                self._start_broadcast_read_loop(session, session_id)
+            # Standalone callers may not have started the reader at session creation.
+            if connection_count == 1:
+                self.start_session(session)
 
             # Snapshot buffer while under lock (ensures consistency with broadcast)
             # Note: session_info is sent by the caller (app.py) to include tab_id
             if not skip_buffer and not session.output_buffer.is_empty:
                 buffered = session.get_buffered_output()
 
-        # Replay buffer OUTSIDE lock to avoid blocking other clients during I/O
-        if buffered:
-            await connection.send_output(buffered)
-
         try:
+            # Replay outside the session lock, but serialize it before live output.
+            # Cancellation here must also unregister the connection.
+            if buffered:
+                async with self._flow_state[connection].send_lock:
+                    await asyncio.wait_for(connection.send_output(buffered), OUTPUT_SEND_TIMEOUT)
+
             # Start heartbeat for this connection
             heartbeat_task = asyncio.create_task(self._heartbeat_loop(connection))
 
@@ -259,33 +282,6 @@ class TerminalService:
                 session_id,
                 remaining,
             )
-
-            # Last client: stop the read loop and cleanup lock
-            if remaining == 0:
-                await self._stop_broadcast_read_loop(session_id)
-                self._cleanup_session_lock(session_id)
-
-    def _start_broadcast_read_loop(
-        self,
-        session: Session[PTYPort],
-        session_id: str,
-    ) -> None:
-        """Start the PTY read loop that broadcasts to all clients."""
-        if session_id in self._session_read_tasks:
-            return  # Already running
-
-        task = asyncio.create_task(self._read_pty_broadcast_loop(session, session_id))
-        self._session_read_tasks[session_id] = task
-        logger.debug("Started broadcast read loop session_id=%s", session_id)
-
-    async def _stop_broadcast_read_loop(self, session_id: str) -> None:
-        """Stop the PTY read loop for a session."""
-        task = self._session_read_tasks.pop(session_id, None)
-        if task and not task.done():
-            task.cancel()
-            with suppress(asyncio.CancelledError):
-                await task
-        logger.debug("Stopped broadcast read loop session_id=%s", session_id)
 
     async def _read_pty_broadcast_loop(
         self,
@@ -337,13 +333,7 @@ class TerminalService:
             # Broadcast outside lock (I/O can be slow)
             await self._send_to_connections(connections, combined)
 
-        def has_connections() -> bool:
-            return (
-                session_id in self._session_connections
-                and len(self._session_connections[session_id]) > 0
-            )
-
-        while has_connections() and session.pty_handle.is_alive():
+        while session.pty_handle.is_alive():
             try:
                 data = session.pty_handle.read(4096)
                 if data:
@@ -403,7 +393,7 @@ class TerminalService:
         await flush_batch()
 
         # Notify all clients if PTY died
-        if has_connections() and not session.pty_handle.is_alive():
+        if not session.pty_handle.is_alive():
             await self._broadcast_output(session_id, b"\r\n[Shell exited]\r\n")
 
     async def _heartbeat_loop(self, connection: ConnectionPort) -> None:
@@ -450,15 +440,13 @@ class TerminalService:
             )
             return
 
-        # Filter terminal response sequences before writing to PTY.
-        # xterm.js generates these in response to DA/CPR queries.
-        # If written back to PTY, they get echoed and displayed as garbage.
-        filtered = TERMINAL_RESPONSE_PATTERN.sub(b"", data)
-        if not filtered:
+        if not data:
             return
 
-        if rate_limiter.try_acquire(len(filtered)):
-            session.pty_handle.write(filtered)
+        # Terminal query replies are input too: shells such as Fish wait for
+        # device attributes before accepting commands.
+        if rate_limiter.try_acquire(len(data)):
+            session.pty_handle.write(data)
             session.touch(datetime.now(UTC))
         else:
             await connection.send_message(
@@ -489,17 +477,16 @@ class TerminalService:
             # Client is overwhelmed - stop sending data to this connection
             flow = self._flow_state.get(connection)
             if flow:
-                flow.paused = True
-                flow.pause_time = time.time()
+                flow.paused_at = monotonic()
                 # Send confirmation so client knows pause was received
                 await connection.send_message({"type": "pause_ack"})
                 logger.debug("Connection paused (client overwhelmed) session_id=%s", session.id)
         elif msg_type == "ack":
             # Client caught up - resume sending data
             flow = self._flow_state.get(connection)
-            if flow and flow.paused:
-                flow.paused = False
-                flow.pause_time = None
+            if flow and flow.paused_at is not None:
+                flow.paused_at = None
+                await self._send_connection_output(connection, b"")
                 logger.debug("Connection resumed (client caught up) session_id=%s", session.id)
         else:
             logger.warning("Unknown message type session_id=%s type=%s", session.id, msg_type)

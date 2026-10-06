@@ -1,8 +1,39 @@
 """Regression tests for command output captured from an agent's PTY."""
 
+import asyncio
+
 import pytest
 
 from porterminal.application.services.agent_terminal_service import AgentTerminalService
+from porterminal.application.services.terminal_service import TerminalService
+from porterminal.domain import TokenBucketRateLimiter
+from porterminal.infrastructure.web.agent_connection import AgentSessionConnection
+
+
+async def test_agent_terminal_answers_cursor_position_queries():
+    connection = AgentSessionConnection(80, 24)
+    await connection.send_output(b"hello\x1b[6n")
+
+    assert await asyncio.wait_for(connection.receive(), 1) == b"\x1b[1;6R"
+    assert connection.capture_since(0) == b"hello\x1b[6n"
+
+
+async def test_device_attribute_reply_reaches_the_shell(
+    sample_session, fake_pty, rate_limit_config, fake_clock
+):
+    connection = AgentSessionConnection(80, 24)
+    await connection.send_output(b"\x1b[0c")
+    reply = await asyncio.wait_for(connection.receive(), 1)
+    assert reply == b"\x1b[?6c"
+
+    await TerminalService()._handle_binary_input(
+        sample_session,
+        reply,
+        TokenBucketRateLimiter(rate_limit_config, fake_clock),
+        connection,
+    )
+
+    assert fake_pty.get_input() == [reply]
 
 
 @pytest.mark.parametrize(

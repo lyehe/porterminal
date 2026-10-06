@@ -4,7 +4,7 @@
 .DESCRIPTION
     Installs Porterminal via uv/uvx. Installs uv first if not present.
 .EXAMPLE
-    powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/lyehe/porterminal/master/install.ps1 | iex"
+    powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/porterminal/porterminal/master/install.ps1 | iex"
 #>
 
 $ErrorActionPreference = "Stop"

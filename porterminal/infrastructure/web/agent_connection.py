@@ -18,6 +18,7 @@ phone co-views and can take over for free.
 
 import asyncio
 import logging
+from collections.abc import Callable
 
 import pyte
 
@@ -33,20 +34,34 @@ _CAPTURE_CAP = 1_048_576  # 1 MiB
 _MAX_WRITE = 4096
 
 
+class _AgentScreen(pyte.Screen):
+    """Answer terminal queries just as a browser terminal would."""
+
+    def __init__(self, cols: int, rows: int, reply: Callable[[str], None]) -> None:
+        super().__init__(cols, rows)
+        self._reply = reply
+
+    def write_process_input(self, data: str) -> None:
+        self._reply(data)
+
+
 class AgentSessionConnection:
     """A non-WebSocket ConnectionPort driven by MCP tool calls."""
 
     def __init__(self, cols: int, rows: int) -> None:
-        self._screen = pyte.Screen(cols, rows)
+        self._input: asyncio.Queue[bytes] = asyncio.Queue()
+        self._screen = _AgentScreen(cols, rows, self._reply_to_query)
         self._stream = pyte.ByteStream(self._screen)
 
         self._capture = bytearray()
         self._dropped = 0  # bytes trimmed from the front of _capture
 
-        self._input: asyncio.Queue[bytes] = asyncio.Queue()
         self._output_event = asyncio.Event()
         self._connected = True
         self._last_error: str | None = None
+
+    def _reply_to_query(self, data: str) -> None:
+        self._input.put_nowait(data.encode("utf-8"))
 
     # ------------------------------------------------------------------
     # ConnectionPort protocol

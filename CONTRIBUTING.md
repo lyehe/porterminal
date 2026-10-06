@@ -13,7 +13,7 @@ possible — all code is written and reviewed in-house.
   review, regardless of quality. Please do not invest time in a code change
   intended for this repository.
 - **Bug reports and feature requests** are welcome as
-  [issues](https://github.com/lyehe/porterminal/issues), but may be closed or
+  [issues](https://github.com/porterminal/porterminal/issues), but may be closed or
   left unactioned at the maintainer's discretion.
 - **Security vulnerabilities** must be reported privately — see
   [SECURITY.md](.github/SECURITY.md). Please do **not** open a public issue for
@@ -25,7 +25,7 @@ Porterminal is open source under [AGPL-3.0](LICENSE). You are free to fork,
 modify, and run your own copy. To run from source:
 
 ```bash
-git clone https://github.com/lyehe/porterminal
+git clone https://github.com/porterminal/porterminal
 cd porterminal
 uv sync
 uv run ptn

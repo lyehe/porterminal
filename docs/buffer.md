@@ -84,7 +84,9 @@ if readable:
 | `OUTPUT_BATCH_INTERVAL` | 16ms | 51 |
 | `OUTPUT_BATCH_MAX_SIZE` | 16KB | 52 |
 | `INTERACTIVE_THRESHOLD` | 64 bytes | 53 |
-| `FLOW_PAUSE_TIMEOUT` | 15 seconds | 55 |
+| `FLOW_PAUSE_TIMEOUT` | 5 seconds | |
+| `FLOW_BUFFER_MAX_BYTES` | 1MB per connection | |
+| `OUTPUT_SEND_TIMEOUT` | 5 seconds | |
 
 **Batching Strategy (lines 338-366):**
 ```
@@ -112,14 +114,18 @@ await self._send_to_connections(connections, combined)
 ```python
 @dataclass
 class ConnectionFlowState:
-    paused: bool = False
-    pause_time: float | None = None
+    paused_at: float | None = None
+    pending_output: bytearray = field(default_factory=bytearray)
+    send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    failed: bool = False
 ```
 
 **Protocol:**
-- Client sends `{"type": "pause"}` when overwhelmed (lines 457-463)
-- Client sends `{"type": "ack"}` when caught up (lines 464-470)
-- Auto-resume after 15 seconds if no ACK (lines 135-138)
+- Client sends `{"type": "pause"}` when overwhelmed; subsequent output is queued for that connection.
+- Client sends `{"type": "ack"}` when caught up; queued output is flushed immediately, even if the PTY has produced no new output.
+- New output automatically resumes delivery after 5 seconds without an ACK and includes the queued bytes.
+- Each connection has a serialized send path and a 1MB queue limit. If the queue overflows, the connection closes so the client can reconnect and replay the session's retained output.
+- Sends time out after 5 seconds so a stalled connection cannot block the reader indefinitely.
 
 ---
 

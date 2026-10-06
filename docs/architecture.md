@@ -239,7 +239,8 @@ User (identified by email from Cloudflare Access)
 
 Multiple clients can connect to the same session:
 
-- Single PTY read loop per session (started by first client)
+- Single PTY read loop per session, started at creation and stopped before PTY shutdown
+- Disconnected sessions keep draining output into the bounded replay buffer
 - Output broadcasted to all connected clients
 - Input from any client goes to same PTY
 - Lock-protected buffer replay on new client connection

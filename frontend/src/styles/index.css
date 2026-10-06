@@ -211,6 +211,24 @@ html, body {
     text-overflow: ellipsis;
 }
 
+.tab-select {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0;
+    height: 100%;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.tab-select:focus-visible, .tab-close:focus-visible {
+    outline: 2px solid var(--text-high);
+    outline-offset: 2px;
+}
+
 /* Agent-controlled (MCP) tabs: robot badge + accent underline */
 .tab-badge {
     font-size: 11px;
@@ -235,6 +253,11 @@ html, body {
     transition: all var(--transition-fast);
     position: relative;
     overflow: hidden;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    cursor: pointer;
 }
 
 /* Hold-to-close progress indicator */

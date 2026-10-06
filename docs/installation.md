@@ -19,7 +19,7 @@ uvx ptn
 ## From Source
 
 ```bash
-git clone https://github.com/lyehe/porterminal.git
+git clone https://github.com/porterminal/porterminal.git
 cd porterminal
 uv sync --frozen
 uv run --frozen ptn
@@ -69,3 +69,18 @@ Options:
   --mcp-only        MCP control with local copy shortcuts, no QR or web terminal
   -v, --verbose     Show detailed startup logs
 ```
+
+## Troubleshooting
+
+**Connection fails:** use the complete generated URL, including its access
+code. Restart Porterminal for a fresh tunnel and access path if needed.
+
+**`uvx ptn` runs an older version:** an existing `uv tool` installation can
+take precedence. Run `uv tool upgrade ptn`, or bypass installed tools with
+`uvx --isolated ptn@latest`.
+
+**Clipboard unavailable on Linux:** install `wl-clipboard` for Wayland or
+`xclip`/`xsel` for X11. You can also press `s` to show selectable agent
+instructions and the complete URL, then `q` to close them. Terminal clipboard
+support varies; set `PORTERMINAL_DISABLE_OSC52_CLIPBOARD=1` to disable the
+OSC 52 fallback if it causes problems in your terminal.

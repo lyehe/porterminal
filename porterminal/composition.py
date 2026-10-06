@@ -158,19 +158,20 @@ def create_container(
     pty_factory = create_pty_factory(cwd)
 
     # Create services
+    terminal_service = TerminalService()
     session_service = SessionService(
         repository=session_repository,
         pty_factory=pty_factory,
         limit_checker=SessionLimitChecker(),
         working_directory=cwd,
+        on_session_created=terminal_service.start_session,
+        on_session_closing=terminal_service.stop_session,
     )
 
     tab_service = TabService(
         repository=tab_repository,
         limit_checker=TabLimitChecker(),
     )
-
-    terminal_service = TerminalService()
 
     # Create a shell provider closure for ManagementService
     def get_shell(shell_id: str | None) -> ShellCommand | None:

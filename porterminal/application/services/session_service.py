@@ -33,6 +33,8 @@ class SessionService:
         pty_factory: PTYFactory,
         limit_checker: SessionLimitChecker | None = None,
         working_directory: str | None = None,
+        on_session_created: Callable[[Session[PTYPort]], None] | None = None,
+        on_session_closing: Callable[[SessionId], Awaitable[None]] | None = None,
     ) -> None:
         self._repository = repository
         self._pty_factory = pty_factory
@@ -41,6 +43,8 @@ class SessionService:
         self._running = False
         self._cleanup_task: asyncio.Task | None = None
         self._on_session_destroyed: Callable[[SessionId, UserId], Awaitable[None]] | None = None
+        self._on_session_created = on_session_created
+        self._on_session_closing = on_session_closing
 
     def set_on_session_destroyed(
         self, callback: Callable[[SessionId, UserId], Awaitable[None]]
@@ -118,6 +122,8 @@ class SessionService:
         )
 
         self._repository.add(session)
+        if self._on_session_created:
+            self._on_session_created(session)
         logger.info(
             "Session created session_id=%s user_id=%s shell=%s",
             session.id,
@@ -185,6 +191,9 @@ class SessionService:
         """Destroy a session completely."""
         session = self._repository.remove(session_id)
         if session:
+            if self._on_session_closing:
+                await self._on_session_closing(session_id)
+
             # Invoke cascade callback (e.g., to close associated tabs)
             if self._on_session_destroyed:
                 try:
@@ -197,7 +206,7 @@ class SessionService:
                     )
 
             try:
-                session.pty_handle.close()
+                await asyncio.to_thread(session.pty_handle.close)
             except Exception as e:
                 logger.warning("Error closing PTY session_id=%s: %s", session_id, e)
 

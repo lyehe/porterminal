@@ -1,47 +1,41 @@
 # Porterminal Documentation
 
-Web-based terminal accessible from your phone via Cloudflare Quick Tunnel.
+**Give your agent any computer.**
 
-## Overview
+Porterminal gives an AI agent a real terminal on a Windows, macOS, or Linux
+computer. Run `uvx ptn`, share the generated connection instructions, and
+open the same URL in a browser to watch or type into the agent's session.
 
-Porterminal provides a mobile-friendly terminal interface that you can access from any device with a web browser. It uses Cloudflare Quick Tunnels to securely expose your local terminal without port forwarding or firewall configuration.
+## Start here
 
-## Quick Links
+1. Run `uvx ptn` on the computer you want the agent to use.
+2. Press **`c`** to copy the URL and agent instructions, and share them with a task.
+3. Scan the QR code or open the complete URL, then select the agent's **🤖 tab**.
 
-- [Installation](installation.md) - Get started with Porterminal
-- [Configuration](configuration.md) - Customize your setup
-- [Security](security.md) - Password protection & best practices
-- [Agent access (MCP + REST)](agent-access.md) - Let AI agents drive the terminal
-- [Architecture](architecture.md) - Technical details
-- [Development](development.md) - Contributing & release process
-- [Changelog](CHANGELOG.md) - Version history
+The agent connects through MCP or REST, and the browser joins the same
+terminal. Both can send input, so coordinate typing. You can also use
+Porterminal as a phone terminal without an agent.
 
-## Key Features
+The complete URL and QR code grant shell access to the computer. Treat them as
+credentials. The optional password protects browser connections; agent APIs
+use the URL as their credential. Read [security](security.md).
 
-| Feature | Description |
-|---------|-------------|
-| Mobile UI | Touch-friendly virtual keyboard with modifier keys |
-| Multi-tab | Run multiple terminal sessions simultaneously |
-| Persistence | Reconnect to running sessions after disconnect |
-| Secure | Optional password protection, env vars sanitized |
-| Zero-config | Cloudflare tunnel with QR code for instant access |
-| Cross-platform | Windows, Linux, and macOS support |
-| Agent-ready (MCP + REST) | AI agents drive a shell via `/mcp` or `/api/agent/run`; `/llms.txt`, agent-ready copy buttons, and browser fallback text help agents discover the right path |
+## Guides
 
-## How It Works
-
-1. **Start** - Run `ptn` from your terminal
-2. **Connect** - Scan the QR code with your phone
-3. **Use** - Full terminal access with touch-friendly controls
-
-```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Phone     │────▶│  Cloudflare  │────▶│   Server    │
-│  (Browser)  │◀────│    Tunnel    │◀────│   (Local)   │
-└─────────────┘     └──────────────┘     └─────────────┘
-```
+| Guide | What it covers |
+|-------|----------------|
+| [Installation](installation.md) | Package managers, requirements, and running from source |
+| [Agent access](agent-access.md) | MCP, REST, browser fallback, and session lifetimes |
+| [Demo](demo.md) | A repeatable agent task and recording plan |
+| [Terminal controls](frontend_features.md) | Mobile input, gestures, compose mode, and tabs |
+| [Configuration](configuration.md) | Shells, toolbar buttons, and server settings |
+| [Security](security.md) | Access URLs, passwords, and deployment boundaries |
+| [Architecture](architecture.md) | Services, protocols, and terminal I/O |
+| [Development](development.md) | Local checks and release process |
+| [Changelog](CHANGELOG.md) | Version history |
 
 ## Requirements
 
 - Python 3.12+
-- cloudflared CLI (auto-installed if missing)
+- `cloudflared` for remote access (Porterminal attempts to install it if missing)
+- An agent with remote MCP support or HTTP tools; humans connect through a browser

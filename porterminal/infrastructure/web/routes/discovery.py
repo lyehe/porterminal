@@ -222,7 +222,7 @@ async def mcp_server_json(request: Request) -> dict:
             else "Web terminal + MCP agent terminal on this machine, exposed via a Cloudflare tunnel."
         ),
         "version": __version__,
-        "repository": {"url": "https://github.com/lyehe/porterminal", "source": "github"},
+        "repository": {"url": "https://github.com/porterminal/porterminal", "source": "github"},
         "remotes": [{"type": "streamable-http", "url": f"{base}/mcp"}],
     }
 

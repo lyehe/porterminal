@@ -13,7 +13,7 @@
 
 ### Private Disclosure (Preferred)
 
-Use [GitHub's private vulnerability reporting](https://github.com/lyehe/porterminal/security/advisories/new):
+Use [GitHub's private vulnerability reporting](https://github.com/porterminal/porterminal/security/advisories/new):
 
 1. Go to **Security** → **Advisories** → **New draft advisory**
 2. Fill in the vulnerability details

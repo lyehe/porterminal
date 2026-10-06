@@ -1,11 +1,11 @@
 [project]
 name = "ptn"
 dynamic = ["version"]
-description = "Web-based terminal accessible from phone via Cloudflare Tunnel"
+description = "Give your agent any computer: a shared terminal for AI agents and humans"
 readme = "README.md"
 license = {text = "AGPL-3.0-or-later"}
 requires-python = ">=3.12"
-keywords = ["terminal", "web", "cloudflare", "tunnel", "pty", "mobile", "xterm", "websocket"]
+keywords = ["terminal", "agent", "mcp", "web", "cloudflare", "tunnel", "pty", "mobile", "xterm", "websocket"]
 authors = [
     {name = "Porterminal Contributors"}
 ]
@@ -52,10 +52,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/lyehe/porterminal"
-Repository = "https://github.com/lyehe/porterminal"
-Documentation = "https://github.com/lyehe/porterminal/tree/master/docs"
-Issues = "https://github.com/lyehe/porterminal/issues"
+Homepage = "https://github.com/porterminal/porterminal"
+Repository = "https://github.com/porterminal/porterminal"
+Documentation = "https://github.com/porterminal/porterminal/tree/master/docs"
+Issues = "https://github.com/porterminal/porterminal/issues"
 
 [project.scripts]
 ptn = "porterminal:main"

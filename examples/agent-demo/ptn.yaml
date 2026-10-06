@@ -1,0 +1,8 @@
+# Keep the shared agent terminal readable in a phone recording.
+terminal:
+  cols: 48
+  rows: 24
+ui:
+  compose_mode: true
+update:
+  notify_on_startup: false

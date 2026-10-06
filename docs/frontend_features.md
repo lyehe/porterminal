@@ -176,6 +176,8 @@ Prevents accidental tab closure:
 - **Hold duration**: 400ms
 - **Visual feedback**: `holding` class → `ready` class
 - **Cancellation**: `pointerleave` (swipe away gesture)
+- **Keyboard or click activation**: Confirm before closing; restore focus to the active tab
+- **Accessible controls**: Separate labelled buttons for selecting and closing each tab
 
 ---
 

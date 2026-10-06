@@ -1,6 +1,6 @@
 #!/bin/sh
 # Porterminal installer for macOS/Linux
-# Usage: curl -LsSf https://raw.githubusercontent.com/lyehe/porterminal/master/install.sh | sh
+# Usage: curl -LsSf https://raw.githubusercontent.com/porterminal/porterminal/master/install.sh | sh
 
 set -e
 

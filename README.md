@@ -1,274 +1,171 @@
+<p align="center"><strong>PORTERMINAL</strong></p>
+
+<h1 align="center">Give your agent any computer</h1>
+
 <p align="center">
-  <a href="https://github.com/lyehe/porterminal">
-    <img src="assets/banner.jpg" alt="Porterminal - Vibe Code From Anywhere" width="600">
-  </a>
+  One command. One URL. A real terminal for your agent, a live view for you.
 </p>
 
 <p align="center">
   <a href="https://pypi.org/project/ptn/"><img src="https://img.shields.io/pypi/v/ptn?style=flat-square&logo=pypi&logoColor=white&label=PyPI" alt="PyPI"></a>
   <a href="https://pypi.org/project/ptn/"><img src="https://img.shields.io/pypi/pyversions/ptn?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
-  <a href="https://pypi.org/project/ptn/"><img src="https://img.shields.io/pypi/dm/ptn?style=flat-square&label=Downloads" alt="Downloads"></a>
-  <a href="https://github.com/lyehe/porterminal/blob/master/LICENSE"><img src="https://img.shields.io/github/license/lyehe/porterminal?style=flat-square" alt="License"></a>
-  <a href="https://github.com/lyehe/porterminal/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/lyehe/porterminal/ci.yml?branch=master&style=flat-square&logo=github&label=CI" alt="CI"></a>
+  <a href="https://github.com/porterminal/porterminal/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/porterminal/porterminal/ci.yml?branch=master&style=flat-square&logo=github&label=CI" alt="CI"></a>
+  <a href="https://github.com/porterminal/porterminal/blob/master/LICENSE"><img src="https://img.shields.io/github/license/porterminal/porterminal?style=flat-square" alt="License"></a>
 </p>
 
+Run Porterminal on a Windows, macOS, or Linux computer and give the generated
+link to your AI agent. It gets a real shell with the files, tools, and projects
+on that machine. Open the same link on your phone or in any browser to watch
+the agent work and type into its terminal.
 
+## Start here
 
-<p align="center">
-  <b>Hand a computer to an agent, full control, and watch it.</b><br>
-  One command, one URL. (Also a slick terminal for your own phone.)
-</p>
+On the computer you want to give your agent:
 
-<p align="center">
-  <b>1.</b> <code>uvx ptn</code><br>
-  <b>2.</b> Hand the URL to an AI agent, or scan the QR yourself<br>
-  <b>3.</b> Watch it work in any browser, and take over anytime<br>
-</p>
+```bash
+uvx ptn
+```
 
-<p align="center">
-  <img src="assets/demo.gif" alt="Porterminal demo" width="320">
-</p>
+1. **Give the agent the link.** Press **`c`** in the local Porterminal window
+   to copy the URL and connection instructions. Paste them into your agent
+   with a task. The agent needs remote MCP support or a way to make HTTP requests.
+2. **Open your view.** Scan the QR code or open the complete URL in a browser.
+   Select the agent's **🤖 tab** to see its terminal.
+3. **Work together.** Watch the output, answer an interactive prompt, type a
+   command, or close the tab to end that shell.
 
-> [!WARNING]
-> **That complete URL is full access to this computer.** It contains a random per-launch access code, and anyone (or any AI agent) you hand it to gets a real shell on your machine. Treat the URL and QR code like a secret, only share them with people and agents you trust, and read [Security](#security) before you point Porterminal at anything important.
+To start in a particular project, use `uvx ptn /path/to/project`.
+For installation options, see [installation](https://github.com/porterminal/porterminal/blob/master/docs/installation.md), or use an installer below.
 
-## Why
+> **The link is the key to the computer.** The complete URL and QR code grant
+> shell access. Share them only with people and agents you trust.
+> [Read the security model](#security).
 
-I need something dangerously easy to remote access a computer.
+## The agent works. You stay in the loop.
 
-**ngrok** requires registration and the free tier sucks. **Cloudflare Tunnel** is excellent plumbing, but by itself it only gives you a tunnel, not a phone-friendly terminal. **Tailscale** is great when you own both ends, but it still means joining devices to a private network. **Termius** requires complicated setup: port forwarding, firewall rules, key management...
+| Your agent | You |
+|------------|-----|
+| Runs commands in the computer's real shell | Watches the same output live in a browser |
+| Reads terminal screens and answers prompts | Types into the same terminal when needed |
+| Keeps shell state across tool calls | Switches between agent and personal tabs |
+| Uses MCP or HTTP to connect | Uses the QR code or URL from a phone or desktop |
 
-So I built something simpler: **run a command, scan a QR, start typing.**
+Terminal input is shared; coordinate typing with your agent. Porterminal
+supports interactive terminal apps, multiple tabs, and reconnecting to running
+sessions while the server and session remain alive.
 
-Then it clicked: the same trick (one command, one URL) is the easiest way to give an AI agent a real terminal on *any* computer. No MCP server to write, no SSH keys, no Docker, no config. Run `uvx ptn`, hand over the URL, and the agent runs commands, reads the screen, and answers prompts on that machine. And because it's a web terminal, you can open the same session in any browser to watch it work live, or grab the keyboard and take over.
+The phone UI includes Ctrl/Alt/Shift keys, touch selection, scrolling,
+pinch-to-zoom, and a compose field for editing or dictating longer input.
+See [terminal controls](https://github.com/porterminal/porterminal/blob/master/docs/frontend_features.md).
 
-## Features
+## Try the demo
 
-- **Hand a computer to an agent, full control, and watch it** - Give an AI agent the URL and it gets a real terminal on the machine via MCP or plain REST. Open the same session in any browser to watch it work live, and grab the keyboard whenever you want. No keys, no Docker. The agent learns how from `<url>/llms.txt` and `<url>/.well-known/mcp.json`. See [Agent access](#agent-access-mcp--rest).
-- **One command, instant access** - `uvx ptn` and you (or an agent) get a real terminal on this machine. No SSH, no port forwarding, no config files. Cloudflare tunnel + QR code.
-- **Actually usable on mobile** - Touch-optimized with momentum scrolling, pinch-to-zoom, swipe gestures, and modifier keys (Ctrl, Alt).
-- **Full terminal apps** - vim, htop, less, tmux all work correctly with proper alt-screen buffer handling.
-- **Persistent multi-tab sessions** - Sessions survive disconnects. Close the browser, switch networks, reconnect from another device, and your shell and running processes are still there. You and an agent can share one session: watch it work, or take over.
-- **Cross-platform** - Windows (PowerShell, CMD, WSL), Linux/macOS (Bash, Zsh, Fish, Nushell, and any shell via `$SHELL`). Auto-detects your shells.
-- **Hard to guess by default** - Every launch adds an independent 128-bit random access path. The bare tunnel hostname and every wrong path return 404. The URL is hidden on screen, but the QR contains the complete credential, so keep both private. Press `c` to copy agent instructions and URL, `u` to copy the URL only, or `s` to show the agent prompt on screen (`q` closes it).
+Give an agent a small invoice project with a failing check. Watch it find the
+bug, edit the file, and turn the checks green. Then answer the receipt's label
+prompt from your phone and have the agent read the result.
+
+The [demo guide](https://github.com/porterminal/porterminal/blob/master/docs/demo.md) includes a ready-to-copy project, an agent task,
+and a 60-second recording plan. It demonstrates commands, file changes,
+verification, and human input in one shared session.
+
+## Connect your agent
+
+Pressing **`c`** copies instructions for the available connection methods.
+The running server also serves them at `<url>/llms.txt`.
+
+Here, **`<url>` is the complete generated URL, including its access code**.
+
+| Agent capability | Connection |
+|------------------|------------|
+| Remote MCP | `<url>/mcp` — Streamable HTTP |
+| HTTP requests | `<url>/api/agent/run` — REST |
+| Browser automation | Open `<url>/`; use **Terminal screen** and **Terminal input** |
+
+MCP exposes four tools: `run_command`, `read_screen`, `send_keys`, and
+`send_signal`. REST returns a `session_id` that the agent reuses for subsequent
+commands and interaction. Agent shells appear as 🤖 tabs in your browser.
+
+See [agent access](https://github.com/porterminal/porterminal/blob/master/docs/agent-access.md) for client setup, request examples,
+session lifetimes, and long-running commands.
 
 ## Install
 
-| Method | Install | Update |
-|--------|---------|--------|
-| **uvx** (no install) | `uvx ptn` | `uvx ptn@latest` |
-| **uv tool** | `uv tool install ptn` | `uv tool upgrade ptn` |
-| **pipx** | `pipx install ptn` | `pipx upgrade ptn` |
-| **pip** | `pip install ptn` | `pip install -U ptn` |
+Requires **Python 3.12+**. Porterminal attempts to install `cloudflared`
+automatically when it is missing.
 
-**One-line install (uv + ptn):**
+| Method | Run or install | Update |
+|--------|----------------|--------|
+| uvx | `uvx ptn` | `uvx --isolated ptn@latest` |
+| uv tool | `uv tool install ptn` | `uv tool upgrade ptn` |
+| pipx | `pipx install ptn` | `pipx upgrade ptn` |
+| pip | `pip install ptn` | `pip install -U ptn` |
 
-| OS | Command |
-|----|---------|
-| **Windows** | `powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/lyehe/porterminal/master/install.ps1 \| iex"` |
-| **macOS/Linux** | `curl -LsSf https://raw.githubusercontent.com/lyehe/porterminal/master/install.sh \| sh` |
+**Install uv and Porterminal together:**
 
-Requires Python 3.12+ and [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (auto-installed if missing).
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/porterminal/porterminal/master/install.ps1 | iex"
+```
+
+macOS / Linux:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/porterminal/porterminal/master/install.sh | sh
+```
 
 ## Usage
 
-```bash
-ptn                    # Start in current directory
-ptn ~/projects/myapp   # Start in specific folder
-```
+After installing, run `ptn` or `ptn /path/to/project`.
 
-| Flag | Description |
-|------|-------------|
-| `-n, --no-tunnel` | Local network only (no Cloudflare tunnel) |
-| `--mcp-only` | MCP shell control without a QR code, browser terminal, or REST API |
-| `-p, --password` | Prompt for password to protect this session |
-| `-sp, --save-password` | Save or clear password in config |
-| `-tp, --toggle-password` | Set password requirement (on/off/toggle) |
-| `-v, --verbose` | Show detailed startup logs |
-| `-i, --init` | Create `.ptn/ptn.yaml` with auto-discovered project scripts as buttons |
-| `-if, --init-from URL/PATH` | Create `.ptn/ptn.yaml` from a URL or local file |
-| `-c, --compose` | Enable compose mode by default |
-| `-k, --keep-qr` | Keep the QR code visible after the first connection |
-| `-u, --check-update` | Check if a newer version is available |
-| `-V, --version` | Show version |
+| Option | Purpose |
+|--------|---------|
+| `--no-tunnel` | Run without a Cloudflare tunnel |
+| `--mcp-only` | Expose MCP only; disables the QR code, browser terminal, and REST API |
+| `--compose` | Start with the mobile compose field enabled |
+| `--init` | Generate `.ptn/ptn.yaml` with buttons discovered from project scripts |
+| `--password` | Add a password to browser terminal access |
+| `--help` | Show all options |
+| `--version` | Show the installed version |
 
-**While running:** with a tunnel active, the connection URL is hidden on screen for privacy. Press **`c`** to copy agent instructions and URL, including `/mcp`, `/api/agent/run`, and `/llms.txt`; press **`u`** to copy the URL only; press **`s`** to show the full agent prompt as selectable text (**`q`** closes it); or scan the QR to connect. `Ctrl+C` stops the server.
+While running: **`c`** copies the agent instructions, **`u`** copies only the
+URL, and **`s`** shows the share text on screen (**`q`** closes it).
+**Ctrl+C** stops Porterminal. In MCP-only mode the share keys use the MCP URL.
 
-## Agent access (MCP + REST)
-
-For shell control entirely behind the scenes, run `ptn --mcp-only`.
-The local terminal UI stays open: press `c` to copy the agent prompt and MCP
-address, `u` to copy just the MCP address, or `s` to show the prompt on screen
-(`q` closes it). These keys also work with `--no-tunnel`.
-Connect your MCP client to the generated
-`<url>/mcp` endpoint. This mode shows no QR code and disables the web terminal,
-browser WebSockets, and REST API, so commands cannot be watched or entered through
-the browser. MCP discovery and `/llms.txt` remain available.
-The complete MCP URL still grants shell control of the computer.
-
-The same URL also works for AI agents. MCP-capable clients can use **`<url>/mcp`** (Streamable HTTP) for native typed tools. Agents that cannot register an MCP server can use the REST fallback at **`<url>/api/agent/run`** with ordinary HTTP requests. Either path creates a persistent agent shell, shown as a 🤖 tab you can watch and take over from your phone.
-
-Hand the agent the complete generated URL, including its access code. MCP clients can auto-discover the server from **`<url>/.well-known/mcp.json`** (the MCP `server.json` descriptor), and there's a human/agent-readable **`<url>/llms.txt`** with usage. The base page also includes accessibility-visible hints for browser-driving agents, while the human UI stays compact. Example client config:
-
-```json
-{
-  "mcpServers": {
-    "porterminal": { "url": "https://<your-tunnel>.trycloudflare.com/<access-code>/mcp" }
-  }
-}
-```
-
-MCP tools: `run_command` (clean output + exit code), `read_screen`, `send_keys`, `send_signal` (Ctrl-C / EOF).
-
-REST fallback:
-
-```bash
-curl -s -X POST https://<your-tunnel>.trycloudflare.com/<access-code>/api/agent/run \
-  -H "content-type: application/json" \
-  -d '{"command":"echo hello","timeout":30}'
-```
-
-The response includes a `session_id`; reuse it with `<url>/api/agent/screen`,
-`<url>/api/agent/keys`, `<url>/api/agent/signal`, and
-`DELETE <url>/api/agent/session`.
-
-When you open Porterminal on your phone, the top-right copy button copies the same agent-ready share text. Browser-only agents also get a fallback on the base page: a DOM-readable **Terminal screen** mirror and a clearly labeled **Terminal input**.
-
-> **Security:** `<url>` means the complete generated URL, including its random access code. The bare tunnel hostname exposes nothing, but anyone (or any agent) with the complete URL gets full, non-elevated shell access. See [docs/agent-access.md](docs/agent-access.md).
-
-## Mobile Gestures
-
-| Gesture | Action |
-|---------|--------|
-| **Tap** | Focus terminal, clear selection |
-| **Long-press** | Start text selection |
-| **Double-tap** | Select word |
-| **Swipe left/right** | Arrow keys (← →) |
-| **Scroll** | Momentum scrolling with physics |
-| **Pinch** | Zoom text (10-24px) |
-
-**Modifier keys** (Ctrl, Alt, Shift): Tap once for sticky (one keystroke), double-tap for lock.
-
-**Compose mode** (▤ button): Toggle a text input field where you can type or dictate, edit your text with full mobile editing features (autocorrect, suggestions, cursor positioning), then send to terminal. Useful for longer commands or voice input.
-
-## Configuration
-
-Run `ptn --init` to create a starter config. It auto-discovers project scripts from `package.json`, `pyproject.toml`, or `Makefile` and adds them as buttons:
-
-```bash
-ptn -i
-# Created: .ptn/ptn.yaml
-# Discovered 3 project script(s): build, dev, test
-```
-
-Or create `ptn.yaml` manually:
-
-```yaml
-# Terminal settings
-terminal:
-  default_shell: nu              # Default shell ID
-  shells:                        # Custom shell definitions
-    - id: nu
-      name: Nushell
-      command: nu
-      args: []
-
-# Custom buttons (appear in toolbar)
-# row: 1 = default row, 2+ = additional rows
-buttons:
-  - label: "claude"
-    send:
-      - "claude"
-      - 100        # delay in ms
-      - "\r"
-  - label: "build"
-    send: "npm run build\r"
-    row: 2         # second button row
-
-# Update checker settings
-update:
-  notify_on_startup: true   # Show update notification
-  check_interval: 86400     # Seconds between checks (default: 24h)
-
-# Security settings
-security:
-  require_password: true    # Always require password at startup
-  password_hash: ""         # Saved password hash (use ptn -sp to set)
-  max_auth_attempts: 5      # Max failed attempts before disconnect
-```
-
-Config is searched in order: `$PORTERMINAL_CONFIG_PATH`, `./ptn.yaml`, `./.ptn/ptn.yaml`, `~/.ptn/ptn.yaml`.
+Custom shells, toolbar buttons, and startup settings live in `ptn.yaml`.
+See [configuration](https://github.com/porterminal/porterminal/blob/master/docs/configuration.md).
 
 ## Security
 
-Every launch creates a new 128-bit random path such as
-`https://<tunnel>.trycloudflare.com/<access-code>/`. All browser, WebSocket,
-MCP, REST, health, and static routes require that exact prefix; the bare host
-and wrong paths return 404. This makes brute-forcing a discovered tunnel
-hostname impractical.
+Porterminal gives access to a real shell with your user's permissions. The
+starting directory is a convenience, not a sandbox or a limit on file access.
 
-The complete generated URL is still a bearer credential: anyone who gets it
-has shell access. Restart Porterminal to rotate the code if it leaks. The
-optional password adds authentication to browser WebSockets, but MCP and REST
-continue to trust the complete URL so agents can use the one-link workflow.
+Each launch creates a new 128-bit random access path. The bare tunnel hostname
+and wrong paths return 404, but anyone with the complete URL can use the shell.
+Keep the URL and QR code private, stop Porterminal when finished, and restart
+it to rotate the access code if the link leaks.
 
-A browser remembers a successful password in plaintext storage scoped to that
-complete launch URL. Saving a password for a newer launch on the same origin
-retires older Porterminal password entries; clearing or rejecting a remembered
-password removes them all without touching other browser storage. Consequently,
-concurrent launches on the same origin may prompt again, while an already
-authenticated connection remains connected.
+**The optional password protects browser connections. MCP and REST use the
+complete URL as their credential and do not require that password.**
 
-**From the UI:** Open Settings (gear icon) and use the Security section to set/change password and toggle password requirement. Changes require server restart.
+See [security](https://github.com/porterminal/porterminal/blob/master/docs/security.md) for the full model and password behavior.
+Report vulnerabilities through [the security policy](https://github.com/porterminal/porterminal/blob/master/.github/SECURITY.md).
 
-**From CLI:**
+## Documentation and development
 
-```bash
-# One-time password (prompt each session)
-ptn -p
+- [Installation](https://github.com/porterminal/porterminal/blob/master/docs/installation.md)
+- [Agent access: MCP, REST, and browser fallback](https://github.com/porterminal/porterminal/blob/master/docs/agent-access.md)
+- [Demo setup and recording](https://github.com/porterminal/porterminal/blob/master/docs/demo.md)
+- [Configuration](https://github.com/porterminal/porterminal/blob/master/docs/configuration.md)
+- [Architecture](https://github.com/porterminal/porterminal/blob/master/docs/architecture.md)
+- [Development and release process](https://github.com/porterminal/porterminal/blob/master/docs/development.md)
+- [Changelog](https://github.com/porterminal/porterminal/blob/master/docs/CHANGELOG.md)
 
-# Save password to config (no prompt needed)
-ptn -sp
-# Password: ****
-# Confirm password: ****
-
-# Clear saved password (enter empty password)
-ptn -sp
-# Password: [press Enter]
-
-# Set or toggle password requirement
-ptn -tp          # Toggle on/off
-```
-
-See [docs/security.md](docs/security.md) for details.
-
-## Troubleshooting
-
-**Connection fails?** Use the complete generated URL, including its access code. Cloudflare tunnel issues can also be resolved by restarting the server (`Ctrl+C`, then `ptn`) for a fresh tunnel and access path.
-
-**`uvx ptn` still runs an older version?** An existing `uv tool` installation
-can take precedence. Run `uv tool upgrade ptn`, or bypass installed tools with
-`uvx --isolated ptn@latest`.
-
-**Shell not detected?** Set your `$SHELL` environment variable or configure shells in `ptn.yaml`.
-
-**`c`/`u` says "Clipboard unavailable" on Linux?** Porterminal copies through the system's own tool, and Ubuntu desktop ships none: install `wl-clipboard` (Wayland) or `xclip`/`xsel` (X11). Without one, Porterminal can only send an OSC 52 terminal-clipboard sequence, which GNOME Terminal and other VTE-based terminals ignore and no terminal ever confirms, so the URL is shown on screen instead. Set `PORTERMINAL_DISABLE_OSC52_CLIPBOARD=1` to turn the OSC 52 fallback off entirely for terminals that misbehave on it.
-
-## Contributing
-
-**This project does not accept external contributions** (pull requests or code
-changes) for security reasons (see [CONTRIBUTING.md](CONTRIBUTING.md)). You're
-welcome to fork and run your own copy under [AGPL-3.0](LICENSE).
-
-Run from source:
-
-```bash
-git clone https://github.com/lyehe/porterminal
-cd porterminal
-uv sync --frozen
-uv run --frozen ptn
-```
+Bug reports and feature requests are welcome as
+[issues](https://github.com/porterminal/porterminal/issues).
+External pull requests and code contributions are not accepted; see
+[CONTRIBUTING.md](https://github.com/porterminal/porterminal/blob/master/CONTRIBUTING.md). You can fork and run your own copy.
 
 ## License
 
-[AGPL-3.0](LICENSE)
+[AGPL-3.0](https://github.com/porterminal/porterminal/blob/master/LICENSE)

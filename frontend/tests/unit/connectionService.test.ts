@@ -21,6 +21,7 @@ function createTab(tabId: string | null = 'server-tab'): Tab {
             scrollToBottom: vi.fn(),
             onRender: vi.fn(() => ({ dispose: vi.fn() })),
             resize: vi.fn(),
+            reset: vi.fn(),
         } as unknown as Tab['term'],
         fitAddon: { fit: vi.fn() } as unknown as Tab['fitAddon'],
         container,
@@ -67,6 +68,49 @@ describe('connection service', () => {
     afterEach(() => {
         vi.clearAllTimers();
         vi.useRealTimers();
+    });
+
+    it.each(['€', 'é', '😀'])('preserves %s split across binary output frames', (text) => {
+        const service = createService();
+        const tab = createTab();
+        service.connect(tab);
+        const socket = FakeWebSocket.instances[0]!;
+        socket.open();
+        const bytes = new TextEncoder().encode(text);
+        for (const byte of bytes) {
+            const chunk = new window.ArrayBuffer(1);
+            new window.Uint8Array(chunk)[0] = byte;
+            socket.onmessage?.({ data: chunk } as MessageEvent<ArrayBuffer>);
+        }
+
+        expect(vi.mocked(tab.term.write).mock.calls.map(([data]) => data).join('')).toBe(text);
+        service.disconnect(tab);
+    });
+
+    it('keeps UTF-8 decoding independent between tabs', () => {
+        const service = createService();
+        const firstTab = createTab('first');
+        const secondTab = { ...createTab('second'), id: 2 };
+        service.connect(firstTab);
+        service.connect(secondTab);
+        const first = FakeWebSocket.instances[0]!;
+        const second = FakeWebSocket.instances[1]!;
+        first.open();
+        second.open();
+        const bytes = new TextEncoder().encode('€');
+        const sendBytes = (socket: FakeWebSocket, data: Uint8Array) => {
+            const buffer = new window.ArrayBuffer(data.length);
+            new window.Uint8Array(buffer).set(data);
+            socket.onmessage?.({ data: buffer } as MessageEvent<ArrayBuffer>);
+        };
+        sendBytes(first, bytes.slice(0, 1));
+        receiveBinary(second, 'other tab');
+        sendBytes(first, bytes.slice(1));
+
+        expect(vi.mocked(firstTab.term.write).mock.calls.map(([data]) => data).join('')).toBe('€');
+        expect(vi.mocked(secondTab.term.write).mock.calls.map(([data]) => data).join('')).toBe('other tab');
+        service.disconnect(firstTab);
+        service.disconnect(secondTab);
     });
 
     it('authenticates, synchronizes session state, and sends terminal input', () => {
@@ -132,7 +176,7 @@ describe('connection service', () => {
         expect(FakeWebSocket.instances).toHaveLength(1);
     });
 
-    it('reconnects normal closures with buffer replay disabled', () => {
+    it('reconnects with a fresh terminal and buffer replay enabled', () => {
         vi.useFakeTimers();
         const service = createService();
         const tab = createTab();
@@ -147,7 +191,8 @@ describe('connection service', () => {
         vi.advanceTimersByTime(10);
 
         expect(FakeWebSocket.instances).toHaveLength(2);
-        expect(FakeWebSocket.instances[1]!.url).toContain('skip_buffer=1');
+        expect(FakeWebSocket.instances[1]!.url).not.toContain('skip_buffer=1');
+        expect(tab.term.reset).toHaveBeenCalledTimes(2);
         service.disconnect(tab);
     });
 

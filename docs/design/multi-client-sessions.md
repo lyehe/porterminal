@@ -1,5 +1,10 @@
 # Multi-Client Session Support and Cross-Browser Tab Synchronization
 
+The original design below starts and stops readers with the first and last viewer.
+The current implementation starts a reader when the session is created and stops
+it before PTY shutdown. It keeps draining while disconnected, queues paused
+viewers' output, and restores the bounded replay buffer on browser reconnection.
+
 ## 1. Executive Summary
 
 This design document outlines the implementation of multi-client session support for Porterminal, enabling multiple browser tabs or devices to connect to the same terminal session simultaneously. The solution addresses three core requirements:

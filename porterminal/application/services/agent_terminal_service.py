@@ -435,17 +435,17 @@ class AgentTerminalService:
     def _extract_output(segment: str, command: str, marker: str) -> str:
         """Extract command output from the captured region before the marker.
 
-        The region holds: the echoed command, its output, then the echoed
-        marker-print line (which contains the random `marker`). We stop at that
-        echoed marker line and drop only the *first* command-echo line, so
+        Drop the marker-print echo and only the first command-echo line, so
         output lines that happen to repeat the command text are preserved.
+        Queued input can echo before the shell produces its output, so the
+        marker-print echo does not end the captured output.
         """
         cmd = command.strip()
         keep: list[str] = []
         dropped_echo = False
         for line in segment.splitlines():
             if marker in line:
-                break  # reached the echoed marker-print command; output ended
+                continue  # queued probe input can echo before command output
             stripped = line.strip()
             if not stripped:
                 continue

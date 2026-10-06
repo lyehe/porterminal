@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/porterminal/porterminal/master/assets/header.png" alt="PTN terminal logo" width="800">
+</p>
+
 <p align="center"><strong>PORTERMINAL</strong></p>
 
 <h1 align="center">Give your agent any computer</h1>

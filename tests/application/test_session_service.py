@@ -75,15 +75,23 @@ async def test_real_pty_command_finishes_without_a_viewer(tmp_path):
         UserId.local_user(), shell, TerminalDimensions.default()
     )
     try:
-        # The final marker is deliberately absent from the echoed command line.
+        # Observe completion outside terminal rendering: ConPTY may insert
+        # cursor moves or line wraps into an output marker.
+        completed_path = tmp_path / "offline.done"
         command = (
-            "python -c \"import sys; sys.stdout.write('x'*2000000); print('OFFLINE'+'_DONE')\"\r"
+            'python -c "import sys; from pathlib import Path; '
+            "sys.stdout.write('x'*2000000); sys.stdout.flush(); "
+            "Path('offline.done').write_text('done')\"\r"
         )
         session.pty_handle.write(command.encode("utf-8"))
-        async with asyncio.timeout(15):
-            while b"OFFLINE_DONE" not in session.get_buffered_output():
+        # pywinpty 2.0.15 drains this volume much more slowly than newer releases.
+        # Keep enough output to exceed PTY buffers and verify reader progress.
+        async with asyncio.timeout(90):
+            while not completed_path.exists():
                 await asyncio.sleep(0.01)
+        assert completed_path.read_text() == "done"
         assert not session.is_connected
+        assert session.get_buffered_output()
         assert session.output_buffer.size <= session.output_buffer.max_bytes
     finally:
         await container.session_service.destroy_session(session.id)

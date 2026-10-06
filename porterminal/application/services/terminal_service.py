@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import re
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -37,17 +36,6 @@ class ConnectionFlowState:
     send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     failed: bool = False
 
-
-# Terminal response sequences that should NOT be written to PTY.
-# These are responses from the terminal emulator to queries from applications.
-# If written to PTY, they get echoed back and displayed as garbage.
-#
-# Note: We only filter DA responses. CPR responses (\x1b[...R) are needed by
-# some shells like Nushell that query cursor position during startup.
-#
-# Patterns:
-#   \x1b[?...c  - Device Attributes (DA) response
-TERMINAL_RESPONSE_PATTERN = re.compile(rb"\x1b\[\?[\d;]*c")
 
 # Constants
 HEARTBEAT_INTERVAL = 30  # seconds
@@ -452,15 +440,13 @@ class TerminalService:
             )
             return
 
-        # Filter terminal response sequences before writing to PTY.
-        # xterm.js generates these in response to DA/CPR queries.
-        # If written back to PTY, they get echoed and displayed as garbage.
-        filtered = TERMINAL_RESPONSE_PATTERN.sub(b"", data)
-        if not filtered:
+        if not data:
             return
 
-        if rate_limiter.try_acquire(len(filtered)):
-            session.pty_handle.write(filtered)
+        # Terminal query replies are input too: shells such as Fish wait for
+        # device attributes before accepting commands.
+        if rate_limiter.try_acquire(len(data)):
+            session.pty_handle.write(data)
             session.touch(datetime.now(UTC))
         else:
             await connection.send_message(

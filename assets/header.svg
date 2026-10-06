@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title description">
+  <title id="title">PTN</title>
+  <desc id="description">Porterminal terminal logo in cyan and blue on a white background.</desc>
+  <!-- Geometry from LOGO in porterminal/cli/display.py. -->
+  <rect width="1200" height="360" fill="#fff"/>
+  <g transform="translate(120 60)" shape-rendering="crispEdges">
+    <path fill="#06b6d4" d="M0 0h240v60h-240z M300 0h300v60h-300z M660 0h60v60h-60z M900 0h60v60h-60z"/>
+    <path fill="#06b6d4" d="M0 60h60v60h-60z M180 60h60v60h-60z M420 60h60v60h-60z M660 60h120v60h-120z M900 60h60v60h-60z"/>
+    <path fill="#0891b2" d="M0 120h240v60h-240z M420 120h60v60h-60z M660 120h60v60h-60z M780 120h60v60h-60z M900 120h60v60h-60z"/>
+    <path fill="#2563eb" d="M0 180h60v60h-60z M420 180h60v60h-60z M660 180h60v60h-60z M840 180h120v60h-120z"/>
+  </g>
+</svg>

@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/porterminal/porterminal/master/assets/header.png?v=4" alt="PTN — Portable Terminal" width="800">
+  <a href="https://github.com/porterminal/porterminal">
+    <img src="https://raw.githubusercontent.com/porterminal/porterminal/master/assets/header.png?v=5" alt="PTN — Portable Terminal. QR code links to the GitHub repository." width="800">
+  </a>
 </p>
 
 <h1 align="center">Give your agent any computer</h1>

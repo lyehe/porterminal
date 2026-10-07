@@ -1,13 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title description">
-  <title id="title">PTN</title>
-  <desc id="description">Porterminal terminal logo in coral, orange, and yellow on a white background.</desc>
-  <!-- Geometry from LOGO in porterminal/cli/display.py. -->
-  <!-- Windows Terminal Campbell palette with its hue rotated by 180 degrees. -->
-  <rect width="1200" height="360" fill="#fff"/>
-  <g transform="translate(120 60)" shape-rendering="crispEdges">
-    <path fill="#d66161" d="M0 0h240v60h-240z M300 0h300v60h-300z M660 0h60v60h-60z M900 0h60v60h-60z"/>
-    <path fill="#d66161" d="M0 60h60v60h-60z M180 60h60v60h-60z M420 60h60v60h-60z M660 60h120v60h-120z M900 60h60v60h-60z"/>
-    <path fill="#dd813a" d="M0 120h240v60h-240z M420 120h60v60h-60z M660 120h60v60h-60z M780 120h60v60h-60z M900 120h60v60h-60z"/>
-    <path fill="#ffc23b" d="M0 180h60v60h-60z M420 180h60v60h-60z M660 180h60v60h-60z M840 180h120v60h-120z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" role="img" aria-labelledby="title description">
+  <title id="title">PTN - Portable Terminal</title>
+  <desc id="description">Pixel PTN lettering in cyan and blue above yellow PORTABLE and purple TERMINAL lettering, inside a black terminal frame with rounded corners and a subtle colored edge.</desc>
+  <!-- Pixel geometry from LOGO, TAGLINE_PORTABLE, and TAGLINE_TERMINAL in porterminal/cli/display.py. -->
+  <!-- Colors sampled from the terminal reference. Transparent margins blend into any README theme. -->
+  <defs>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#61d6d6" stop-opacity=".65"/>
+      <stop offset=".48" stop-color="#3b78ff" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#b4009e" stop-opacity=".55"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="7" stdDeviation="9" flood-color="#000" flood-opacity=".25"/>
+    </filter>
+  </defs>
+  <rect x="24" y="24" width="1152" height="592" rx="28" fill="#0c0c0c" filter="url(#shadow)"/>
+  <rect x="24.75" y="24.75" width="1150.5" height="590.5" rx="27.25" fill="none" stroke="url(#edge)" stroke-width="1.5"/>
+  <g fill="#60666e" opacity=".65">
+    <circle cx="55" cy="55" r="5"/>
+    <circle cx="75" cy="55" r="5"/>
+    <circle cx="95" cy="55" r="5"/>
+  </g>
+  <path d="M48 80h1104" stroke="#fff" stroke-opacity=".07"/>
+  <path d="m1129 49 6 6-6 6m13 0h8" fill="none" stroke="#61d6d6" stroke-width="2" stroke-opacity=".5"/>
+  <g transform="translate(216 104)" shape-rendering="crispEdges">
+    <path fill="#61d6d6" d="M0 0h24v48h-24z M24 0h24v48h-24z M48 0h24v48h-24z M72 0h24v48h-24z M96 0h24v48h-24z M120 0h24v48h-24z M144 0h24v48h-24z M168 0h24v48h-24z M240 0h24v48h-24z M264 0h24v48h-24z M288 0h24v48h-24z M312 0h24v48h-24z M336 0h24v48h-24z M360 0h24v48h-24z M384 0h24v48h-24z M408 0h24v48h-24z M432 0h24v48h-24z M456 0h24v48h-24z M528 0h24v48h-24z M552 0h24v48h-24z M720 0h24v48h-24z M744 0h24v48h-24z"/>
+    <path fill="#61d6d6" d="M0 48h24v48h-24z M24 48h24v48h-24z M144 48h24v48h-24z M168 48h24v48h-24z M336 48h24v48h-24z M360 48h24v48h-24z M528 48h24v48h-24z M552 48h24v48h-24z M576 48h24v48h-24z M600 48h24v48h-24z M720 48h24v48h-24z M744 48h24v48h-24z"/>
+    <path fill="#3a96dd" d="M0 96h24v48h-24z M24 96h24v48h-24z M48 96h24v48h-24z M72 96h24v48h-24z M96 96h24v48h-24z M120 96h24v48h-24z M144 96h24v48h-24z M168 96h24v48h-24z M336 96h24v48h-24z M360 96h24v48h-24z M528 96h24v48h-24z M552 96h24v48h-24z M624 96h24v48h-24z M648 96h24v48h-24z M720 96h24v48h-24z M744 96h24v48h-24z"/>
+    <path fill="#3b78ff" d="M0 144h24v48h-24z M24 144h24v48h-24z M336 144h24v48h-24z M360 144h24v48h-24z M528 144h24v48h-24z M552 144h24v48h-24z M672 144h24v48h-24z M696 144h24v48h-24z M720 144h24v48h-24z M744 144h24v48h-24z"/>
+    <path fill="#f9f1a5" d="M0 240h24v48h-24z M24 240h24v24h-24z M48 240h24v48h-24z M96 240h24v48h-24z M120 240h24v24h-24z M144 240h24v48h-24z M192 240h24v48h-24z M216 240h24v24h-24z M240 240h24v48h-24z M288 240h24v24h-24z M312 240h24v48h-24z M336 240h24v24h-24z M384 264h24v24h-24z M408 240h24v24h-24z M432 240h24v48h-24z M480 240h24v48h-24z M504 264h24v24h-24z M528 264h24v24h-24z M576 240h24v48h-24z M672 240h24v48h-24z M696 240h24v24h-24z M720 240h24v24h-24z"/>
+    <path fill="#c19c00" d="M0 288h24v48h-24z M24 288h24v24h-24z M48 288h24v24h-24z M96 288h24v48h-24z M120 312h24v24h-24z M144 288h24v48h-24z M192 288h24v48h-24z M216 288h24v24h-24z M240 312h24v24h-24z M312 288h24v48h-24z M384 288h24v48h-24z M408 288h24v24h-24z M432 288h24v48h-24z M480 288h24v48h-24z M504 312h24v24h-24z M528 288h24v48h-24z M576 288h24v48h-24z M600 312h24v24h-24z M624 312h24v24h-24z M672 288h24v48h-24z M696 288h24v48h-24z M720 312h24v24h-24z"/>
+    <path fill="#b4009e" d="M0 384h24v24h-24z M24 384h24v48h-24z M48 384h24v24h-24z M96 384h24v48h-24z M120 384h24v24h-24z M144 384h24v24h-24z M192 384h24v48h-24z M216 384h24v24h-24z M240 384h24v48h-24z M288 384h24v48h-24z M312 384h24v24h-24z M336 408h24v24h-24z M360 384h24v24h-24z M384 384h24v48h-24z M432 384h24v48h-24z M480 384h24v48h-24z M504 408h24v24h-24z M552 384h24v48h-24z M600 408h24v24h-24z M624 384h24v24h-24z M648 384h24v48h-24z M696 384h24v48h-24z"/>
+    <path fill="#881798" d="M24 432h24v48h-24z M96 432h24v48h-24z M120 432h24v48h-24z M144 456h24v24h-24z M192 432h24v48h-24z M216 432h24v24h-24z M240 456h24v24h-24z M288 432h24v48h-24z M336 432h24v24h-24z M384 432h24v48h-24z M432 432h24v48h-24z M480 432h24v48h-24z M528 432h24v24h-24z M552 432h24v48h-24z M600 432h24v48h-24z M624 432h24v24h-24z M648 432h24v48h-24z M696 432h24v48h-24z M720 456h24v24h-24z M744 456h24v24h-24z"/>
   </g>
 </svg>

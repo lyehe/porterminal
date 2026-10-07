@@ -33,6 +33,8 @@ class ConnectionFlowState:
 
     paused_at: float | None = None
     pending_output: bytearray = field(default_factory=bytearray)
+    # One snapshot, bounded by the session's OutputBuffer, precedes live output.
+    replay_output: bytes = b""
     failed: bool = False
     writer_task: asyncio.Task[None] | None = None
     close_task: asyncio.Task[None] | None = None
@@ -111,6 +113,7 @@ class TerminalService:
         flow = self._flow_state.pop(connection, None)
         if flow:
             flow.pending_output.clear()
+            flow.replay_output = b""
             for task in (flow.writer_task, flow.close_task):
                 if task:
                     task.cancel()
@@ -171,6 +174,7 @@ class TerminalService:
             # Bound slow and paused viewers alike. Reconnection replays the session buffer.
             flow.failed = True
             flow.pending_output.clear()
+            flow.replay_output = b""
             if flow.writer_task:
                 flow.writer_task.cancel()
             flow.close_task = asyncio.create_task(
@@ -185,23 +189,32 @@ class TerminalService:
             if monotonic() - flow.paused_at <= FLOW_PAUSE_TIMEOUT:
                 return
             flow.paused_at = None
-        if flow.pending_output and (flow.writer_task is None or flow.writer_task.done()):
+        if (flow.replay_output or flow.pending_output) and (
+            flow.writer_task is None or flow.writer_task.done()
+        ):
             flow.writer_task = asyncio.create_task(self._drain_connection_output(connection, flow))
 
     async def _drain_connection_output(
         self, connection: ConnectionPort, flow: ConnectionFlowState
     ) -> None:
         try:
-            while flow.pending_output and self._flow_state.get(connection) is flow:
+            while (flow.replay_output or flow.pending_output) and (
+                self._flow_state.get(connection) is flow
+            ):
                 if flow.failed or flow.paused_at is not None:
                     return
-                payload = bytes(flow.pending_output)
-                flow.pending_output.clear()
+                if flow.replay_output:
+                    payload = flow.replay_output
+                    flow.replay_output = b""
+                else:
+                    payload = bytes(flow.pending_output)
+                    flow.pending_output.clear()
                 try:
                     await asyncio.wait_for(connection.send_output(payload), OUTPUT_SEND_TIMEOUT)
                 except Exception as error:
                     flow.failed = True
                     flow.pending_output.clear()
+                    flow.replay_output = b""
                     logger.debug("Failed to send output to connection: %s", error)
                     await self._close_output_connection(
                         connection, code=1011, reason="Terminal output delivery failed"
@@ -283,7 +296,8 @@ class TerminalService:
             # Note: session_info is sent by the caller (app.py) to include tab_id
             if not skip_buffer and not session.output_buffer.is_empty:
                 # Queue replay first, before the reader can enqueue any live output.
-                await self._send_connection_output(connection, session.get_buffered_output())
+                self._flow_state[connection].replay_output = session.get_buffered_output()
+                await self._send_connection_output(connection, b"")
 
         try:
             # Start heartbeat for this connection

@@ -385,6 +385,30 @@ async def test_session_shutdown_cancels_an_inflight_viewer_write(sample_session)
     assert service._flow_state == {}
 
 
+async def test_full_replay_does_not_consume_the_live_output_queue_allowance(
+    sample_session, monkeypatch
+):
+    service = TerminalService()
+    connection = RecordingConnection()
+    monkeypatch.setattr(terminal_module, "FLOW_BUFFER_MAX_BYTES", 5)
+    sample_session.add_output(b"12345")
+
+    async def receive_live_output(_session, _connection, _rate_limiter):
+        # A reader can enqueue live output before the replay writer gets scheduled.
+        await service._send_to_connections([connection], b"live")
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(service, "_handle_input_loop", receive_live_output)
+    task = asyncio.create_task(service.handle_session(sample_session, connection))
+    try:
+        await wait_for_output(connection, b"12345live")
+        assert connection.is_connected()
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await service.stop_session(sample_session.id)
+
+
 async def test_send_timeout_disconnects_only_the_stalled_viewer(sample_session, monkeypatch):
     monkeypatch.setattr(terminal_module, "OUTPUT_SEND_TIMEOUT", 0.02)
     service = TerminalService()

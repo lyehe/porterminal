@@ -48,6 +48,7 @@ _AGENT_RATE = RateLimitConfig(rate=1_000_000_000.0, burst=1_000_000_000)
 
 _MAX_TIMEOUT = 60.0  # cap below Cloudflare Quick Tunnel idle (~100s)
 _DEFAULT_TIMEOUT = 30.0
+_STARTUP_TIMEOUT = 10.0
 
 
 def _clean(raw: bytes) -> str:
@@ -96,6 +97,19 @@ def _probe_command(shell_id: str, marker: str) -> str:
     return f"printf '{marker}%d\\n' \"$?\""
 
 
+def _ready_command(shell_id: str, marker: str) -> str:
+    """Print a readiness marker that cannot be mistaken for echoed input."""
+    first, second = marker[: len(marker) // 2], marker[len(marker) // 2 :]
+    fam = _family(shell_id)
+    if fam == "ps":
+        return f'Write-Output ("{first}" + "{second}")'
+    if fam == "cmd":
+        return f"echo {first}^{second}"
+    if fam == "nu":
+        return f'print ("{first}" + "{second}")'
+    return f"printf '%s%s\\n' '{first}' '{second}'"
+
+
 @dataclass
 class _AgentSession:
     session: Session[PTYPort]
@@ -106,6 +120,7 @@ class _AgentSession:
     lock: asyncio.Lock
     reap_on_disconnect: bool = True
     last_used: float = 0.0
+    ready_task: asyncio.Task[None] | None = None
 
 
 class AgentSessionNotFoundError(LookupError):
@@ -154,65 +169,109 @@ class AgentTerminalService:
         now = asyncio.get_running_loop().time()
         existing = self._by_mcp.get(mcp_session_id)
         if existing is not None:
+            await self._await_ready(existing)
             existing.last_used = now
             return existing
 
         async with self._create_lock:
             existing = self._by_mcp.get(mcp_session_id)
-            if existing is not None:
-                existing.last_used = now
-                return existing
+            if existing is None:
+                existing = await self._create_session(mcp_session_id, reap_on_disconnect, now)
 
-            shell = self._get_shell(None)
-            if shell is None:
-                raise RuntimeError("No shell available")
+        await self._await_ready(existing)
+        existing.last_used = asyncio.get_running_loop().time()
+        return existing
 
-            session = await self._sessions.create_session(
-                user_id=self._owner, shell=shell, dimensions=self._dims
+    async def _create_session(
+        self, mcp_session_id: str, reap_on_disconnect: bool, now: float
+    ) -> _AgentSession:
+        shell = self._get_shell(None)
+        if shell is None:
+            raise RuntimeError("No shell available")
+
+        session = await self._sessions.create_session(
+            user_id=self._owner, shell=shell, dimensions=self._dims
+        )
+        session.add_client()  # keep alive for the agent's lifetime
+
+        tab = self._tabs.create_tab(
+            user_id=self._owner,
+            session_id=session.id,
+            shell_id=shell.id,
+            name=f"Agent {shell.id}"[:50],
+            origin="agent",
+        )
+        # Surface the new robot tab on the human's phone.
+        await self._registry.broadcast(self._owner, self._tabs.build_tab_state_update("add", tab))
+
+        conn = self._make_conn(self._dims.cols, self._dims.rows)
+        task = asyncio.create_task(
+            self._terminal.handle_session(
+                session, conn, skip_buffer=False, rate_limit_config=_AGENT_RATE
             )
-            session.add_client()  # keep alive for the agent's lifetime
+        )
 
-            tab = self._tabs.create_tab(
-                user_id=self._owner,
-                session_id=session.id,
-                shell_id=shell.id,
-                name=f"Agent {shell.id}"[:50],
-                origin="agent",
-            )
-            # Surface the new robot tab on the human's phone.
-            await self._registry.broadcast(
-                self._owner, self._tabs.build_tab_state_update("add", tab)
-            )
+        rec = _AgentSession(
+            session=session,
+            tab=tab,
+            conn=conn,
+            task=task,
+            shell_id=shell.id,
+            lock=asyncio.Lock(),
+            reap_on_disconnect=reap_on_disconnect,
+            last_used=now,
+        )
+        rec.ready_task = asyncio.create_task(self._initialize_session(mcp_session_id, rec))
+        # Observe failures even if every waiting caller is cancelled.
+        rec.ready_task.add_done_callback(
+            lambda task: None if task.cancelled() else task.exception()
+        )
+        self._by_mcp[mcp_session_id] = rec
 
-            conn = self._make_conn(self._dims.cols, self._dims.rows)
-            task = asyncio.create_task(
-                self._terminal.handle_session(
-                    session, conn, skip_buffer=False, rate_limit_config=_AGENT_RATE
-                )
-            )
+        logger.info(
+            "Agent session created mcp=%s session_id=%s shell=%s",
+            mcp_session_id,
+            session.id,
+            shell.id,
+        )
 
-            rec = _AgentSession(
-                session=session,
-                tab=tab,
-                conn=conn,
-                task=task,
-                shell_id=shell.id,
-                lock=asyncio.Lock(),
-                reap_on_disconnect=reap_on_disconnect,
-                last_used=now,
-            )
-            self._by_mcp[mcp_session_id] = rec
-
-            logger.info(
-                "Agent session created mcp=%s session_id=%s shell=%s",
-                mcp_session_id,
-                session.id,
-                shell.id,
-            )
-
-        # Let the shell finish printing its initial prompt before first use.
-        await self._settle(rec.conn, idle=0.3, max_wait=3.0)
         return rec
+
+    @staticmethod
+    async def _await_ready(rec: _AgentSession) -> None:
+        if rec.ready_task is not None:
+            # A cancelled tool call must not cancel another caller's initialization.
+            await asyncio.shield(rec.ready_task)
+
+    async def _initialize_session(self, mcp_session_id: str, rec: _AgentSession) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + _STARTUP_TIMEOUT
+            # Wait for delayed startup output before checking for a quiet prompt.
+            # A silent custom prompt can still become ready through the marker below.
+            await self._settle(
+                rec.conn,
+                idle=0.3,
+                max_wait=min(3.0, _STARTUP_TIMEOUT / 3),
+                wait_for_initial_output=True,
+            )
+            marker = "PTNR" + uuid.uuid4().hex
+            snapshot = rec.conn.total_received
+            await rec.conn.push_input((_ready_command(rec.shell_id, marker) + "\r").encode())
+            while marker not in _clean(rec.conn.capture_since(snapshot)):
+                error = rec.conn.take_error()
+                if error:
+                    raise RuntimeError(error)
+                if self._pty_dead(rec) or not rec.conn.is_connected():
+                    raise RuntimeError("Shell exited before becoming ready")
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    raise TimeoutError("Shell did not become ready before the startup timeout")
+                await rec.conn.wait_for_output(min(remaining, 0.5))
+            await self._settle(rec.conn, idle=0.1, max_wait=0.5)
+        except Exception:
+            await self.close_session(mcp_session_id)
+            raise
 
     async def _resolve_session(
         self,
@@ -230,6 +289,7 @@ class AgentTerminalService:
         rec = self._by_mcp.get(mcp_session_id)
         if rec is None:
             raise AgentSessionNotFoundError(mcp_session_id)
+        await self._await_ready(rec)
         rec.last_used = asyncio.get_running_loop().time()
         return rec
 
@@ -237,6 +297,10 @@ class AgentTerminalService:
         rec = self._by_mcp.pop(mcp_session_id, None)
         if rec is None:
             return False
+        if rec.ready_task is not None and rec.ready_task is not asyncio.current_task():
+            rec.ready_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await rec.ready_task
         await rec.conn.close()
         rec.task.cancel()
         try:
@@ -464,11 +528,22 @@ class AgentTerminalService:
         return "\n".join(keep).strip()
 
     @staticmethod
-    async def _settle(conn: AgentConnectionPort, idle: float, max_wait: float) -> None:
+    async def _settle(
+        conn: AgentConnectionPort,
+        idle: float,
+        max_wait: float,
+        *,
+        wait_for_initial_output: bool = False,
+    ) -> None:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + max_wait
         while loop.time() < deadline:
-            window = min(idle, max(0.0, deadline - loop.time()))
+            remaining = max(0.0, deadline - loop.time())
+            window = (
+                remaining
+                if wait_for_initial_output and conn.total_received == 0
+                else min(idle, remaining)
+            )
             got = await conn.wait_for_output(window)
             if not got:
                 return

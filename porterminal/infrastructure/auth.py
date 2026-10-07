@@ -83,7 +83,7 @@ async def authenticate_connection(
             continue
 
         password = message.get("password", "")
-        if bcrypt.checkpw(password.encode(), password_hash):
+        if await asyncio.to_thread(bcrypt.checkpw, password.encode(), password_hash):
             await connection.send_message({"type": "auth_success"})
             return True
 
@@ -128,4 +128,4 @@ async def validate_auth_message(
         return False
 
     password = message.get("password", "")
-    return bcrypt.checkpw(password.encode(), password_hash)
+    return await asyncio.to_thread(bcrypt.checkpw, password.encode(), password_hash)

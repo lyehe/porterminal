@@ -15,6 +15,7 @@ class RecordingConnection:
         self.outputs: list[bytes] = []
         self.messages: list[dict] = []
         self.connected = True
+        self.close_code: int | None = None
 
     async def send_output(self, data: bytes) -> None:
         self.outputs.append(data)
@@ -28,9 +29,22 @@ class RecordingConnection:
 
     async def close(self, code: int = 1000, reason: str = "") -> None:
         self.connected = False
+        self.close_code = code
 
     def is_connected(self) -> bool:
         return self.connected
+
+
+async def wait_for_output(connection: RecordingConnection, expected: bytes) -> None:
+    async with asyncio.timeout(1):
+        while b"".join(connection.outputs) != expected:
+            await asyncio.sleep(0)
+
+
+async def wait_for_close(connection: RecordingConnection) -> None:
+    async with asyncio.timeout(1):
+        while connection.is_connected():
+            await asyncio.sleep(0)
 
 
 @pytest.mark.asyncio
@@ -50,11 +64,13 @@ async def test_pause_ack_resume_and_timeout_control_delivery(sample_session, mon
 
     now[0] += terminal_module.FLOW_PAUSE_TIMEOUT + 0.01
     await service._send_to_connections([connection], b"auto-resumed")
+    await wait_for_output(connection, b"heldauto-resumed")
     assert b"".join(connection.outputs) == b"heldauto-resumed"
 
     await service._handle_json_message(sample_session, {"type": "pause"}, connection)
     await service._handle_json_message(sample_session, {"type": "ack"}, connection)
     await service._send_to_connections([connection], b"explicitly-resumed")
+    await wait_for_output(connection, b"heldauto-resumedexplicitly-resumed")
     assert b"".join(connection.outputs) == b"heldauto-resumedexplicitly-resumed"
 
 
@@ -68,6 +84,7 @@ async def test_ack_flushes_paused_output_without_waiting_for_more_pty_data(sampl
     await service._send_to_connections([connection], b"first")
     await service._send_to_connections([connection], b"second")
     await service._handle_json_message(sample_session, {"type": "ack"}, connection)
+    await wait_for_output(connection, b"firstsecond")
 
     assert b"".join(connection.outputs) == b"firstsecond"
 
@@ -134,7 +151,7 @@ async def test_output_waiting_for_replay_is_dropped_when_connection_unregisters(
     try:
         await asyncio.wait_for(started.wait(), 1)
         queued = asyncio.create_task(service._send_connection_output(connection, b"live output"))
-        await asyncio.sleep(0)  # The live send waits for replay to release the connection lock.
+        await queued  # Live output queues behind replay without blocking the reader.
         replay.cancel()
         with pytest.raises(asyncio.CancelledError):
             await replay
@@ -167,7 +184,8 @@ async def test_large_pty_reads_are_batched_before_broadcast(sample_session, fake
 
     await service._read_pty_broadcast_loop(sample_session, session_id)
 
-    assert connection.outputs == [b"a" * 100 + b"b" * 200, b"\r\n[Shell exited]\r\n"]
+    await wait_for_output(connection, b"a" * 100 + b"b" * 200 + b"\r\n[Shell exited]\r\n")
+    assert len(connection.outputs) <= 2
     assert sample_session.get_buffered_output().endswith(b"a" * 100 + b"b" * 200)
 
 
@@ -241,6 +259,150 @@ async def test_paused_output_overflow_requests_replay_instead_of_silent_loss(
     await service._send_to_connections([connection], b"12345")
     assert connection.is_connected()
     await service._send_to_connections([connection], b"6")
+    await wait_for_close(connection)
 
     assert not connection.is_connected()
     assert service._flow_state[connection].pending_output == b""
+    assert connection.close_code == 1013
+
+
+async def test_slow_viewer_does_not_block_later_output_for_other_viewers(sample_session, fake_pty):
+    service = TerminalService()
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    class SlowConnection(RecordingConnection):
+        async def send_output(self, data: bytes) -> None:
+            started.set()
+            await release.wait()
+            await super().send_output(data)
+
+    slow = SlowConnection()
+    fast = RecordingConnection()
+    session_id = str(sample_session.id)
+    service._register_connection(session_id, slow)
+    service._register_connection(session_id, fast)
+    fake_pty.add_output(b"first")
+    fake_pty.add_output(b"second")
+    service.start_session(sample_session)
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+        await wait_for_output(fast, b"firstsecond")
+        assert slow.outputs == []
+        assert sample_session.get_buffered_output() == b"firstsecond"
+        release.set()
+        await wait_for_output(slow, b"firstsecond")
+    finally:
+        await service.stop_session(sample_session.id)
+    assert service._flow_state == {}
+
+
+async def test_unpaused_slow_viewer_has_a_bounded_queue(sample_session, monkeypatch):
+    service = TerminalService()
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+    monkeypatch.setattr(terminal_module, "FLOW_BUFFER_MAX_BYTES", 5)
+
+    class SlowConnection(RecordingConnection):
+        async def send_output(self, data: bytes) -> None:
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+    slow = SlowConnection()
+    fast = RecordingConnection()
+    session_id = str(sample_session.id)
+    service._register_connection(session_id, slow)
+    service._register_connection(session_id, fast)
+    try:
+        await service._send_to_connections([slow, fast], b"first")
+        await asyncio.wait_for(started.wait(), 1)
+        await wait_for_output(fast, b"first")
+        await service._send_to_connections([slow, fast], b"12345")
+        await wait_for_output(fast, b"first12345")
+        await service._send_to_connections([slow, fast], b"6")
+        await wait_for_close(slow)
+        await asyncio.wait_for(cancelled.wait(), 1)
+        await wait_for_output(fast, b"first123456")
+        assert slow.close_code == 1013
+        assert service._flow_state[slow].pending_output == b""
+        assert fast.is_connected()
+    finally:
+        await service.stop_session(sample_session.id)
+
+
+async def test_replay_precedes_live_output_even_while_replay_is_slow(sample_session, fake_pty):
+    service = TerminalService()
+    started = asyncio.Event()
+    release = asyncio.Event()
+    sample_session.add_output(b"history")
+
+    class SlowReplay(RecordingConnection):
+        async def send_output(self, data: bytes) -> None:
+            if data == b"history":
+                started.set()
+                await release.wait()
+            await super().send_output(data)
+
+    connection = SlowReplay()
+    task = asyncio.create_task(service.handle_session(sample_session, connection))
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+        fake_pty.add_output(b"live")
+        async with asyncio.timeout(1):
+            while sample_session.get_buffered_output() != b"historylive":
+                await asyncio.sleep(0)
+        assert connection.outputs == []
+        release.set()
+        await wait_for_output(connection, b"historylive")
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await service.stop_session(sample_session.id)
+
+
+async def test_session_shutdown_cancels_an_inflight_viewer_write(sample_session):
+    service = TerminalService()
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    class SlowConnection(RecordingConnection):
+        async def send_output(self, data: bytes) -> None:
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+    connection = SlowConnection()
+    service._register_connection(str(sample_session.id), connection)
+    await service._send_to_connections([connection], b"output")
+    await asyncio.wait_for(started.wait(), 1)
+    await service.stop_session(sample_session.id)
+    assert cancelled.is_set()
+    assert service._flow_state == {}
+
+
+async def test_send_timeout_disconnects_only_the_stalled_viewer(sample_session, monkeypatch):
+    monkeypatch.setattr(terminal_module, "OUTPUT_SEND_TIMEOUT", 0.02)
+    service = TerminalService()
+
+    class SlowConnection(RecordingConnection):
+        async def send_output(self, data: bytes) -> None:
+            await asyncio.Event().wait()
+
+    slow = SlowConnection()
+    fast = RecordingConnection()
+    session_id = str(sample_session.id)
+    service._register_connection(session_id, slow)
+    service._register_connection(session_id, fast)
+    try:
+        await service._send_to_connections([slow, fast], b"output")
+        await wait_for_output(fast, b"output")
+        await wait_for_close(slow)
+        assert slow.close_code == 1011
+        assert fast.is_connected()
+    finally:
+        await service.stop_session(sample_session.id)

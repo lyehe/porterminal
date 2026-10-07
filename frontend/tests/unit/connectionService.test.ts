@@ -66,6 +66,7 @@ describe('connection service', () => {
     });
 
     afterEach(() => {
+        vi.unstubAllGlobals();
         vi.clearAllTimers();
         vi.useRealTimers();
     });
@@ -210,7 +211,7 @@ describe('connection service', () => {
         expect(FakeWebSocket.instances).toHaveLength(1);
     });
 
-    it('trims buffered output received before the connection opens', () => {
+    it('preserves buffered output received before terminal layout completes', () => {
         const service = createService();
         const tab = createTab();
         const write = vi.mocked(tab.term.write);
@@ -224,10 +225,11 @@ describe('connection service', () => {
         socket.open();
 
         expect(write).toHaveBeenCalledTimes(1);
-        expect(write).toHaveBeenCalledWith(secondChunk, expect.any(Function));
+        expect(write).toHaveBeenCalledWith(firstChunk + secondChunk, expect.any(Function));
+        service.disconnect(tab);
     });
 
-    it('confirms pause once and performs emergency recovery when rendering stalls', () => {
+    it('confirms pause once and replays instead of acknowledging stalled rendering', () => {
         vi.useFakeTimers();
         const service = createService();
         const tab = createTab();
@@ -242,6 +244,7 @@ describe('connection service', () => {
 
         const pause = JSON.stringify({ type: 'pause' });
         const ack = JSON.stringify({ type: 'ack' });
+        const close = vi.spyOn(socket, 'close');
         expect(socket.sent.filter((item) => item === pause)).toHaveLength(1);
 
         socket.message({ type: 'pause_ack' });
@@ -249,7 +252,101 @@ describe('connection service', () => {
         expect(socket.sent.filter((item) => item === pause)).toHaveLength(1);
 
         vi.advanceTimersByTime(4_500);
-        expect(socket.sent.filter((item) => item === ack)).toHaveLength(1);
+        expect(socket.sent).not.toContain(ack);
+        expect(close).toHaveBeenCalledWith(4008, expect.stringContaining('replay'));
+        vi.advanceTimersByTime(10);
+        expect(FakeWebSocket.instances[1]!.url).not.toContain('skip_buffer=1');
+        service.disconnect(tab);
+    });
+
+    it('pauses and bounds background output even when animation frames never run', () => {
+        vi.useFakeTimers();
+        const service = createService();
+        const tab = createTab();
+        service.connect(tab);
+        const socket = FakeWebSocket.instances[0]!;
+        socket.open();
+        vi.advanceTimersByTime(64);
+        const frames: FrameRequestCallback[] = [];
+        vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+            frames.push(callback);
+            return frames.length;
+        });
+        const close = vi.spyOn(socket, 'close');
+        for (let i = 0; i < 80; i++) receiveBinary(socket, 'x'.repeat(65_536));
+
+        expect(socket.sent).toContain(JSON.stringify({ type: 'pause' }));
+        expect(close).toHaveBeenCalledOnce();
+        expect(close).toHaveBeenCalledWith(4008, expect.stringContaining('replay'));
+        expect(tab.term.write).not.toHaveBeenCalled();
+        frames.forEach((callback) => callback(0));
+        expect(tab.term.write).not.toHaveBeenCalled();
+
+        vi.unstubAllGlobals();
+        vi.advanceTimersByTime(10);
+        const reconnected = FakeWebSocket.instances[1]!;
+        expect(reconnected.url).not.toContain('skip_buffer=1');
+        reconnected.open();
+        vi.advanceTimersByTime(64);
+        receiveBinary(reconnected, 'replayed output');
+        vi.advanceTimersToNextFrame();
+        expect(tab.term.write).toHaveBeenCalledExactlyOnceWith('replayed output', expect.any(Function));
+        service.disconnect(tab);
+    });
+
+    it('bounds output while the initial terminal layout is suspended', () => {
+        vi.useFakeTimers();
+        const service = createService();
+        const tab = createTab();
+        service.connect(tab);
+        const socket = FakeWebSocket.instances[0]!;
+        socket.open();
+        const close = vi.spyOn(socket, 'close');
+        receiveBinary(socket, 'x'.repeat(2_000_001));
+
+        expect(close).toHaveBeenCalledWith(4008, expect.stringContaining('replay'));
+        expect(tab.term.write).not.toHaveBeenCalled();
+        service.disconnect(tab);
+    });
+
+    it.each([false, true])('replays pending output and ignores stale frames (skip requested: %s)', (skip) => {
+        const service = createService();
+        const tab = createTab();
+        service.connect(tab);
+        const first = FakeWebSocket.instances[0]!;
+        first.open();
+        const frames: FrameRequestCallback[] = [];
+        vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+            frames.push(callback);
+            return frames.length;
+        });
+        const flushFrame = () => frames.splice(0).forEach((callback) => callback(0));
+        receiveBinary(first, 'old output');
+        const staleFrame = frames.shift()!;
+        service.connect(tab, skip);
+        const second = FakeWebSocket.instances[1]!;
+        expect(second.url).not.toContain('skip_buffer=1');
+        expect(tab.term.reset).toHaveBeenCalledTimes(2);
+        second.open();
+        receiveBinary(second, 'new output');
+        staleFrame(0);
+        expect(tab.term.write).not.toHaveBeenCalled();
+        flushFrame();
+        flushFrame();
+        flushFrame();
+        expect(tab.term.write).toHaveBeenCalledExactlyOnceWith('new output', expect.any(Function));
+        service.disconnect(tab);
+    });
+
+    it('requests replay when returning to a disconnected tab', () => {
+        const service = createService();
+        const tab = createTab();
+        service.connect(tab);
+        FakeWebSocket.instances[0]!.open();
+        FakeWebSocket.instances[0]!.closeFromServer(1006, 'background disconnect');
+        service.connect(tab, true);
+        expect(FakeWebSocket.instances[1]!.url).not.toContain('skip_buffer=1');
+        expect(tab.term.reset).toHaveBeenCalledTimes(2);
         service.disconnect(tab);
     });
 

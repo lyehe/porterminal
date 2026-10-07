@@ -1,5 +1,7 @@
 """Tests for OutputBuffer entity."""
 
+import pytest
+
 from porterminal.domain.entities.output_buffer import (
     ALT_SCREEN_ENTER,
     ALT_SCREEN_EXIT,
@@ -214,3 +216,70 @@ class TestAltScreenVariant1049:
         assert b"vim file.txt" in result
         assert b"Hello world" not in result
         assert b"~" not in result
+
+
+@pytest.mark.parametrize("sequence", [*ALT_SCREEN_ENTER, *ALT_SCREEN_EXIT, CLEAR_SCREEN_SEQUENCE])
+def test_control_sequences_work_at_every_chunk_boundary(sequence):
+    for boundary in range(1, len(sequence)):
+        buf = OutputBuffer()
+        buf.add(b"history")
+        if sequence in ALT_SCREEN_EXIT:
+            buf.add(ALT_SCREEN_ENTER[0] + b"application")
+        buf.add(sequence[:boundary])
+        buf.add(sequence[boundary:] + b"tail")
+
+        if sequence in ALT_SCREEN_ENTER:
+            assert buf.in_alt_screen
+            assert buf.get_all() == b"tail"
+        elif sequence in ALT_SCREEN_EXIT:
+            assert not buf.in_alt_screen
+            assert buf.get_all() == b"history" + sequence + b"tail"
+        else:
+            assert buf.get_all() == b"tail"
+
+
+def test_multiple_screen_transitions_follow_stream_order_for_any_chunking():
+    data = b"history" + ALT_SCREEN_ENTER[2] + b"application" + ALT_SCREEN_EXIT[2] + b"prompt"
+    whole = OutputBuffer()
+    whole.add(data)
+    assert whole.get_all() == b"history" + ALT_SCREEN_EXIT[2] + b"prompt"
+    for boundary in range(1, len(data)):
+        split = OutputBuffer()
+        split.add(data[:boundary])
+        split.add(data[boundary:])
+        assert split.get_all() == whole.get_all()
+        assert not split.in_alt_screen
+    bytewise = OutputBuffer()
+    for byte in data:
+        bytewise.add(bytes([byte]))
+    assert bytewise.get_all() == whole.get_all()
+
+
+def test_unknown_escapes_are_preserved_and_clear_discards_incomplete_controls():
+    buf = OutputBuffer()
+    buf.add(b"hello\x1b[")
+    buf.add(b"31mred")
+    assert buf.get_all() == b"hello\x1b[31mred"
+    buf.add(b"\x1b[?104")
+    buf.clear()
+    buf.add(b"9hnew")
+    assert buf.get_all() == b"9hnew"
+    assert not buf.in_alt_screen
+
+
+def test_oversized_output_after_clear_retains_a_bounded_tail():
+    buf = OutputBuffer(max_bytes=5)
+    buf.add(b"old")
+    buf.add(CLEAR_SCREEN_SEQUENCE + b"123456789")
+    assert buf.get_all() == b"56789"
+    assert buf.size == 5
+
+
+def test_replay_includes_an_incomplete_control_until_live_output_completes_it():
+    buf = OutputBuffer(max_bytes=20)
+    buf.add(b"history\x1b[?104")
+    assert buf.get_all() == b"history\x1b[?104"
+    assert buf.size == len(buf.get_all())
+    buf.add(b"9happlication")
+    assert buf.in_alt_screen
+    assert buf.get_all() == b"application"

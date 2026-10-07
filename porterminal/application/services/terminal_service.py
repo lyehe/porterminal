@@ -33,8 +33,9 @@ class ConnectionFlowState:
 
     paused_at: float | None = None
     pending_output: bytearray = field(default_factory=bytearray)
-    send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     failed: bool = False
+    writer_task: asyncio.Task[None] | None = None
+    close_task: asyncio.Task[None] | None = None
 
 
 # Constants
@@ -107,7 +108,12 @@ class TerminalService:
     def _unregister_connection(self, session_id: str, connection: ConnectionPort) -> int:
         """Unregister a connection. Returns remaining count."""
         # Clean up flow control state
-        self._flow_state.pop(connection, None)
+        flow = self._flow_state.pop(connection, None)
+        if flow:
+            flow.pending_output.clear()
+            for task in (flow.writer_task, flow.close_task):
+                if task:
+                    task.cancel()
 
         if session_id not in self._session_connections:
             return 0
@@ -137,6 +143,16 @@ class TerminalService:
             task.cancel()
             with suppress(asyncio.CancelledError):
                 await task
+        delivery_tasks: list[asyncio.Task[None]] = []
+        for connection in list(self._session_connections.get(key, set())):
+            flow = self._flow_state.get(connection)
+            if flow:
+                delivery_tasks.extend(
+                    task for task in (flow.writer_task, flow.close_task) if task is not None
+                )
+            self._unregister_connection(key, connection)
+        if delivery_tasks:
+            await asyncio.gather(*delivery_tasks, return_exceptions=True)
         self._session_locks.pop(key, None)
         logger.debug("Stopped broadcast read loop session_id=%s", session_id)
 
@@ -147,44 +163,57 @@ class TerminalService:
             await asyncio.wait_for(connection.close(code=code, reason=reason), OUTPUT_SEND_TIMEOUT)
 
     async def _send_connection_output(self, connection: ConnectionPort, data: bytes) -> None:
+        """Enqueue without waiting for a viewer's network I/O."""
         flow = self._flow_state.get(connection)
-        if flow is None:
+        if flow is None or flow.failed:
             return
-
-        async with flow.send_lock:
-            if flow.failed or self._flow_state.get(connection) is not flow:
-                return
-            if flow.paused_at is not None and monotonic() - flow.paused_at > FLOW_PAUSE_TIMEOUT:
-                flow.paused_at = None
-
-            if flow.paused_at is not None:
-                if len(flow.pending_output) + len(data) <= FLOW_BUFFER_MAX_BYTES:
-                    flow.pending_output.extend(data)
-                    return
-                # Bound each viewer's queue. Reconnection replays the session buffer.
-                flow.failed = True
-                flow.pending_output.clear()
-                await self._close_output_connection(
+        if len(flow.pending_output) + len(data) > FLOW_BUFFER_MAX_BYTES:
+            # Bound slow and paused viewers alike. Reconnection replays the session buffer.
+            flow.failed = True
+            flow.pending_output.clear()
+            if flow.writer_task:
+                flow.writer_task.cancel()
+            flow.close_task = asyncio.create_task(
+                self._close_output_connection(
                     connection, code=1013, reason="Output backlog full; reconnect to replay"
                 )
-                return
+            )
+            return
 
-            payload = bytes(flow.pending_output) + data
-            flow.pending_output.clear()
-            if not payload:
+        flow.pending_output.extend(data)
+        if flow.paused_at is not None:
+            if monotonic() - flow.paused_at <= FLOW_PAUSE_TIMEOUT:
                 return
-            try:
-                await asyncio.wait_for(connection.send_output(payload), OUTPUT_SEND_TIMEOUT)
-            except Exception as error:
-                flow.failed = True
-                logger.debug("Failed to send output to connection: %s", error)
-                await self._close_output_connection(
-                    connection, code=1011, reason="Terminal output delivery failed"
-                )
+            flow.paused_at = None
+        if flow.pending_output and (flow.writer_task is None or flow.writer_task.done()):
+            flow.writer_task = asyncio.create_task(self._drain_connection_output(connection, flow))
+
+    async def _drain_connection_output(
+        self, connection: ConnectionPort, flow: ConnectionFlowState
+    ) -> None:
+        try:
+            while flow.pending_output and self._flow_state.get(connection) is flow:
+                if flow.failed or flow.paused_at is not None:
+                    return
+                payload = bytes(flow.pending_output)
+                flow.pending_output.clear()
+                try:
+                    await asyncio.wait_for(connection.send_output(payload), OUTPUT_SEND_TIMEOUT)
+                except Exception as error:
+                    flow.failed = True
+                    flow.pending_output.clear()
+                    logger.debug("Failed to send output to connection: %s", error)
+                    await self._close_output_connection(
+                        connection, code=1011, reason="Terminal output delivery failed"
+                    )
+                    return
+        finally:
+            flow.writer_task = None
 
     async def _send_to_connections(self, connections: list[ConnectionPort], data: bytes) -> None:
         """Deliver or queue output independently for each viewer, preserving byte order."""
-        await asyncio.gather(*(self._send_connection_output(conn, data) for conn in connections))
+        for connection in connections:
+            await self._send_connection_output(connection, data)
 
     async def _broadcast_output(self, session_id: str, data: bytes) -> None:
         """Broadcast PTY output to all connections for a session.
@@ -238,7 +267,6 @@ class TerminalService:
 
         # Register and snapshot together so replay cannot duplicate a live broadcast.
         # Network I/O happens after releasing the session lock.
-        buffered = None
         async with lock:
             connection_count = self._register_connection(session_id, connection)
             logger.info(
@@ -254,15 +282,10 @@ class TerminalService:
             # Snapshot buffer while under lock (ensures consistency with broadcast)
             # Note: session_info is sent by the caller (app.py) to include tab_id
             if not skip_buffer and not session.output_buffer.is_empty:
-                buffered = session.get_buffered_output()
+                # Queue replay first, before the reader can enqueue any live output.
+                await self._send_connection_output(connection, session.get_buffered_output())
 
         try:
-            # Replay outside the session lock, but serialize it before live output.
-            # Cancellation here must also unregister the connection.
-            if buffered:
-                async with self._flow_state[connection].send_lock:
-                    await asyncio.wait_for(connection.send_output(buffered), OUTPUT_SEND_TIMEOUT)
-
             # Start heartbeat for this connection
             heartbeat_task = asyncio.create_task(self._heartbeat_loop(connection))
 
@@ -275,7 +298,15 @@ class TerminalService:
 
         finally:
             # Unregister this connection
+            flow = self._flow_state.get(connection)
+            delivery_tasks = (
+                [task for task in (flow.writer_task, flow.close_task) if task is not None]
+                if flow
+                else []
+            )
             remaining = self._unregister_connection(session_id, connection)
+            if delivery_tasks:
+                await asyncio.gather(*delivery_tasks, return_exceptions=True)
 
             logger.info(
                 "Client disconnected session_id=%s remaining_connections=%d",

@@ -1,5 +1,6 @@
 """Windows PTY backend using pywinpty."""
 
+import codecs
 import logging
 import select
 import time
@@ -26,6 +27,7 @@ class WindowsPTYBackend:
         self._pty: Any | None = None
         self._rows: int = 30
         self._cols: int = 120
+        self._input_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
     @property
     def rows(self) -> int:
@@ -61,6 +63,7 @@ class WindowsPTYBackend:
             env=env,
             cwd=cwd,
         )
+        self._input_decoder.reset()
         logger.debug("Windows PTY spawned cmd=%s", cmd)
 
     def read(self, size: int = 4096) -> bytes:
@@ -92,9 +95,11 @@ class WindowsPTYBackend:
         """Write to Windows PTY."""
         if self._pty is None:
             return
-        text = data.decode("utf-8", errors="replace")
+        # Input frames can split a multibyte character (including agent chunks).
+        text = self._input_decoder.decode(data)
         logger.debug("PTY write bytes=%d", len(data))
-        self._pty.write(text)
+        if text:
+            self._pty.write(text)
 
     def resize(self, rows: int, cols: int) -> None:
         """Resize the PTY window."""
@@ -111,6 +116,7 @@ class WindowsPTYBackend:
 
     def close(self) -> None:
         """Close the PTY with grace period before force kill."""
+        self._input_decoder.reset()
         if self._pty is None:
             return
 

@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/porterminal/porterminal">
-    <img src="https://raw.githubusercontent.com/porterminal/porterminal/master/assets/header.png?v=5" alt="PTN — Portable Terminal. QR code links to the GitHub repository." width="800">
+    <img src="https://raw.githubusercontent.com/porterminal/porterminal/master/assets/header.png?v=6" alt="PTN — Portable Terminal with decorative QR artwork." width="800">
   </a>
 </p>
 

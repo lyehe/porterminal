@@ -37,6 +37,8 @@ uvx ptn
    Select the agent's **🤖 tab** to see its terminal.
 3. **Work together.** Watch the output, answer an interactive prompt, type a
    command, or close the tab to end that shell.
+4. **Access your computer from any phone.** Use your phone's browser for
+   vibe coding, quick fixes, running commands, and more.
 
 To start in a particular project, use `uvx ptn /path/to/project`.
 For installation options, see [installation](https://github.com/porterminal/porterminal/blob/master/docs/installation.md), or use an installer below.

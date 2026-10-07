@@ -51,9 +51,24 @@ _DEFAULT_TIMEOUT = 30.0
 _STARTUP_TIMEOUT = 10.0
 
 
+def _strip_ansi(match: re.Match[bytes]) -> bytes:
+    sequence = match.group()
+    if sequence.startswith(b"\x1b[") and sequence[-1:] in (b"H", b"f"):
+        fields = sequence[2:-1].split(b";")
+        if (
+            len(fields) <= 2
+            and all(not field or field.isdigit() for field in fields)
+            and (len(fields) == 1 or fields[1] in (b"", b"0", b"1"))
+        ):
+            # ConPTY can start the next row with CUP/HVP instead of a newline.
+            # Keeping the boundary prevents output merging with an echoed probe.
+            return b"\n"
+    return b""
+
+
 def _clean(raw: bytes) -> str:
-    """Strip ANSI and normalise newlines for marker scanning."""
-    text = _ANSI_RE.sub(b"", raw).decode("utf-8", "replace")
+    """Strip ANSI while retaining terminal row boundaries for marker scanning."""
+    text = _ANSI_RE.sub(_strip_ansi, raw).decode("utf-8", "replace")
     return text.replace("\r\n", "\n").replace("\r", "")
 
 

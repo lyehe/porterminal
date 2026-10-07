@@ -46,7 +46,10 @@ async def test_agent_completion_and_exit_codes_in_real_shell(tmp_path, shell_id,
         result = await agent.run_command("shell-regression", "echo SHELL_OK", timeout=10)
         assert result["status"] == "completed", result
         assert result["exit_code"] == 0, result
-        assert "SHELL_OK" in result["output"], result
+        assert "SHELL_OK" in result["output"], (
+            result,
+            agent._by_mcp["shell-regression"].conn.capture_since(0),
+        )
 
         result = await agent.run_command(
             "shell-regression", 'python -c "import sys; sys.exit(7)"', timeout=10

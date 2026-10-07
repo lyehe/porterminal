@@ -78,6 +78,32 @@ def test_command_output_repeating_the_command_is_preserved_after_probe_echo():
     assert output == "cat log.txt\nanother line"
 
 
+@pytest.mark.parametrize("shell", ["cmd", "pwsh", "bash"])
+def test_cursor_positioned_prompt_does_not_swallow_command_output(shell):
+    marker = "PTNXregression"
+    command = "echo SHELL_OK"
+    probe = agent_module._probe_command(shell, marker)
+    # Older Windows PTYs move the cursor to the next prompt without emitting LF.
+    raw = (
+        f"prompt> {command}\r\n\x1b[?25lSHELL_OK\x1b[11;1H"
+        f"prompt> {probe}\r\n{marker}0\x1b[15;1Hprompt> "
+    ).encode()
+    text = agent_module._clean(raw)
+    output = AgentTerminalService._extract_output(text.split(marker + "0")[0], command, marker)
+    assert output == "SHELL_OK"
+
+
+@pytest.mark.parametrize(
+    "sequence", [b"\x1b[H", b"\x1b[20H", b"\x1b[20;1H", b"\x1b[20;0f", b"\x1b[20;H"]
+)
+def test_ansi_cleanup_preserves_cursor_moves_to_the_beginning_of_a_row(sequence):
+    assert agent_module._clean(b"first" + sequence + b"second") == "first\nsecond"
+
+
+def test_ansi_cleanup_keeps_inline_color_and_horizontal_cursor_changes_inline():
+    assert agent_module._clean(b"first\x1b[31m\x1b[5;12Hsecond\x1b[0m") == "firstsecond"
+
+
 @pytest.fixture
 async def startup_service(
     session_repository,

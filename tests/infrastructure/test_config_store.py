@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -106,3 +108,35 @@ def test_cli_mutation_uses_shared_store(tmp_path, monkeypatch):
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert raw["custom"] == {"preserved": True}
     assert raw["security"]["require_password"] is True
+
+
+async def test_password_hashing_leaves_the_event_loop_responsive(tmp_path, monkeypatch):
+    import bcrypt
+
+    loop = asyncio.get_running_loop()
+    started = asyncio.Event()
+    release = threading.Event()
+
+    def slow_hash(password: bytes, salt: bytes) -> bytes:
+        assert password == b"new password"
+        assert threading.get_ident() != main_thread
+        loop.call_soon_threadsafe(started.set)
+        if not release.wait(5):
+            raise TimeoutError("The event loop could not release the password worker")
+        return b"stored hash"
+
+    main_thread = threading.get_ident()
+    monkeypatch.setattr(bcrypt, "hashpw", slow_hash)
+    store = make_store(tmp_path / "ptn.yaml")
+    task = asyncio.create_task(ConfigService(store).set_password("new password"))
+    try:
+        await asyncio.wait_for(started.wait(), 2)
+        assert not task.done()
+    finally:
+        release.set()
+        settings = await task
+    assert settings["password_protected"]
+    assert store.read_raw()["security"] == {
+        "password_hash": "stored hash",
+        "require_password": True,
+    }

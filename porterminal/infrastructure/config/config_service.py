@@ -144,7 +144,9 @@ class ConfigService:
         async with self._lock:
             data = await self._read()
 
-            password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+            password_hash = (
+                await asyncio.to_thread(bcrypt.hashpw, password.encode(), bcrypt.gensalt())
+            ).decode()
             data.setdefault("security", {})["password_hash"] = password_hash
             data["security"]["require_password"] = True
 

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/porterminal/porterminal/master/assets/header.png?v=3" alt="PTN terminal logo" width="800">
+  <img src="https://raw.githubusercontent.com/porterminal/porterminal/master/assets/header.png?v=4" alt="PTN — Portable Terminal" width="800">
 </p>
 
 <h1 align="center">Give your agent any computer</h1>
